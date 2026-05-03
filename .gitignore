@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Xcode
+DerivedData/
+build/
+*.xcworkspace
+xcuserdata/
+*.xcuserstate
+
+# Firebase
+functions/node_modules/
+functions/lib/
+.firebase/
+
+# Secrets
+.env
+.env.local
+
+# Logs
+npm-debug.log
+yarn-error.log
+
+# その他
+*.log
