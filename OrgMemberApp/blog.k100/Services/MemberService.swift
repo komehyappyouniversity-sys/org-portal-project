@@ -216,11 +216,14 @@ final class MemberService: MemberServiceProtocol {
             )
         ).sorted()
 
+        let baselineAt = (data["messageReadBaselineAt"] as? Timestamp)?.dateValue()
+
         return MemberProfile(
             id: snapshot.documentID,
             uid: uid,
             name: name,
-            status: status
+            status: status,
+            messageReadBaselineAt: baselineAt
         )
     }
 }

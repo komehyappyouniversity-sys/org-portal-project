@@ -162,7 +162,7 @@ final class AdminMessageComposerStore: ObservableObject {
         case .approvedMembersOnly:
             data["isBroadcast"] = true
             data["deliveryType"] = "承認済み会員全員"
-            data["categoryTargets"] = ["approved"]
+            data["categoryTargets"] = []
 
         case .categoryMembers:
             data["isBroadcast"] = true

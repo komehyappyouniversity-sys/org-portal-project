@@ -155,9 +155,24 @@ export const onMessageCreated = functions
       },
     };
 
-    await admin.messaging().sendEachForMulticast(message);
+    const response = await admin.messaging().sendEachForMulticast(message);
 
-    console.log("通知送信完了:", tokens.length);
+console.log("通知送信結果:", {
+  targetCount: tokens.length,
+  successCount: response.successCount,
+  failureCount: response.failureCount,
+});
+
+response.responses.forEach((r, index) => {
+  if (!r.success) {
+    console.error("通知送信失敗:", {
+      index,
+      errorCode: r.error?.code,
+      errorMessage: r.error?.message,
+      tokenPrefix: tokens[index]?.substring(0, 20),
+    });
+  }
+});
   });
 
 /**
@@ -172,4 +187,3 @@ export const onMemberCreated = functions
 
     console.log("新規会員:", data.name || "no-name");
   });
-  

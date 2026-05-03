@@ -8,6 +8,7 @@ struct MemberProfile: Identifiable, Equatable {
     let uid: String
     let name: String
     let status: String
+    let messageReadBaselineAt: Date?
 
     var isApproved: Bool {
         status == "approved"
@@ -33,7 +34,6 @@ final class MemberStore: ObservableObject {
         memberListener?.remove()
     }
 
-    // 🔹 ログイン状態の監視のみ（匿名ログインなし）
     func ensureSignedIn() {
         if authHandle != nil { return }
 
@@ -48,14 +48,12 @@ final class MemberStore: ObservableObject {
             if let uid = user?.uid, !uid.isEmpty {
                 self.watchMember(uid: uid)
             } else {
-                // 🔴 未ログイン状態（何もしない）
                 self.memberListener?.remove()
                 self.memberListener = nil
             }
         }
     }
 
-    // 🔹 会員情報監視
     private func watchMember(uid: String) {
         let organizationId = OrganizationConfig.organizationId
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -99,6 +97,20 @@ final class MemberStore: ObservableObject {
             let name = data["name"] as? String ?? ""
             let status = data["status"] as? String ?? "pending"
 
+            let baselineAt = (data["messageReadBaselineAt"] as? Timestamp)?.dateValue()
+
+            if baselineAt == nil {
+                ref.setData([
+                    "messageReadBaselineAt": FieldValue.serverTimestamp()
+                ], merge: true) { error in
+                    if let error {
+                        print("❌ messageReadBaselineAt 保存失敗:", error.localizedDescription)
+                    } else {
+                        print("✅ messageReadBaselineAt 初回保存")
+                    }
+                }
+            }
+
             print("✅ member 読み込み:", name, status)
 
             DispatchQueue.main.async {
@@ -106,19 +118,18 @@ final class MemberStore: ObservableObject {
                     id: uid,
                     uid: uid,
                     name: name,
-                    status: status
+                    status: status,
+                    messageReadBaselineAt: baselineAt
                 )
             }
         }
     }
 
-    // 🔹 明示ログイン（必要なら使用）
     func signIn(email: String, password: String) async throws {
         let result = try await Auth.auth().signIn(withEmail: email, password: password)
         self.authUid = result.user.uid
     }
 
-    // 🔹 ログアウト
     func signOut() {
         try? Auth.auth().signOut()
         authUid = nil

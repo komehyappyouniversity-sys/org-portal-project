@@ -11,7 +11,10 @@ final class MemberMessageStore: ObservableObject {
 
     private let db = Firestore.firestore()
     private var listener: ListenerRegistration?
+    private var baselineListener: ListenerRegistration?
+
     private var locallyReadMessageIds: Set<String> = []
+    private var messageReadBaselineAt: Date?
 
     var unreadCount: Int {
         items.filter { !$0.isRead }.count
@@ -19,6 +22,7 @@ final class MemberMessageStore: ObservableObject {
 
     deinit {
         listener?.remove()
+        baselineListener?.remove()
     }
 
     func startListening(organizationId: String, visibility: String) {
@@ -33,8 +37,14 @@ final class MemberMessageStore: ObservableObject {
         }
 
         listener?.remove()
+        baselineListener?.remove()
+
         isLoading = true
         errorMessage = ""
+
+        if let uid {
+            startBaselineListening(organizationId: orgId, uid: uid)
+        }
 
         print("========== MemberMessageStore startListening ==========")
         print("organizationId:", orgId)
@@ -69,6 +79,8 @@ final class MemberMessageStore: ObservableObject {
                     guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                         return nil
                     }
+
+                    let createdAt = (data["createdAt"] as? Timestamp)?.dateValue() ?? Date()
 
                     let messageVisibility = (data["visibility"] as? String ?? "")
                         .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -127,9 +139,19 @@ final class MemberMessageStore: ObservableObject {
 
                     guard shouldShow else { return nil }
 
+                    let isOlderThanBaseline: Bool
+                    if let baseline = self.messageReadBaselineAt {
+                        isOlderThanBaseline = createdAt < baseline
+                    } else {
+                        isOlderThanBaseline = false
+                    }
+
                     let isRead: Bool
                     if let uid {
-                        isRead = readBy.contains(uid) || self.locallyReadMessageIds.contains(doc.documentID)
+                        isRead =
+                            isOlderThanBaseline ||
+                            readBy.contains(uid) ||
+                            self.locallyReadMessageIds.contains(doc.documentID)
                     } else {
                         isRead = true
                     }
@@ -138,7 +160,7 @@ final class MemberMessageStore: ObservableObject {
                         id: doc.documentID,
                         title: title,
                         body: body,
-                        createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? Date(),
+                        createdAt: createdAt,
                         isRead: isRead
                     )
                 }
@@ -150,9 +172,56 @@ final class MemberMessageStore: ObservableObject {
             }
     }
 
+    private func startBaselineListening(organizationId: String, uid: String) {
+        let ref = db.collection("organizations")
+            .document(organizationId)
+            .collection("members")
+            .document(uid)
+
+        baselineListener = ref.addSnapshotListener { [weak self] snapshot, error in
+            guard let self else { return }
+
+            if let error {
+                print("❌ baseline listen error:", error.localizedDescription)
+                return
+            }
+
+            let data = snapshot?.data() ?? [:]
+
+            if let baseline = (data["messageReadBaselineAt"] as? Timestamp)?.dateValue() {
+                self.messageReadBaselineAt = baseline
+                print("✅ messageReadBaselineAt:", baseline)
+                self.recalculateUnreadByBaseline()
+            } else {
+                ref.setData([
+                    "messageReadBaselineAt": FieldValue.serverTimestamp()
+                ], merge: true) { error in
+                    if let error {
+                        print("❌ baseline 保存失敗:", error.localizedDescription)
+                    } else {
+                        print("✅ baseline 初回保存")
+                    }
+                }
+            }
+        }
+    }
+
+    private func recalculateUnreadByBaseline() {
+        guard let baseline = messageReadBaselineAt else { return }
+
+        for index in items.indices {
+            if items[index].createdAt < baseline {
+                items[index].isRead = true
+            }
+        }
+    }
+
     func stopListening() {
         listener?.remove()
         listener = nil
+
+        baselineListener?.remove()
+        baselineListener = nil
     }
 
     func markAsRead(item: MemberMessageItem, organizationId: String) {
