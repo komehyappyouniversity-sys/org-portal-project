@@ -1,32 +1,175 @@
+import * as functions from "firebase-functions";
+import * as admin from "firebase-admin";
+
+admin.initializeApp();
+
+const db = admin.firestore();
+
 /**
- * Import function triggers from their respective submodules:
- *
- * import {onCall} from "firebase-functions/v2/https";
- * import {onDocumentWritten} from "firebase-functions/v2/firestore";
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
+ * 簡易暗号化（Base64）
+ * ※本番強化するなら Secret Manager + crypto 推奨
  */
+function encrypt(text: string): string {
+  return Buffer.from(text, "utf-8").toString("base64");
+}
 
-import {setGlobalOptions} from "firebase-functions";
-import {onRequest} from "firebase-functions/https";
-import * as logger from "firebase-functions/logger";
+function decrypt(text: string): string {
+  return Buffer.from(text, "base64").toString("utf-8");
+}
 
-// Start writing functions
-// https://firebase.google.com/docs/functions/typescript
+/**
+ * ■ Vimeo設定保存（管理アプリ → Functions）
+ * organizations/{orgId}/private/settings/vimeo
+ */
+export const saveVimeoConfig = functions
+  .region("asia-northeast1")
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "ログイン必須");
+    }
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
+    const { organizationId, accessToken, userId } = data;
 
-// export const helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+    if (!organizationId || !accessToken) {
+      throw new functions.https.HttpsError("invalid-argument", "パラメータ不足");
+    }
+
+    const encryptedToken = encrypt(accessToken);
+
+    await db
+      .collection("organizations")
+      .doc(organizationId)
+      .collection("private")
+      .doc("settings")
+      .set({
+        vimeo: {
+          accessToken: encryptedToken,
+          userId: userId || "",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      }, { merge: true });
+
+    return { success: true };
+  });
+
+/**
+ * ■ Vimeo取得（動画取得時に使用）
+ */
+export const getVimeoConfig = functions
+  .region("asia-northeast1")
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "ログイン必須");
+    }
+
+    const { organizationId } = data;
+
+    const doc = await db
+      .collection("organizations")
+      .doc(organizationId)
+      .collection("private")
+      .doc("settings")
+      .get();
+
+    const vimeo = doc.data()?.vimeo;
+
+    if (!vimeo) {
+      return { exists: false };
+    }
+
+    return {
+      exists: true,
+      accessToken: decrypt(vimeo.accessToken),
+      userId: vimeo.userId,
+    };
+  });
+
+/**
+ * ■ メッセージ送信トリガー（通知）
+ * organizations/{orgId}/messages/{messageId}
+ */
+export const onMessageCreated = functions
+  .region("asia-northeast1")
+  .firestore.document("organizations/{orgId}/messages/{messageId}")
+  .onCreate(async (snap, context) => {
+    const data = snap.data();
+    const orgId = context.params.orgId;
+
+    const title = data.title || "お知らせ";
+    const body = data.body || "";
+
+    const isBroadcast = data.isBroadcast ?? true;
+    const categoryTargets: string[] = data.categoryTargets || [];
+    const targetUids: string[] = data.targetMemberUids || [];
+
+    // 会員取得
+    const membersSnap = await db
+      .collection("organizations")
+      .doc(orgId)
+      .collection("members")
+      .get();
+
+    const tokens: string[] = [];
+
+    membersSnap.forEach((doc) => {
+      const m = doc.data();
+
+      if (!m.fcmToken) return;
+
+      // 個別指定
+      if (targetUids.length > 0) {
+        if (targetUids.includes(doc.id)) {
+          tokens.push(m.fcmToken);
+        }
+        return;
+      }
+
+      // カテゴリ指定
+      if (categoryTargets.length > 0) {
+        if (categoryTargets.includes(m.category)) {
+          tokens.push(m.fcmToken);
+        }
+        return;
+      }
+
+      // 全体配信
+      if (isBroadcast) {
+        tokens.push(m.fcmToken);
+      }
+    });
+
+    if (tokens.length === 0) {
+      console.log("送信対象なし");
+      return;
+    }
+
+    const message: admin.messaging.MulticastMessage = {
+      tokens,
+      notification: {
+        title,
+        body,
+      },
+      data: {
+        messageId: snap.id,
+        type: "message",
+      },
+    };
+
+    await admin.messaging().sendEachForMulticast(message);
+
+    console.log("通知送信完了:", tokens.length);
+  });
+
+/**
+ * ■ 会員登録時（オプション）
+ * 初期データ補完などに使える
+ */
+export const onMemberCreated = functions
+  .region("asia-northeast1")
+  .firestore.document("organizations/{orgId}/members/{uid}")
+  .onCreate(async (snap, context) => {
+    const data = snap.data();
+
+    console.log("新規会員:", data.name || "no-name");
+  });
+  
