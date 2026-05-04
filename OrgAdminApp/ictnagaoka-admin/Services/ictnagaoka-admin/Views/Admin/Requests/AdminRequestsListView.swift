@@ -4,9 +4,14 @@ struct AdminRequestsListView: View {
     @EnvironmentObject var organizationStore: OrganizationStore
     @StateObject private var store = AdminRequestsStore()
 
+    private var safeOrganizationId: String {
+        (organizationStore.organizationId ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var body: some View {
         VStack {
-            if organizationStore.organizationId.isEmpty {
+            if safeOrganizationId.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.largeTitle)
@@ -30,61 +35,52 @@ struct AdminRequestsListView: View {
                 .padding()
 
             } else if store.isLoading {
-                VStack(spacing: 12) {
-                    ProgressView("読み込み中...")
-                    Text("organizationId: \(organizationStore.organizationId)")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                }
-                .padding()
+                ProgressView("読み込み中...")
+                    .padding()
 
-            } else if !store.errorMessage.isEmpty {
+            } else if let errorMessage = store.errorMessage, !errorMessage.isEmpty {
                 VStack(spacing: 12) {
-                    Text(store.errorMessage)
+                    Text(errorMessage)
                         .foregroundColor(.red)
                         .multilineTextAlignment(.center)
 
-                    Text("organizationId: \(organizationStore.organizationId)")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-
                     Button("再読み込み") {
-                        store.startListening(
-                            organizationId: organizationStore.organizationId
-                        )
+                        store.startListening(organizationId: safeOrganizationId)
                     }
                     .buttonStyle(.bordered)
                 }
                 .padding()
 
             } else if store.requests.isEmpty {
-                VStack(spacing: 12) {
-                    Text("申請はありません")
-                        .foregroundColor(.gray)
-
-                    Text("organizationId: \(organizationStore.organizationId)")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                }
-                .padding()
+                Text("申請はありません")
+                    .foregroundColor(.gray)
+                    .padding()
 
             } else {
                 List(store.requests) { item in
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(item.name)
-                            .font(.headline)
+                    NavigationLink {
+                        AdminRequestsDetailView(
+                            request: item,
+                            store: store
+                        )
+                    } label: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(item.name)
+                                .font(.headline)
 
-                        if !item.email.isEmpty {
-                            Text(item.email)
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-                        }
+                            if !item.email.isEmpty {
+                                Text(item.email)
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
+                            }
 
-                        if !item.phone.isEmpty {
-                            Text(item.phone)
-                                .font(.caption)
-                                .foregroundColor(.gray)
+                            if !item.phone.isEmpty {
+                                Text(item.phone)
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
                         }
+                        .padding(.vertical, 6)
                     }
                 }
                 .listStyle(.plain)
@@ -92,26 +88,20 @@ struct AdminRequestsListView: View {
         }
         .navigationTitle("会員申請一覧")
         .onAppear {
-            print("📌 AdminRequestsListView organizationId:", organizationStore.organizationId)
-
-            if organizationStore.organizationId.isEmpty {
+            if safeOrganizationId.isEmpty {
                 organizationStore.startListening(
                     organizationId: OrganizationConfig.organizationId
                 )
-            }
-
-            if !organizationStore.organizationId.isEmpty {
-                store.startListening(
-                    organizationId: organizationStore.organizationId
-                )
+            } else {
+                store.startListening(organizationId: safeOrganizationId)
             }
         }
         .onChange(of: organizationStore.organizationId) { _, newValue in
-            let safeId = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !safeId.isEmpty else { return }
+            let newOrganizationId = (newValue ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
 
-            print("📌 organizationId changed:", safeId)
-            store.startListening(organizationId: safeId)
+            guard !newOrganizationId.isEmpty else { return }
+            store.startListening(organizationId: newOrganizationId)
         }
         .onDisappear {
             store.stopListening()
