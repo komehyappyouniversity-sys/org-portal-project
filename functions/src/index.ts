@@ -112,31 +112,50 @@ export const onMessageCreated = functions
     const tokens: string[] = [];
 
     membersSnap.forEach((doc) => {
-      const m = doc.data();
+  const m = doc.data();
 
-      if (!m.fcmToken) return;
+  const token = m.fcmToken;
+  if (!token) return;
 
-      // 個別指定
-      if (targetUids.length > 0) {
-        if (targetUids.includes(doc.id)) {
-          tokens.push(m.fcmToken);
-        }
-        return;
-      }
+  const status = m.status || "";
+  if (status !== "approved") return;
 
-      // カテゴリ指定
-      if (categoryTargets.length > 0) {
-        if (categoryTargets.includes(m.category)) {
-          tokens.push(m.fcmToken);
-        }
-        return;
-      }
+  const memberCategories: string[] = Array.isArray(m.categories)
+    ? m.categories
+    : [];
 
-      // 全体配信
-      if (isBroadcast) {
-        tokens.push(m.fcmToken);
-      }
-    });
+  const legacyCategory = typeof m.category === "string" ? m.category : "";
+
+  const allMemberCategories = [
+    ...memberCategories,
+    ...(legacyCategory ? [legacyCategory] : []),
+  ];
+
+  // 個別指定
+  if (targetUids.length > 0) {
+    if (targetUids.includes(doc.id)) {
+      tokens.push(token);
+    }
+    return;
+  }
+
+  // カテゴリ指定
+  if (categoryTargets.length > 0) {
+    const matched = categoryTargets.some((category) =>
+      allMemberCategories.includes(category)
+    );
+
+    if (matched) {
+      tokens.push(token);
+    }
+    return;
+  }
+
+  // 承認済み会員全員
+  if (isBroadcast) {
+    tokens.push(token);
+  }
+});
 
     if (tokens.length === 0) {
       console.log("送信対象なし");

@@ -165,9 +165,12 @@ final class MemberMessageStore: ObservableObject {
                     )
                 }
 
+                self.objectWillChange.send()
+
                 print("✅ messages loaded:", self.items.count)
+                print("✅ unreadCount:", self.unreadCount)
                 for item in self.items {
-                    print("message:", item.title)
+                    print("message:", item.title, "isRead:", item.isRead)
                 }
             }
     }
@@ -209,10 +212,18 @@ final class MemberMessageStore: ObservableObject {
     private func recalculateUnreadByBaseline() {
         guard let baseline = messageReadBaselineAt else { return }
 
+        var didChange = false
+
         for index in items.indices {
-            if items[index].createdAt < baseline {
+            if items[index].createdAt < baseline && items[index].isRead == false {
                 items[index].isRead = true
+                didChange = true
             }
+        }
+
+        if didChange {
+            objectWillChange.send()
+            print("✅ baseline反映後 unreadCount:", unreadCount)
         }
     }
 
@@ -234,6 +245,8 @@ final class MemberMessageStore: ObservableObject {
 
         if let index = items.firstIndex(where: { $0.id == item.id }) {
             items[index].isRead = true
+            objectWillChange.send()
+            print("✅ local markAsRead:", item.id, "unreadCount:", unreadCount)
         }
 
         db.collection("organizations")

@@ -67,8 +67,7 @@ final class AdminMessageComposerStore: ObservableObject {
                 let status = (data["status"] as? String) ?? ""
                 guard status == "approved" else { return nil }
 
-                let name =
-                    (data["name"] as? String)?
+                let name = (data["name"] as? String)?
                     .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
                 let categories = data["categories"] as? [String] ?? []
@@ -163,16 +162,21 @@ final class AdminMessageComposerStore: ObservableObject {
             data["isBroadcast"] = true
             data["deliveryType"] = "承認済み会員全員"
             data["categoryTargets"] = []
+            data["targetMemberUids"] = []
 
         case .categoryMembers:
-            data["isBroadcast"] = true
+            data["isBroadcast"] = false
             data["deliveryType"] = "カテゴリ対象"
             data["categoryTargets"] = selectedCategoryArray
+            data["targetMemberUids"] = []
 
         case .individual:
             data["isBroadcast"] = false
             data["deliveryType"] = "個別送信"
+            data["categoryTargets"] = []
+            data["targetMemberUids"] = selectedUIDArray
             data["toUids"] = selectedUIDArray
+
             if selectedUIDArray.count == 1 {
                 data["toUid"] = selectedUIDArray.first ?? ""
             }

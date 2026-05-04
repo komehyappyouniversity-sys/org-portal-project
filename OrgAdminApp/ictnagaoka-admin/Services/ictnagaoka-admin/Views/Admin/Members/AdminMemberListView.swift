@@ -1,10 +1,3 @@
-//
-//  AdminMemberListView.swift
-//  ictnagaoka-admin
-//
-//  Created by 根津浩 on 2026/04/15.
-//
-
 import SwiftUI
 import FirebaseFirestore
 
@@ -14,6 +7,7 @@ struct AdminMemberItem: Identifiable {
     let status: String
     let email: String
     let phone: String
+    let categories: [String]
 }
 
 struct AdminMemberListView: View {
@@ -26,78 +20,30 @@ struct AdminMemberListView: View {
     private let db = Firestore.firestore()
 
     var body: some View {
-        VStack(spacing: 0) {
-            if organizationStore.organizationId.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.largeTitle)
-                        .foregroundColor(.gray)
-
-                    Text("organizationId がありません")
-                        .font(.headline)
-
-                    Text("組織情報を取得できていないため、会員一覧を表示できません。")
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                }
-                .padding()
-
-            } else if isLoading {
-                VStack(spacing: 12) {
-                    ProgressView("読み込み中...")
-                    Text("organizationId: \(organizationStore.organizationId)")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                }
-                .padding()
-
-            } else if !errorMessage.isEmpty {
-                VStack(spacing: 12) {
-                    Text(errorMessage)
-                        .foregroundColor(.red)
-                        .multilineTextAlignment(.center)
-
-                    Text("organizationId: \(organizationStore.organizationId)")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-
-                    Button("再読み込み") {
-                        fetch()
-                    }
-                }
-                .padding()
-
-            } else if members.isEmpty {
-                VStack(spacing: 12) {
-                    Text("会員がいません")
-                        .foregroundColor(.gray)
-
-                    Text("organizationId: \(organizationStore.organizationId)")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-
-                    Button("再読み込み") {
-                        fetch()
-                    }
-                }
-                .padding()
-
-            } else {
-                List(members) { member in
+        List {
+            ForEach(members) { member in
+                NavigationLink {
+                    AdminMemberCategoryEditView(
+                        organizationId: organizationStore.organizationId,
+                        member: member
+                    )
+                } label: {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(member.name.isEmpty ? "名称未設定" : member.name)
                             .font(.headline)
 
-                        if !member.email.isEmpty {
-                            Text(member.email)
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-                        }
+                        Text(member.email)
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
 
-                        if !member.phone.isEmpty {
-                            Text(member.phone)
+                        if member.categories.isEmpty {
+                            Text("カテゴリ未設定")
                                 .font(.caption)
-                                .foregroundColor(.gray)
+                                .foregroundColor(.orange)
+                        } else {
+                            Text("カテゴリ: \(member.categories.joined(separator: "、"))")
+                                .font(.caption)
+                                .foregroundColor(.blue)
                         }
 
                         Text(member.status)
@@ -106,58 +52,77 @@ struct AdminMemberListView: View {
                     }
                     .padding(.vertical, 6)
                 }
-                .listStyle(.plain)
             }
         }
         .navigationTitle("会員一覧")
+        .overlay {
+            if isLoading {
+                ProgressView("読み込み中...")
+            } else if !errorMessage.isEmpty {
+                Text(errorMessage)
+                    .foregroundColor(.red)
+                    .padding()
+            } else if members.isEmpty {
+                Text("会員がいません")
+                    .foregroundColor(.gray)
+            }
+        }
         .onAppear {
-            print("📌 AdminMemberListView organizationId:", organizationStore.organizationId)
             fetch()
         }
     }
 
     private func fetch() {
-        let safeOrganizationId = organizationStore.organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let orgId = organizationStore.organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard !safeOrganizationId.isEmpty else {
-            members = []
+        guard !orgId.isEmpty else {
             errorMessage = "organizationId がありません"
-            isLoading = false
             return
         }
 
         isLoading = true
         errorMessage = ""
 
-        print("📘 members fetch path: organizations/\(safeOrganizationId)/members")
-
         db.collection("organizations")
-            .document(safeOrganizationId)
+            .document(orgId)
             .collection("members")
             .order(by: "createdAt", descending: true)
             .getDocuments { snapshot, error in
                 if let error {
-                    print("❌ members fetch error:", error.localizedDescription)
-                    errorMessage = error.localizedDescription
-                    isLoading = false
+                    self.errorMessage = error.localizedDescription
+                    self.isLoading = false
                     return
                 }
 
                 let docs = snapshot?.documents ?? []
 
-                print("✅ members count:", docs.count)
-
                 self.members = docs.map { doc in
-                    AdminMemberItem(
+                    let data = doc.data()
+
+                    let arrayCategories = data["categories"] as? [String] ?? []
+
+                    let legacyString = data["categories"] as? String ?? ""
+                    let legacyCategories = legacyString
+                        .replacingOccurrences(of: "[", with: "")
+                        .replacingOccurrences(of: "]", with: "")
+                        .replacingOccurrences(of: "\"", with: "")
+                        .split(separator: ",")
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty }
+
+                    let categories = arrayCategories.isEmpty ? legacyCategories : arrayCategories
+
+                    return AdminMemberItem(
                         id: doc.documentID,
-                        name: doc["name"] as? String ?? "",
-                        status: doc["status"] as? String ?? "",
-                        email: doc["email"] as? String ?? "",
-                        phone: doc["phone"] as? String ?? ""
+                        name: data["name"] as? String ?? "",
+                        status: data["status"] as? String ?? "",
+                        email: data["email"] as? String ?? "",
+                        phone: data["phone"] as? String ?? "",
+                        categories: categories
                     )
                 }
 
-                isLoading = false
+                self.isLoading = false
             }
     }
 }
