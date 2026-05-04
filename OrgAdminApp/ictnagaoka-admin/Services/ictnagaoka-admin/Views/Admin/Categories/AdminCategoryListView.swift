@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct AdminCategorySettingsView: View {
+struct AdminCategoryListView: View {
     @EnvironmentObject private var organizationStore: OrganizationStore
     @StateObject private var store = AdminCategoryStore()
 
@@ -14,13 +14,16 @@ struct AdminCategorySettingsView: View {
 
             if !store.errorMessage.isEmpty {
                 Text(store.errorMessage)
-                    .foregroundColor(.red)
+                    .foregroundStyle(.red)
                     .font(.footnote)
             }
 
             List {
                 ForEach(store.categories) { category in
-                    Text(category.name)
+                    HStack {
+                        Text(category.name)
+                        Spacer()
+                    }
                 }
                 .onDelete { indexSet in
                     for index in indexSet {
@@ -37,7 +40,6 @@ struct AdminCategorySettingsView: View {
         }
         .padding()
         .navigationTitle("カテゴリ管理")
-        .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             store.startListening(
                 organizationId: organizationStore.organization.id
@@ -69,7 +71,7 @@ struct AdminCategorySettingsView: View {
 
             Text("削除する場合は、一覧の項目を左にスワイプしてください。")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
     }
 }
