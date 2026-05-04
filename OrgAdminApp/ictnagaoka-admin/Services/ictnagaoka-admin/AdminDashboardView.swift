@@ -5,6 +5,14 @@ struct AdminDashboardView: View {
     @EnvironmentObject var organizationStore: OrganizationStore
     @EnvironmentObject var authStore: AdminAuthStore
 
+    private var currentEmail: String {
+        Auth.auth().currentUser?.email ?? "メール不明"
+    }
+
+    private var currentUid: String {
+        Auth.auth().currentUser?.uid ?? "UID不明"
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -22,6 +30,10 @@ struct AdminDashboardView: View {
                             .environmentObject(organizationStore)
                     }
 
+                    menuButton(title: "送信済み一覧") {
+                        AdminSentMessageListView()
+                    }
+
                     menuButton(title: "会員申請一覧") {
                         AdminRequestsListView()
                             .environmentObject(organizationStore)
@@ -37,54 +49,37 @@ struct AdminDashboardView: View {
                             .environmentObject(organizationStore)
                     }
 
-                    menuButton(title: "カテゴリ管理") {
-                        AdminCategorySettingsView()
-                            .environmentObject(organizationStore)
-                    }
-
-                    Button {
-                        authStore.signOut()
-                    } label: {
-                        Text("ログアウト")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.red.opacity(0.9))
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
-                    }
-                    .padding(.top, 12)
+                    logoutButton
                 }
                 .padding()
             }
-            .navigationTitle("管理メニュー")
+            .navigationTitle("管理ダッシュボード")
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear {
-                organizationStore.startListening(
-                    organizationId: OrganizationConfig.organizationId
-                )
-            }
         }
     }
 
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("管理アプリ")
-                .font(.title2.bold())
-
-            Text("organizationId: \(OrganizationConfig.organizationId)")
+            Text("ログイン中")
                 .font(.caption)
                 .foregroundColor(.secondary)
 
-            if let email = Auth.auth().currentUser?.email {
-                Text("ログイン中: \(email)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+            Text(currentEmail)
+                .font(.headline)
+
+            Text("UID: \(currentUid)")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            Divider()
+
+            Text("組織ID: \(organizationStore.organization.id)")
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(Color.gray.opacity(0.12))
+        .background(Color.gray.opacity(0.08))
         .cornerRadius(12)
     }
 
@@ -100,6 +95,20 @@ struct AdminDashboardView: View {
                 .frame(maxWidth: .infinity)
                 .padding()
                 .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(12)
+        }
+    }
+
+    private var logoutButton: some View {
+        Button {
+            authStore.signOut()
+        } label: {
+            Text("ログアウト")
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.red)
                 .foregroundColor(.white)
                 .cornerRadius(12)
         }

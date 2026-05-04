@@ -12,6 +12,7 @@
 		896E0D092F9AFE310077F3B9 /* MemberVideoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896E0D082F9AFE310077F3B9 /* MemberVideoListView.swift */; };
 		896E0D0B2F9B97C40077F3B9 /* VideoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896E0D0A2F9B97C40077F3B9 /* VideoItem.swift */; };
 		896E0D722F9C6E4B0077F3B9 /* MemberLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896E0D712F9C6E4B0077F3B9 /* MemberLoginView.swift */; };
+		899632132FA8A2B0002FA8BC /* PushNavigationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 899632122FA8A2B0002FA8BC /* PushNavigationStore.swift */; };
 		899F3D8A2F996AE100713584 /* MemberMessageItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 899F3D892F996AE100713584 /* MemberMessageItem.swift */; };
 		89C1973D2F8B61EB00610C65 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 89C1973C2F8B61EB00610C65 /* Assets.xcassets */; };
 		89C197472F8B6A2000610C65 /* blog_k100App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C197392F8B5CD100610C65 /* blog_k100App.swift */; };
@@ -77,6 +78,7 @@
 		896E0D082F9AFE310077F3B9 /* MemberVideoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberVideoListView.swift; sourceTree = "<group>"; };
 		896E0D0A2F9B97C40077F3B9 /* VideoItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoItem.swift; sourceTree = "<group>"; };
 		896E0D712F9C6E4B0077F3B9 /* MemberLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberLoginView.swift; sourceTree = "<group>"; };
+		899632122FA8A2B0002FA8BC /* PushNavigationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNavigationStore.swift; sourceTree = "<group>"; };
 		899F3D892F996AE100713584 /* MemberMessageItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberMessageItem.swift; sourceTree = "<group>"; };
 		89C197252F8B13AF00610C65 /* blog.k100.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = blog.k100.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		89C197392F8B5CD100610C65 /* blog_k100App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = blog_k100App.swift; sourceTree = "<group>"; };
@@ -215,6 +217,7 @@
 				89C198762F8E176F00610C65 /* DiaryStore.swift */,
 				89C198B12F8EF8B100610C65 /* MemberPostStore.swift */,
 				89C1996B2F94ECA700610C65 /* MemberAnnouncementStore.swift */,
+				899632122FA8A2B0002FA8BC /* PushNavigationStore.swift */,
 			);
 			path = Stores;
 			sourceTree = "<group>";
@@ -434,6 +437,7 @@
 				89C1992F2F90BCED00610C65 /* MemberPost.swift in Sources */,
 				89C198812F8E231300610C65 /* PhotoPickerItem.swift in Sources */,
 				89C1985F2F8CF35200610C65 /* OrganizationConfig.swift in Sources */,
+				899632132FA8A2B0002FA8BC /* PushNavigationStore.swift in Sources */,
 				89C198A62F8EF42600610C65 /* MessageService.swift in Sources */,
 				896E0D072F9AFDC70077F3B9 /* MemberVideoStore.swift in Sources */,
 				89C1985D2F8CF2C900610C65 /* MemberMessageStore.swift in Sources */,

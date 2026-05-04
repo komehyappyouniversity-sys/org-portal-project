@@ -18,12 +18,13 @@ struct MemberMessageListView: View {
                 .padding(.vertical, 24)
                 .listRowSeparator(.hidden)
 
-            } else if !store.errorMessage.isEmpty {
+            } else if let errorMessage = store.errorMessage,
+                      !errorMessage.isEmpty {
                 VStack(spacing: 12) {
                     Text("お知らせを読み込めませんでした")
                         .font(.headline)
 
-                    Text(store.errorMessage)
+                    Text(errorMessage)
                         .font(.subheadline)
                         .foregroundColor(.red)
                         .multilineTextAlignment(.center)
@@ -97,7 +98,7 @@ struct MemberMessageListView: View {
 
             store.startListening(
                 organizationId: organizationId,
-                visibility: visibility
+                mode: visibility
             )
         }
         .onDisappear {

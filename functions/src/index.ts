@@ -1,208 +1,149 @@
-import * as functions from "firebase-functions";
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
 
 admin.initializeApp();
 
 const db = admin.firestore();
 
-/**
- * 簡易暗号化（Base64）
- * ※本番強化するなら Secret Manager + crypto 推奨
- */
-function encrypt(text: string): string {
-  return Buffer.from(text, "utf-8").toString("base64");
-}
-
-function decrypt(text: string): string {
-  return Buffer.from(text, "base64").toString("utf-8");
-}
-
-/**
- * ■ Vimeo設定保存（管理アプリ → Functions）
- * organizations/{orgId}/private/settings/vimeo
- */
-export const saveVimeoConfig = functions
-  .region("asia-northeast1")
-  .https.onCall(async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError("unauthenticated", "ログイン必須");
+export const sendMessageNotification = onDocumentCreated(
+  {
+    document: "organizations/{organizationId}/messages/{messageId}",
+    region: "us-central1",
+  },
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) {
+      logger.info("No snapshot");
+      return;
     }
 
-    const { organizationId, accessToken, userId } = data;
+    const organizationId = event.params.organizationId;
+    const messageId = event.params.messageId;
+    const data = snapshot.data();
 
-    if (!organizationId || !accessToken) {
-      throw new functions.https.HttpsError("invalid-argument", "パラメータ不足");
-    }
+    const title = String(data.title ?? "お知らせ");
+    const body = String(data.body ?? "");
+    const isBroadcast = data.isBroadcast === true;
+    const categoryTargets = Array.isArray(data.categoryTargets)
+      ? data.categoryTargets.filter((v) => typeof v === "string")
+      : [];
+    const targetMemberUids = Array.isArray(data.targetMemberUids)
+      ? data.targetMemberUids.filter((v) => typeof v === "string")
+      : [];
+    const toUids = Array.isArray(data.toUids)
+      ? data.toUids.filter((v) => typeof v === "string")
+      : [];
 
-    const encryptedToken = encrypt(accessToken);
+    logger.info("通知作成開始", {
+      organizationId,
+      messageId,
+      title,
+      isBroadcast,
+      categoryTargets,
+      targetMemberUids,
+      toUids,
+    });
 
-    await db
+    const membersRef = db
       .collection("organizations")
       .doc(organizationId)
-      .collection("private")
-      .doc("settings")
-      .set({
-        vimeo: {
-          accessToken: encryptedToken,
-          userId: userId || "",
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-      }, { merge: true });
+      .collection("members");
 
-    return { success: true };
-  });
+    let memberSnapshots: FirebaseFirestore.QueryDocumentSnapshot[] = [];
 
-/**
- * ■ Vimeo取得（動画取得時に使用）
- */
-export const getVimeoConfig = functions
-  .region("asia-northeast1")
-  .https.onCall(async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError("unauthenticated", "ログイン必須");
+    if (isBroadcast) {
+      const membersSnapshot = await membersRef.get();
+      memberSnapshots = membersSnapshot.docs;
+    } else if (categoryTargets.length > 0) {
+      const membersSnapshot = await membersRef.get();
+
+      memberSnapshots = membersSnapshot.docs.filter((doc) => {
+        const member = doc.data();
+
+        const categories = Array.isArray(member.categories)
+          ? member.categories.filter((v) => typeof v === "string")
+          : [];
+
+        const legacyCategory =
+          typeof member.category === "string" ? member.category : "";
+
+        const allCategories = [...categories];
+
+        if (legacyCategory) {
+          allCategories.push(legacyCategory);
+        }
+
+        return allCategories.some((category) =>
+          categoryTargets.includes(category)
+        );
+      });
+    } else if (targetMemberUids.length > 0 || toUids.length > 0) {
+      const uidSet = new Set<string>([...targetMemberUids, ...toUids]);
+
+      const docs = await Promise.all(
+        Array.from(uidSet).map((uid) => membersRef.doc(uid).get())
+      );
+
+      memberSnapshots = docs.filter(
+        (doc): doc is FirebaseFirestore.QueryDocumentSnapshot =>
+          doc.exists
+      );
+    } else {
+      logger.info("通知対象なし");
+      return;
     }
 
-    const { organizationId } = data;
+    const tokens = memberSnapshots
+      .map((doc) => doc.data().fcmToken)
+      .filter((token): token is string => typeof token === "string" && token.length > 0);
 
-    const doc = await db
-      .collection("organizations")
-      .doc(organizationId)
-      .collection("private")
-      .doc("settings")
-      .get();
+    const uniqueTokens = Array.from(new Set(tokens));
 
-    const vimeo = doc.data()?.vimeo;
+    logger.info("通知対象トークン数", {
+      count: uniqueTokens.length,
+    });
 
-    if (!vimeo) {
-      return { exists: false };
-    }
-
-    return {
-      exists: true,
-      accessToken: decrypt(vimeo.accessToken),
-      userId: vimeo.userId,
-    };
-  });
-
-/**
- * ■ メッセージ送信トリガー（通知）
- * organizations/{orgId}/messages/{messageId}
- */
-export const onMessageCreated = functions
-  .region("asia-northeast1")
-  .firestore.document("organizations/{orgId}/messages/{messageId}")
-  .onCreate(async (snap, context) => {
-    const data = snap.data();
-    const orgId = context.params.orgId;
-
-    const title = data.title || "お知らせ";
-    const body = data.body || "";
-
-    const isBroadcast = data.isBroadcast ?? true;
-    const categoryTargets: string[] = data.categoryTargets || [];
-    const targetUids: string[] = data.targetMemberUids || [];
-
-    // 会員取得
-    const membersSnap = await db
-      .collection("organizations")
-      .doc(orgId)
-      .collection("members")
-      .get();
-
-    const tokens: string[] = [];
-
-    membersSnap.forEach((doc) => {
-  const m = doc.data();
-
-  const token = m.fcmToken;
-  if (!token) return;
-
-  const status = m.status || "";
-  if (status !== "approved") return;
-
-  const memberCategories: string[] = Array.isArray(m.categories)
-    ? m.categories
-    : [];
-
-  const legacyCategory = typeof m.category === "string" ? m.category : "";
-
-  const allMemberCategories = [
-    ...memberCategories,
-    ...(legacyCategory ? [legacyCategory] : []),
-  ];
-
-  // 個別指定
-  if (targetUids.length > 0) {
-    if (targetUids.includes(doc.id)) {
-      tokens.push(token);
-    }
-    return;
-  }
-
-  // カテゴリ指定
-  if (categoryTargets.length > 0) {
-    const matched = categoryTargets.some((category) =>
-      allMemberCategories.includes(category)
-    );
-
-    if (matched) {
-      tokens.push(token);
-    }
-    return;
-  }
-
-  // 承認済み会員全員
-  if (isBroadcast) {
-    tokens.push(token);
-  }
-});
-
-    if (tokens.length === 0) {
-      console.log("送信対象なし");
+    if (uniqueTokens.length === 0) {
+      logger.info("FCMトークンなし");
       return;
     }
 
     const message: admin.messaging.MulticastMessage = {
-      tokens,
+      tokens: uniqueTokens,
       notification: {
         title,
         body,
       },
       data: {
-        messageId: snap.id,
         type: "message",
+        messageId,
+        organizationId,
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+            badge: 1,
+          },
+        },
       },
     };
 
     const response = await admin.messaging().sendEachForMulticast(message);
 
-console.log("通知送信結果:", {
-  targetCount: tokens.length,
-  successCount: response.successCount,
-  failureCount: response.failureCount,
-});
+    logger.info("通知送信完了", {
+      successCount: response.successCount,
+      failureCount: response.failureCount,
+    });
 
-response.responses.forEach((r, index) => {
-  if (!r.success) {
-    console.error("通知送信失敗:", {
-      index,
-      errorCode: r.error?.code,
-      errorMessage: r.error?.message,
-      tokenPrefix: tokens[index]?.substring(0, 20),
+    response.responses.forEach((result, index) => {
+      if (!result.success) {
+        logger.error("通知送信失敗", {
+          token: uniqueTokens[index],
+          error: result.error?.message,
+        });
+      }
     });
   }
-});
-  });
-
-/**
- * ■ 会員登録時（オプション）
- * 初期データ補完などに使える
- */
-export const onMemberCreated = functions
-  .region("asia-northeast1")
-  .firestore.document("organizations/{orgId}/members/{uid}")
-  .onCreate(async (snap, context) => {
-    const data = snap.data();
-
-    console.log("新規会員:", data.name || "no-name");
-  });
+);
