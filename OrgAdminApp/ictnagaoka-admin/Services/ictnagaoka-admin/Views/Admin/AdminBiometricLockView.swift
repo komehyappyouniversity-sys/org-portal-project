@@ -25,6 +25,7 @@ struct AdminBiometricLockView: View {
             }
 
             Button {
+                print("🔐 Face ID button tapped")
                 securityStore.authenticate()
             } label: {
                 Text("Face IDで開く")

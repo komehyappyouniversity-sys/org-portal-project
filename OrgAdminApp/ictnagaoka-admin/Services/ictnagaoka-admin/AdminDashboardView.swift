@@ -47,53 +47,50 @@ struct AdminDashboardView: View {
                             .environmentObject(organizationStore)
                     }
 
-                    menuButton(title: "Vimeo連携設定") {
+                    menuButton(title: "Vimeo設定") {
                         AdminVimeoSettingsView()
                             .environmentObject(organizationStore)
                     }
 
-                    Button {
+                    // 今回追加
+                    menuButton(title: "動画管理") {
+                        AdminVideoManagementView()
+                            .environmentObject(organizationStore)
+                    }
+
+                    Button(role: .destructive) {
                         authStore.signOut()
                     } label: {
                         Text("ログアウト")
                             .font(.headline)
-                            .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.red)
-                            .cornerRadius(12)
                     }
-                    .padding(.top, 20)
+                    .buttonStyle(.bordered)
+                    .padding(.top, 12)
                 }
                 .padding()
             }
             .navigationTitle("管理メニュー")
-            .onAppear {
-                if organizationStore.organizationId.isEmpty {
-                    organizationStore.startListening(
-                        organizationId: OrganizationConfig.organizationId
-                    )
-                }
-            }
         }
     }
 
     private var headerSection: some View {
         VStack(spacing: 8) {
-            Text("管理アプリ")
-                .font(.largeTitle.bold())
+            Text("管理者メニュー")
+                .font(.title.bold())
 
-            Text("organizationId: \(organizationStore.organizationId.isEmpty ? OrganizationConfig.organizationId : organizationStore.organizationId)")
+            Text("organizationId: \(organizationStore.organizationId.isEmpty ? "未取得" : organizationStore.organizationId)")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.gray)
 
             if let email = Auth.auth().currentUser?.email {
                 Text(email)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.gray)
             }
         }
-        .padding(.bottom, 12)
+        .padding(.bottom, 8)
     }
 
     private func menuButton<Destination: View>(
