@@ -5,14 +5,6 @@ struct AdminDashboardView: View {
     @EnvironmentObject var organizationStore: OrganizationStore
     @EnvironmentObject var authStore: AdminAuthStore
 
-    private var currentEmail: String {
-        Auth.auth().currentUser?.email ?? "メール不明"
-    }
-
-    private var currentUid: String {
-        Auth.auth().currentUser?.uid ?? "UID不明"
-    }
-
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -32,6 +24,7 @@ struct AdminDashboardView: View {
 
                     menuButton(title: "送信済み一覧") {
                         AdminSentMessageListView()
+                            .environmentObject(organizationStore)
                     }
 
                     menuButton(title: "会員申請一覧") {
@@ -49,38 +42,58 @@ struct AdminDashboardView: View {
                             .environmentObject(organizationStore)
                     }
 
-                    logoutButton
+                    menuButton(title: "カテゴリ管理") {
+                        AdminCategorySettingsView()
+                            .environmentObject(organizationStore)
+                    }
+
+                    menuButton(title: "Vimeo連携設定") {
+                        AdminVimeoSettingsView()
+                            .environmentObject(organizationStore)
+                    }
+
+                    Button {
+                        authStore.signOut()
+                    } label: {
+                        Text("ログアウト")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.red)
+                            .cornerRadius(12)
+                    }
+                    .padding(.top, 20)
                 }
                 .padding()
             }
-            .navigationTitle("管理ダッシュボード")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("管理メニュー")
+            .onAppear {
+                if organizationStore.organizationId.isEmpty {
+                    organizationStore.startListening(
+                        organizationId: OrganizationConfig.organizationId
+                    )
+                }
+            }
         }
     }
 
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("ログイン中")
+        VStack(spacing: 8) {
+            Text("管理アプリ")
+                .font(.largeTitle.bold())
+
+            Text("organizationId: \(organizationStore.organizationId.isEmpty ? OrganizationConfig.organizationId : organizationStore.organizationId)")
                 .font(.caption)
                 .foregroundColor(.secondary)
 
-            Text(currentEmail)
-                .font(.headline)
-
-            Text("UID: \(currentUid)")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            Divider()
-
-            Text("組織ID: \(organizationStore.organization.id)")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            if let email = Auth.auth().currentUser?.email {
+                Text(email)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(Color.gray.opacity(0.08))
-        .cornerRadius(12)
+        .padding(.bottom, 12)
     }
 
     private func menuButton<Destination: View>(
@@ -92,24 +105,10 @@ struct AdminDashboardView: View {
         } label: {
             Text(title)
                 .font(.headline)
+                .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding()
                 .background(Color.blue)
-                .foregroundColor(.white)
-                .cornerRadius(12)
-        }
-    }
-
-    private var logoutButton: some View {
-        Button {
-            authStore.signOut()
-        } label: {
-            Text("ログアウト")
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.red)
-                .foregroundColor(.white)
                 .cornerRadius(12)
         }
     }
