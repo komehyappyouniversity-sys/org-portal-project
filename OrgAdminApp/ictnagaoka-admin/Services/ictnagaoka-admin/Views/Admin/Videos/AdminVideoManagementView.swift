@@ -59,7 +59,7 @@ struct AdminVideoManagementView: View {
             Text("Vimeo動画管理")
                 .font(.title2.bold())
 
-            Text("Vimeoから動画一覧を読み込み、公開範囲や有料設定を保存します。")
+            Text("Vimeoから動画一覧を読み込み、公開範囲・有料設定・金額を保存します。")
                 .font(.subheadline)
                 .foregroundColor(.gray)
 
@@ -127,6 +127,7 @@ private struct VideoSettingRow: View {
     let onSave: (AdminManagedVideo) -> Void
 
     @State private var editedVideo: AdminManagedVideo
+    @State private var priceInput: String
 
     init(
         video: AdminManagedVideo,
@@ -137,48 +138,20 @@ private struct VideoSettingRow: View {
         self.onChange = onChange
         self.onSave = onSave
         _editedVideo = State(initialValue: video)
+        _priceInput = State(initialValue: video.price == 0 ? "" : String(video.price))
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                AsyncImage(url: URL(string: editedVideo.thumbnailUrl)) { image in
-                    image
-                        .resizable()
-                        .scaledToFill()
-                } placeholder: {
-                    Rectangle()
-                        .foregroundColor(.gray.opacity(0.2))
-                        .overlay {
-                            Image(systemName: "video")
-                                .foregroundColor(.gray)
-                        }
-                }
-                .frame(width: 96, height: 60)
-                .clipped()
-                .cornerRadius(8)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(editedVideo.title)
-                        .font(.headline)
-                        .lineLimit(2)
-
-                    if !editedVideo.description.isEmpty {
-                        Text(editedVideo.description)
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                            .lineLimit(2)
-                    }
-
-                    Text("Vimeo ID: \(editedVideo.vimeoVideoId)")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                }
-            }
+            videoHeader
 
             Toggle("公開する", isOn: binding(\.isPublished))
             Toggle("会員限定にする", isOn: binding(\.isMembersOnly))
             Toggle("有料 / プレミアム動画", isOn: binding(\.isPremium))
+
+            if editedVideo.isPremium {
+                premiumSection
+            }
 
             Stepper("並び順: \(editedVideo.sortOrder)", value: binding(\.sortOrder), in: 0...999)
 
@@ -186,6 +159,7 @@ private struct VideoSettingRow: View {
                 Spacer()
 
                 Button {
+                    updatePriceText()
                     onSave(editedVideo)
                 } label: {
                     Text("この動画を保存")
@@ -195,17 +169,112 @@ private struct VideoSettingRow: View {
             }
         }
         .padding(.vertical, 8)
-        .onChange(of: editedVideo.isPublished) { _ in
-            onChange(editedVideo)
-        }
-        .onChange(of: editedVideo.isMembersOnly) { _ in
-            onChange(editedVideo)
-        }
+        .onChange(of: editedVideo.isPublished) { _ in onChange(editedVideo) }
+        .onChange(of: editedVideo.isMembersOnly) { _ in onChange(editedVideo) }
         .onChange(of: editedVideo.isPremium) { _ in
+            updatePriceText()
             onChange(editedVideo)
         }
-        .onChange(of: editedVideo.sortOrder) { _ in
+        .onChange(of: editedVideo.billingType) { _ in
+            updatePriceText()
             onChange(editedVideo)
+        }
+        .onChange(of: priceInput) { newValue in
+            let filtered = newValue.filter { $0.isNumber }
+            if filtered != newValue {
+                priceInput = filtered
+                return
+            }
+
+            editedVideo.price = Int(filtered) ?? 0
+            updatePriceText()
+            onChange(editedVideo)
+        }
+        .onChange(of: editedVideo.sortOrder) { _ in onChange(editedVideo) }
+    }
+
+    private var videoHeader: some View {
+        HStack(alignment: .top, spacing: 12) {
+            AsyncImage(url: URL(string: editedVideo.thumbnailUrl)) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+            } placeholder: {
+                Rectangle()
+                    .foregroundColor(.gray.opacity(0.2))
+                    .overlay {
+                        Image(systemName: "video")
+                            .foregroundColor(.gray)
+                    }
+            }
+            .frame(width: 96, height: 60)
+            .clipped()
+            .cornerRadius(8)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(editedVideo.title)
+                    .font(.headline)
+                    .lineLimit(2)
+
+                if !editedVideo.description.isEmpty {
+                    Text(editedVideo.description)
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .lineLimit(2)
+                }
+
+                Text("Vimeo ID: \(editedVideo.vimeoVideoId)")
+                    .font(.caption2)
+                    .foregroundColor(.gray)
+            }
+        }
+    }
+
+    private var premiumSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Picker("課金種別", selection: binding(\.billingType)) {
+                Text("月額").tag("monthly")
+                Text("1本ごと").tag("oneTime")
+            }
+            .pickerStyle(.segmented)
+
+            TextField("金額を入力 例: 1000", text: $priceInput)
+                .keyboardType(.numberPad)
+                .textFieldStyle(.roundedBorder)
+
+            Text(editedVideo.priceText.isEmpty ? "表示例: 月額 1,000円" : "表示: \(editedVideo.priceText)")
+                .font(.caption)
+                .foregroundColor(.gray)
+        }
+        .padding(12)
+        .background(Color.gray.opacity(0.08))
+        .cornerRadius(10)
+    }
+
+    private func updatePriceText() {
+        guard editedVideo.isPremium else {
+            editedVideo.price = 0
+            editedVideo.priceText = ""
+            return
+        }
+
+        let price = Int(priceInput) ?? editedVideo.price
+        editedVideo.price = price
+
+        guard price > 0 else {
+            editedVideo.priceText = ""
+            return
+        }
+
+        let formatted = NumberFormatter.localizedString(
+            from: NSNumber(value: price),
+            number: .decimal
+        )
+
+        if editedVideo.billingType == "monthly" {
+            editedVideo.priceText = "月額 \(formatted)円"
+        } else {
+            editedVideo.priceText = "1本 \(formatted)円"
         }
     }
 

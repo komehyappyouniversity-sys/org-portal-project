@@ -110,6 +110,9 @@ final class AdminVideoManagementStore: ObservableObject {
                             isPublished: false,
                             isMembersOnly: true,
                             isPremium: false,
+                            price: 0,
+                            priceText: "",
+                            billingType: "monthly",
                             sortOrder: 0
                         )
                     }
@@ -145,9 +148,11 @@ final class AdminVideoManagementStore: ObservableObject {
             "isPublished": video.isPublished,
             "isMembersOnly": video.isMembersOnly,
             "isPremium": video.isPremium,
+            "price": video.price,
+            "priceText": video.priceText,
+            "billingType": video.billingType,
             "sortOrder": video.sortOrder,
-            "updatedAt": FieldValue.serverTimestamp(),
-            "createdAt": FieldValue.serverTimestamp()
+            "updatedAt": FieldValue.serverTimestamp()
         ]
 
         db.collection("organizations")
@@ -167,6 +172,11 @@ final class AdminVideoManagementStore: ObservableObject {
     }
 
     func saveAll(organizationId: String) {
+        guard !videos.isEmpty else {
+            showError("保存する動画がありません")
+            return
+        }
+
         for video in videos {
             saveVideo(video, organizationId: organizationId)
         }
@@ -176,6 +186,7 @@ final class AdminVideoManagementStore: ObservableObject {
         guard let index = videos.firstIndex(where: { $0.vimeoVideoId == video.vimeoVideoId }) else {
             return
         }
+
         videos[index] = video
     }
 

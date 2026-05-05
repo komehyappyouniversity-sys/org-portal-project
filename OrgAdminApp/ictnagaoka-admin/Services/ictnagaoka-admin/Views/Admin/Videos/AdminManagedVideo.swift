@@ -14,6 +14,11 @@ struct AdminManagedVideo: Identifiable, Codable {
     var isMembersOnly: Bool
     var isPremium: Bool
 
+    // 🔥 追加（課金）
+    var price: Int
+    var priceText: String
+    var billingType: String   // "monthly" or "oneTime"
+
     var sortOrder: Int
 
     var createdAt: Timestamp?
@@ -29,6 +34,9 @@ struct AdminManagedVideo: Identifiable, Codable {
         isPublished: Bool = false,
         isMembersOnly: Bool = false,
         isPremium: Bool = false,
+        price: Int = 0,
+        priceText: String = "",
+        billingType: String = "monthly", // ← デフォルトは月額
         sortOrder: Int = 0,
         createdAt: Timestamp? = nil,
         updatedAt: Timestamp? = nil
@@ -42,6 +50,9 @@ struct AdminManagedVideo: Identifiable, Codable {
         self.isPublished = isPublished
         self.isMembersOnly = isMembersOnly
         self.isPremium = isPremium
+        self.price = price
+        self.priceText = priceText
+        self.billingType = billingType
         self.sortOrder = sortOrder
         self.createdAt = createdAt
         self.updatedAt = updatedAt
