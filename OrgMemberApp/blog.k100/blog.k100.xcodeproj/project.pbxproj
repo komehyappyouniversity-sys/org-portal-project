@@ -12,6 +12,8 @@
 		896E0D092F9AFE310077F3B9 /* MemberVideoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896E0D082F9AFE310077F3B9 /* MemberVideoListView.swift */; };
 		896E0D0B2F9B97C40077F3B9 /* VideoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896E0D0A2F9B97C40077F3B9 /* VideoItem.swift */; };
 		896E0D722F9C6E4B0077F3B9 /* MemberLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896E0D712F9C6E4B0077F3B9 /* MemberLoginView.swift */; };
+		89900DA82FAAFA8C008CC3E6 /* MemberVideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89900DA72FAAFA8C008CC3E6 /* MemberVideoPlayerView.swift */; };
+		89900DAA2FAAFC43008CC3E6 /* VideoPurchaseStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89900DA92FAAFC43008CC3E6 /* VideoPurchaseStore.swift */; };
 		899632132FA8A2B0002FA8BC /* PushNavigationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 899632122FA8A2B0002FA8BC /* PushNavigationStore.swift */; };
 		899F3D8A2F996AE100713584 /* MemberMessageItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 899F3D892F996AE100713584 /* MemberMessageItem.swift */; };
 		89C1973D2F8B61EB00610C65 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 89C1973C2F8B61EB00610C65 /* Assets.xcassets */; };
@@ -78,6 +80,8 @@
 		896E0D082F9AFE310077F3B9 /* MemberVideoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberVideoListView.swift; sourceTree = "<group>"; };
 		896E0D0A2F9B97C40077F3B9 /* VideoItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoItem.swift; sourceTree = "<group>"; };
 		896E0D712F9C6E4B0077F3B9 /* MemberLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberLoginView.swift; sourceTree = "<group>"; };
+		89900DA72FAAFA8C008CC3E6 /* MemberVideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberVideoPlayerView.swift; sourceTree = "<group>"; };
+		89900DA92FAAFC43008CC3E6 /* VideoPurchaseStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPurchaseStore.swift; sourceTree = "<group>"; };
 		899632122FA8A2B0002FA8BC /* PushNavigationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNavigationStore.swift; sourceTree = "<group>"; };
 		899F3D892F996AE100713584 /* MemberMessageItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberMessageItem.swift; sourceTree = "<group>"; };
 		89C197252F8B13AF00610C65 /* blog.k100.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = blog.k100.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -302,6 +306,8 @@
 				896E0D042F9AFD950077F3B9 /* MemberVideoItem.swift */,
 				896E0D062F9AFDC70077F3B9 /* MemberVideoStore.swift */,
 				896E0D082F9AFE310077F3B9 /* MemberVideoListView.swift */,
+				89900DA72FAAFA8C008CC3E6 /* MemberVideoPlayerView.swift */,
+				89900DA92FAAFC43008CC3E6 /* VideoPurchaseStore.swift */,
 			);
 			path = Video;
 			sourceTree = "<group>";
@@ -438,6 +444,7 @@
 				89C198812F8E231300610C65 /* PhotoPickerItem.swift in Sources */,
 				89C1985F2F8CF35200610C65 /* OrganizationConfig.swift in Sources */,
 				899632132FA8A2B0002FA8BC /* PushNavigationStore.swift in Sources */,
+				89900DAA2FAAFC43008CC3E6 /* VideoPurchaseStore.swift in Sources */,
 				89C198A62F8EF42600610C65 /* MessageService.swift in Sources */,
 				896E0D072F9AFDC70077F3B9 /* MemberVideoStore.swift in Sources */,
 				89C1985D2F8CF2C900610C65 /* MemberMessageStore.swift in Sources */,
@@ -448,6 +455,7 @@
 				89C198792F8E17A200610C65 /* DiaryView.swift in Sources */,
 				896E0D092F9AFE310077F3B9 /* MemberVideoListView.swift in Sources */,
 				89C1988B2F8E45AF00610C65 /* MemberMessageDetailView.swift in Sources */,
+				89900DA82FAAFA8C008CC3E6 /* MemberVideoPlayerView.swift in Sources */,
 				89C198B42F8EF95500610C65 /* MemberPostView.swift in Sources */,
 				89C1974A2F8B71BE00610C65 /* MemberRegistration.swift in Sources */,
 				89C1986F2F8E150C00610C65 /* ScheduleEvent.swift in Sources */,

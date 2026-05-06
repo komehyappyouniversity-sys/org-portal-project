@@ -18,6 +18,7 @@ struct MemberVideoItem: Identifiable, Equatable {
     let price: Int
     let priceText: String
     let billingType: String
+    let productId: String
     let createdAt: Date?
 
     var playURL: String {
@@ -30,6 +31,16 @@ struct MemberVideoItem: Identifiable, Equatable {
         }
 
         return ""
+    }
+
+    var embedURL: String {
+        let trimmedId = vimeoVideoId.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !trimmedId.isEmpty {
+            return "https://player.vimeo.com/video/\(trimmedId)"
+        }
+
+        return playURL
     }
 
     var displayPriceText: String {
@@ -68,6 +79,7 @@ struct MemberVideoItem: Identifiable, Equatable {
         self.price = data["price"] as? Int ?? 0
         self.priceText = data["priceText"] as? String ?? ""
         self.billingType = data["billingType"] as? String ?? ""
+        self.productId = data["productId"] as? String ?? ""
 
         if let timestamp = data["createdAt"] as? Timestamp {
             self.createdAt = timestamp.dateValue()

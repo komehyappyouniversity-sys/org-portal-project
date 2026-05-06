@@ -4,44 +4,24 @@
 //
 
 import SwiftUI
+import StoreKit
 
 struct MemberVideoListView: View {
     @EnvironmentObject var organizationStore: OrganizationStore
+
     @StateObject private var store = MemberVideoStore()
+    @StateObject private var purchaseStore = VideoPurchaseStore()
 
     var body: some View {
         Group {
             if store.isLoading {
-                VStack(spacing: 12) {
-                    ProgressView()
-                    Text("動画を読み込み中...")
-                        .foregroundColor(.gray)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                loadingView
 
             } else if !store.errorMessage.isEmpty {
-                VStack(spacing: 12) {
-                    Text("動画を読み込めませんでした")
-                        .font(.headline)
-
-                    Text(store.errorMessage)
-                        .font(.footnote)
-                        .foregroundColor(.red)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                errorView
 
             } else if store.videos.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "play.rectangle")
-                        .font(.system(size: 48))
-                        .foregroundColor(.gray)
-
-                    Text("公開中の動画はありません")
-                        .foregroundColor(.gray)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                emptyView
 
             } else {
                 List {
@@ -55,19 +35,41 @@ struct MemberVideoListView: View {
         .navigationTitle("動画コンテンツ")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            store.startListening(
-                organizationId: organizationStore.organization.id
-            )
+            start()
         }
     }
 
+    // MARK: - 初期処理
+
+    private func start() {
+        store.startListening(
+            organizationId: organizationStore.organization.id
+        )
+
+        Task {
+            await purchaseStore.updatePurchasedProducts()
+
+            let productIds = store.videos
+                .map { $0.productId }
+                .filter { !$0.isEmpty }
+
+            await purchaseStore.loadProducts(productIds: productIds)
+        }
+    }
+
+    // MARK: - 行UI
+
     private func videoRow(_ video: MemberVideoItem) -> some View {
         VStack(alignment: .leading, spacing: 12) {
+
             HStack(alignment: .top, spacing: 12) {
+
                 thumbnailView(video)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .top, spacing: 8) {
+
+                    // タイトル + 価格
+                    HStack(alignment: .top) {
                         Text(video.title)
                             .font(.headline)
                             .lineLimit(2)
@@ -78,32 +80,19 @@ struct MemberVideoListView: View {
                             Text(video.displayPriceText)
                                 .font(.subheadline.bold())
                                 .foregroundColor(.orange)
-                                .multilineTextAlignment(.trailing)
-                                .lineLimit(2)
                         }
                     }
 
+                    // バッジ
                     HStack(spacing: 8) {
                         if video.isMembersOnly {
-                            badge(
-                                text: "会員限定",
-                                foreground: .blue,
-                                background: Color.blue.opacity(0.15)
-                            )
+                            badge("会員限定", .blue)
                         }
 
                         if video.isPremium {
-                            badge(
-                                text: "有料",
-                                foreground: .orange,
-                                background: Color.orange.opacity(0.15)
-                            )
+                            badge("有料", .orange)
                         } else {
-                            badge(
-                                text: "無料",
-                                foreground: .green,
-                                background: Color.green.opacity(0.15)
-                            )
+                            badge("無料", .green)
                         }
                     }
                 }
@@ -111,18 +100,61 @@ struct MemberVideoListView: View {
                 Spacer()
             }
 
-            if !video.isPremium {
-                Button {
-                    openVideo(urlString: video.playURL)
+            // ボタン（ここが重要）
+            actionButton(video)
+        }
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - ボタン制御
+
+    private func actionButton(_ video: MemberVideoItem) -> some View {
+
+        // 無料動画
+        if !video.isPremium {
+            return AnyView(
+                NavigationLink {
+                    MemberVideoPlayerView(video: video)
                 } label: {
                     Label("再生する", systemImage: "play.fill")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-            }
+            )
         }
-        .padding(.vertical, 8)
+
+        // 有料動画
+        if purchaseStore.isPurchased(productId: video.productId) {
+            return AnyView(
+                NavigationLink {
+                    MemberVideoPlayerView(video: video)
+                } label: {
+                    Label("再生する", systemImage: "play.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+            )
+        }
+
+        // 未購入
+        return AnyView(
+            Button {
+                Task {
+                    if let product = purchaseStore.products.first(where: {
+                        $0.id == video.productId
+                    }) {
+                        await purchaseStore.purchase(product: product)
+                    }
+                }
+            } label: {
+                Text("購入する")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+        )
     }
+
+    // MARK: - サムネイル
 
     private func thumbnailView(_ video: MemberVideoItem) -> some View {
         Group {
@@ -130,10 +162,7 @@ struct MemberVideoListView: View {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .empty:
-                        ZStack {
-                            Color(.systemGray5)
-                            ProgressView()
-                        }
+                        ProgressView()
 
                     case .success(let image):
                         image
@@ -158,33 +187,41 @@ struct MemberVideoListView: View {
     private var placeholderThumbnail: some View {
         ZStack {
             Color(.systemGray5)
-
             Image(systemName: "play.rectangle.fill")
-                .font(.title2)
                 .foregroundColor(.gray)
         }
     }
 
-    private func badge(
-        text: String,
-        foreground: Color,
-        background: Color
-    ) -> some View {
+    // MARK: - 共通UI
+
+    private func badge(_ text: String, _ color: Color) -> some View {
         Text(text)
             .font(.caption.bold())
-            .foregroundColor(foreground)
+            .foregroundColor(color)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(background)
+            .background(color.opacity(0.15))
             .cornerRadius(8)
     }
 
-    private func openVideo(urlString: String) {
-        guard let url = URL(string: urlString), !urlString.isEmpty else {
-            print("❌ 不正な動画URL:", urlString)
-            return
+    private var loadingView: some View {
+        VStack {
+            ProgressView()
+            Text("動画を読み込み中...")
         }
+    }
 
-        UIApplication.shared.open(url)
+    private var errorView: some View {
+        VStack {
+            Text("読み込み失敗")
+            Text(store.errorMessage)
+        }
+    }
+
+    private var emptyView: some View {
+        VStack {
+            Image(systemName: "play.rectangle")
+            Text("動画がありません")
+        }
     }
 }
