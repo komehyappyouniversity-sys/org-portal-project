@@ -48,10 +48,6 @@ struct AdminVimeoSettingsView: View {
                 }
 
                 HStack {
-                    Button("読み込み") {
-                        loadSettings()
-                    }
-                    .buttonStyle(.bordered)
 
                     Spacer()
 

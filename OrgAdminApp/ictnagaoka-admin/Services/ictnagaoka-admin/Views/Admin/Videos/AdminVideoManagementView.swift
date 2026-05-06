@@ -67,24 +67,15 @@ struct AdminVideoManagementView: View {
                 .font(.caption)
                 .foregroundColor(.gray)
 
-            HStack {
-                Button {
-                    store.fetchFromVimeo(organizationId: organizationStore.organizationId)
-                } label: {
-                    Label("Vimeoから読み込み", systemImage: "arrow.down.circle")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-
-                Button {
-                    store.saveAll(organizationId: organizationStore.organizationId)
-                } label: {
-                    Label("全て保存", systemImage: "tray.and.arrow.down")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .disabled(store.videos.isEmpty)
+            Button {
+                store.fetchFromVimeo(organizationId: organizationStore.organizationId)
+            } label: {
+                Label("Vimeoから読み込み", systemImage: "arrow.down.circle")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
             }
+            .buttonStyle(.borderedProminent)
+            .disabled(store.isLoading)
         }
         .padding()
     }
@@ -98,26 +89,14 @@ struct AdminVideoManagementView: View {
             Text("まだ動画が読み込まれていません")
                 .font(.headline)
 
-            Text("「Vimeoから読み込み」を押すと、保存済みのVimeo設定を使って動画一覧を取得します。")
+            Text("上の「Vimeoから読み込み」を押すと、保存済みのVimeo設定を使って動画一覧を取得します。")
                 .font(.subheadline)
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
-
-            Button {
-                store.fetchFromVimeo(organizationId: organizationStore.organizationId)
-            } label: {
-                Text("Vimeoから読み込み")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-            }
-            .background(Color.blue)
-            .foregroundColor(.white)
-            .cornerRadius(12)
-            .padding(.horizontal)
         }
         .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
