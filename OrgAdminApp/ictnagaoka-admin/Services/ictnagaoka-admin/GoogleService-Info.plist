@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>blog.k100.admin</string>
+	<string>org.nagaoka.blog-k100.admin</string>
 	<key>PROJECT_ID</key>
 	<string>ictnagaoka-member</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:1090569556915:ios:9e39fa39964ac2e05d71c6</string>
+	<string>1:1090569556915:ios:b2f2f8f49f2651725d71c6</string>
 </dict>
 </plist>

@@ -70,6 +70,24 @@ async function assertAdmin(organizationId: string, uid: string): Promise<void> {
   }
 }
 
+async function isSuperAdmin(uid: string): Promise<boolean> {
+  const doc = await db.collection("superAdmins").doc(uid).get();
+  return doc.exists && doc.data()?.isActive === true;
+}
+
+async function assertAdminOrSuperAdmin(
+  organizationId: string,
+  uid: string
+): Promise<void> {
+  const superAdmin = await isSuperAdmin(uid);
+
+  if (superAdmin) {
+    return;
+  }
+
+  await assertAdmin(organizationId, uid);
+}
+
 async function getUidFromRequest(req: functions.https.Request): Promise<string> {
   const authorization = req.headers.authorization || "";
 
@@ -82,6 +100,198 @@ async function getUidFromRequest(req: functions.https.Request): Promise<string> 
 
   return decoded.uid;
 }
+
+// MARK: - Vimeo設定保存（callable版）
+
+async function getCallableUid(
+  data: any,
+  context: functions.https.CallableContext
+): Promise<string> {
+  console.log("getCallableUid called", {
+    hasContextAuth: !!context.auth?.uid,
+    contextUid: context.auth?.uid || "",
+    hasIdToken: !!data?.idToken,
+    idTokenPrefix: String(data?.idToken || "").slice(0, 20),
+  });
+
+  if (context.auth?.uid) {
+    return context.auth.uid;
+  }
+
+  const idToken = String(data?.idToken || "").trim();
+
+  if (!idToken) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "Authentication required. No idToken."
+    );
+  }
+
+  try {
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    console.log("idToken verified", {
+      uid: decoded.uid,
+      aud: decoded.aud,
+      iss: decoded.iss,
+    });
+    return decoded.uid;
+  } catch (error) {
+    console.error("verifyIdToken failed", error);
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "Invalid idToken."
+    );
+  }
+}
+
+// MARK: - Vimeo設定保存（callable版）
+
+export const saveVimeoConfig = functions
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    const uid = await getCallableUid(data, context);
+
+    const organizationId = String(data.organizationId || "").trim();
+    const accessToken = String(data.accessToken || "").trim();
+    const userId = String(data.userId || "").trim();
+    const query = String(data.query || "").trim();
+
+    if (!organizationId || !accessToken || !userId) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "organizationId, accessToken, userId が必要です"
+      );
+    }
+
+    await assertAdminOrSuperAdmin(organizationId, uid);
+
+    await db
+      .collection("organizations")
+      .doc(organizationId)
+      .collection("private")
+      .doc("vimeo")
+      .set({
+        encryptedAccessToken: encryptText(accessToken),
+        userId,
+        query,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedBy: uid,
+      }, { merge: true });
+
+    return { ok: true };
+  });
+
+
+// MARK: - Vimeo設定取得（callable版）
+
+export const getVimeoConfig = functions
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    const uid = await getCallableUid(data, context);
+
+    const organizationId = String(data.organizationId || "").trim();
+
+    if (!organizationId) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "organizationId が必要です"
+      );
+    }
+
+    await assertAdminOrSuperAdmin(organizationId, uid);
+
+    const doc = await db
+      .collection("organizations")
+      .doc(organizationId)
+      .collection("private")
+      .doc("vimeo")
+      .get();
+
+    if (!doc.exists) {
+      return {
+        accessToken: "",
+        userId: "",
+        query: "",
+      };
+    }
+
+    const saved = doc.data() || {};
+    const encryptedAccessToken = saved.encryptedAccessToken || "";
+
+    return {
+      accessToken: encryptedAccessToken ? decryptText(encryptedAccessToken) : "",
+      userId: saved.userId || "",
+      query: saved.query || "",
+    };
+  });
+
+
+// MARK: - Vimeo動画取得（callable版）
+
+export const fetchVimeoVideos = functions
+  .region(REGION)
+  .https.onCall(async (data, context) => {
+    const uid = await getCallableUid(data, context);
+
+    const organizationId = String(data.organizationId || "").trim();
+
+    if (!organizationId) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "organizationId が必要です"
+      );
+    }
+
+    await assertAdminOrSuperAdmin(organizationId, uid);
+
+    const configDoc = await db
+      .collection("organizations")
+      .doc(organizationId)
+      .collection("private")
+      .doc("vimeo")
+      .get();
+
+    if (!configDoc.exists) {
+      throw new functions.https.HttpsError(
+        "not-found",
+        "Vimeo設定がありません"
+      );
+    }
+
+    const config = configDoc.data() || {};
+    const accessToken = decryptText(config.encryptedAccessToken);
+    const userId = config.userId;
+    const query = config.query || "";
+
+    let url = `https://api.vimeo.com/users/${userId}/videos?per_page=50`;
+
+    if (query) {
+      url += `&query=${encodeURIComponent(query)}`;
+    }
+
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    const videos = (response.data?.data || []).map((video: any) => {
+      return {
+        id: video.uri?.split("/").pop() || "",
+        title: video.name || "",
+        description: video.description || "",
+        link: video.link || "",
+        duration: video.duration || 0,
+        thumbnailUrl: video.pictures?.sizes?.slice(-1)?.[0]?.link || "",
+        createdTime: video.created_time || "",
+      };
+    });
+
+    return {
+      ok: true,
+      videos,
+    };
+  });
 
 // MARK: - Vimeo設定保存
 
@@ -559,3 +769,4 @@ export const sendUnreadReminderHttp = functions
       return;
     }
   });
+ 

@@ -17,7 +17,7 @@ struct OrganizationDetailView: View {
                 }
 
                 NavigationLink("Vimeo設定") {
-                    Text("Vimeo設定は次のステップで作成します")
+                    OrganizationVimeoSettingsView(organization: organization)
                 }
 
                 NavigationLink("課金設定") {
