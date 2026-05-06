@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import FirebaseAuth
 
 struct AdminVideoManagementView: View {
     @EnvironmentObject var organizationStore: OrganizationStore
@@ -9,6 +10,10 @@ struct AdminVideoManagementView: View {
         VStack(spacing: 0) {
             headerSection
 
+                .onAppear {
+                        print("現在ログイン中 UID:", Auth.auth().currentUser?.uid ?? "nil")
+                        print("現在ログイン中 email:", Auth.auth().currentUser?.email ?? "nil")
+                    }
             if store.isLoading {
                 ProgressView("Vimeoから読み込み中...")
                     .padding()

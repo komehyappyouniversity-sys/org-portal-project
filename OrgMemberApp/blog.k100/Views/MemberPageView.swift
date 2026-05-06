@@ -72,9 +72,18 @@ struct MemberPageView: View {
                     titleText: "お知らせ",
                     visibility: "member"
                 )
+                .environmentObject(memberStore)
                 .environmentObject(organizationStore)
             } label: {
                 menuButton(title: "お知らせ")
+            }
+
+            NavigationLink {
+                MemberVideoListView()
+                    .environmentObject(memberStore)
+                    .environmentObject(organizationStore)
+            } label: {
+                menuButton(title: "動画コンテンツ")
             }
 
             NavigationLink {

@@ -32,6 +32,19 @@ struct MemberHomeView: View {
                             )
                         }
 
+                        NavigationLink {
+                            MemberVideoListView()
+                                .environmentObject(memberStore)
+                                .environmentObject(organizationStore)
+                        } label: {
+                            menuButton(
+                                title: "動画コンテンツ",
+                                subtitle: "公開中の動画を見ることができます",
+                                systemImage: "play.rectangle.fill",
+                                color: .purple
+                            )
+                        }
+
                         if isAlreadyRegistered {
                             menuButton(
                                 title: "会員登録",
@@ -104,7 +117,7 @@ struct MemberHomeView: View {
                 .font(.title3)
                 .foregroundColor(.secondary)
 
-            Text("お知らせの確認、会員登録、登録済み会員のログインができます。")
+            Text("お知らせの確認、動画の閲覧、会員登録、登録済み会員のログインができます。")
                 .font(.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
