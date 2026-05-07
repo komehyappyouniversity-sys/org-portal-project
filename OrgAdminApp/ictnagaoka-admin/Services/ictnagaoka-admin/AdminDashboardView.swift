@@ -1,13 +1,21 @@
+//
+//  AdminDashboardView.swift
+//  ictnagaoka-admin
+//
+
 import SwiftUI
 import FirebaseAuth
+import Combine
 
 struct AdminDashboardView: View {
+
     @EnvironmentObject var organizationStore: OrganizationStore
-    @EnvironmentObject var authStore: AdminAuthStore
 
     var body: some View {
+
         NavigationStack {
             ScrollView {
+
                 VStack(spacing: 16) {
 
                     headerSection
@@ -47,27 +55,23 @@ struct AdminDashboardView: View {
                             .environmentObject(organizationStore)
                     }
 
+                    // MARK: - 予約機能
+                    menuButton(title: "イベント予約管理") {
+                        AdminBookingEventListView()
+                            .environmentObject(organizationStore)
+                    }
+
                     menuButton(title: "Vimeo設定") {
                         AdminVimeoSettingsView()
                             .environmentObject(organizationStore)
                     }
 
-                    // 今回追加
                     menuButton(title: "動画管理") {
                         AdminVideoManagementView()
                             .environmentObject(organizationStore)
                     }
 
-                    Button(role: .destructive) {
-                        authStore.signOut()
-                    } label: {
-                        Text("ログアウト")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                    }
-                    .buttonStyle(.bordered)
-                    .padding(.top, 12)
+                    logoutButton
                 }
                 .padding()
             }
@@ -75,38 +79,72 @@ struct AdminDashboardView: View {
         }
     }
 
-    private var headerSection: some View {
-        VStack(spacing: 8) {
-            Text("管理者メニュー")
-                .font(.title.bold())
+    // MARK: - Header
 
-            Text("organizationId: \(organizationStore.organizationId.isEmpty ? "未取得" : organizationStore.organizationId)")
-                .font(.caption)
+    private var headerSection: some View {
+
+        VStack(spacing: 8) {
+
+            Text("管理者メニュー")
+                .font(.largeTitle.bold())
+
+            Text("organizationId: \(organizationStore.organizationId)")
+                .font(.subheadline)
                 .foregroundColor(.gray)
 
             if let email = Auth.auth().currentUser?.email {
                 Text(email)
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundColor(.gray)
             }
         }
-        .padding(.bottom, 8)
+        .padding(.top)
     }
+
+    // MARK: - Menu Button
 
     private func menuButton<Destination: View>(
         title: String,
         @ViewBuilder destination: @escaping () -> Destination
     ) -> some View {
+
         NavigationLink {
             destination()
         } label: {
+
             Text(title)
-                .font(.headline)
+                .font(.title3.bold())
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
-                .padding()
+                .frame(height: 90)
                 .background(Color.blue)
-                .cornerRadius(12)
+                .cornerRadius(24)
         }
+    }
+
+    // MARK: - Logout
+
+    private var logoutButton: some View {
+
+        Button {
+
+            do {
+                try Auth.auth().signOut()
+                print("✅ 管理者ログアウト成功")
+            } catch {
+                print("❌ 管理者ログアウト失敗:", error.localizedDescription)
+            }
+
+        } label: {
+
+            Text("ログアウト")
+                .font(.title3.bold())
+                .foregroundColor(.red)
+                .frame(maxWidth: .infinity)
+                .frame(height: 90)
+                .background(Color(.systemGray5))
+                .cornerRadius(24)
+        }
+        .padding(.top, 24)
     }
 }
