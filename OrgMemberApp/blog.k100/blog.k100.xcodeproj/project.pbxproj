@@ -76,6 +76,7 @@
 		89C4783E2FACDDF600C6D726 /* MemberBookingSlot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C4783D2FACDDF600C6D726 /* MemberBookingSlot.swift */; };
 		89C478402FACDE6400C6D726 /* MemberBookingEventStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C4783F2FACDE6400C6D726 /* MemberBookingEventStore.swift */; };
 		89C478422FACDEAE00C6D726 /* MemberBookingSlotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C478412FACDEAE00C6D726 /* MemberBookingSlotStore.swift */; };
+		89C4784B2FADE7BA00C6D726 /* firestore.rules in Resources */ = {isa = PBXBuildFile; fileRef = 89C4784A2FADE7BA00C6D726 /* firestore.rules */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -147,6 +148,7 @@
 		89C4783D2FACDDF600C6D726 /* MemberBookingSlot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberBookingSlot.swift; sourceTree = "<group>"; };
 		89C4783F2FACDE6400C6D726 /* MemberBookingEventStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberBookingEventStore.swift; sourceTree = "<group>"; };
 		89C478412FACDEAE00C6D726 /* MemberBookingSlotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberBookingSlotStore.swift; sourceTree = "<group>"; };
+		89C4784A2FADE7BA00C6D726 /* firestore.rules */ = {isa = PBXFileReference; lastKnownFileType = text; path = firestore.rules; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -178,6 +180,7 @@
 				89C1995E2F9303A200610C65 /* blog-k100-Info.plist */,
 				89C1995D2F93038100610C65 /* blog.k100Release.entitlements */,
 				89C199532F92109A00610C65 /* GoogleService-Info.plist */,
+				89C4784A2FADE7BA00C6D726 /* firestore.rules */,
 				89C1989D2F8EF2C000610C65 /* Services */,
 				89C1983B2F8C592200610C65 /* Helpers */,
 				89C1973C2F8B61EB00610C65 /* Assets.xcassets */,
@@ -431,6 +434,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				89C4784B2FADE7BA00C6D726 /* firestore.rules in Resources */,
 				89C1973D2F8B61EB00610C65 /* Assets.xcassets in Resources */,
 				89C199542F92109A00610C65 /* GoogleService-Info.plist in Resources */,
 			);

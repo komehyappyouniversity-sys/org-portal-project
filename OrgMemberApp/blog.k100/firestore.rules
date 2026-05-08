@@ -1,0 +1,165 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin(orgId) {
+      return exists(
+        /databases/$(database)/documents/organizations/$(orgId)/admins/$(request.auth.uid)
+      )
+      &&
+      get(
+        /databases/$(database)/documents/organizations/$(orgId)/admins/$(request.auth.uid)
+      ).data.isActive == true;
+    }
+
+    function isOwnBooking(memberUid) {
+      return isSignedIn() && request.auth.uid == memberUid;
+    }
+
+    match /organizations/{organizationId} {
+
+      allow read: if isSignedIn();
+      allow write: if isAdmin(organizationId);
+
+      match /admins/{adminUid} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin(organizationId);
+      }
+
+      match /members/{memberUid} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+
+        allow update: if
+          isSignedIn()
+          &&
+          (
+            request.auth.uid == memberUid
+            ||
+            isAdmin(organizationId)
+          );
+
+        allow delete: if isAdmin(organizationId);
+      }
+
+      match /memberRegistrations/{registrationId} {
+        allow create: if isSignedIn();
+
+        allow read: if
+          isSignedIn()
+          &&
+          (
+            request.auth.uid == registrationId
+            ||
+            isAdmin(organizationId)
+          );
+
+        allow update, delete: if isAdmin(organizationId);
+      }
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn();
+        allow create, update, delete: if isAdmin(organizationId);
+      }
+
+      match /categories/{categoryId} {
+        allow read: if isSignedIn();
+        allow create, update, delete: if isAdmin(organizationId);
+      }
+
+      match /events/{eventId} {
+        allow read: if isSignedIn();
+        allow create, update, delete: if isAdmin(organizationId);
+      }
+
+      match /memberPosts/{postId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+
+        allow update: if
+          isSignedIn()
+          &&
+          (
+            request.auth.uid == resource.data.memberUid
+            ||
+            isAdmin(organizationId)
+          );
+
+        allow delete: if isAdmin(organizationId);
+
+        match /replies/{replyId} {
+          allow read: if isSignedIn();
+          allow create, update, delete: if isAdmin(organizationId);
+        }
+      }
+
+      match /videos/{videoId} {
+        allow read: if isSignedIn();
+        allow create, update, delete: if isAdmin(organizationId);
+      }
+
+      match /private/{document=**} {
+        allow read, write: if isAdmin(organizationId);
+      }
+
+      // =========================
+      // 講座予約
+      // =========================
+
+      match /bookingEvents/{eventId} {
+        allow read: if isSignedIn();
+        allow create, update, delete: if isAdmin(organizationId);
+
+        match /slots/{slotId} {
+          allow read: if isSignedIn();
+          allow create, delete: if isAdmin(organizationId);
+
+          allow update: if
+            isAdmin(organizationId)
+            ||
+            (
+              isSignedIn()
+              &&
+              resource.data.isOpen == true
+              &&
+              resource.data.reservedCount < resource.data.capacity
+              &&
+              request.resource.data.reservedCount == resource.data.reservedCount + 1
+              &&
+              request.resource.data.diff(resource.data).changedKeys()
+                .hasOnly(["reservedCount", "updatedAt"])
+            );
+
+          match /bookings/{memberUid} {
+            allow read: if isSignedIn();
+
+            allow create: if
+              isOwnBooking(memberUid)
+              &&
+              request.resource.data.memberUid == request.auth.uid
+              &&
+              request.resource.data.organizationId == organizationId
+              &&
+              request.resource.data.eventId == eventId
+              &&
+              request.resource.data.slotId == slotId
+              &&
+              request.resource.data.status == "reserved";
+
+            allow update, delete: if isAdmin(organizationId);
+          }
+
+          match /reservations/{reservationId} {
+            allow read: if isSignedIn();
+            allow create, update, delete: if isAdmin(organizationId);
+          }
+        }
+      }
+    }
+  }
+}
