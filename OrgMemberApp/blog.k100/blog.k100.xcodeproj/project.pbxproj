@@ -72,6 +72,10 @@
 		89C1996C2F94ECA700610C65 /* MemberAnnouncementStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C1996B2F94ECA700610C65 /* MemberAnnouncementStore.swift */; };
 		89C1996E2F94ECDB00610C65 /* MemberAnnouncementListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C1996D2F94ECDB00610C65 /* MemberAnnouncementListView.swift */; };
 		89C199762F980AA400610C65 /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C199752F98098D00610C65 /* SafariView.swift */; };
+		89C4783C2FACDD9000C6D726 /* MemberBookingEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C4783B2FACDD9000C6D726 /* MemberBookingEvent.swift */; };
+		89C4783E2FACDDF600C6D726 /* MemberBookingSlot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C4783D2FACDDF600C6D726 /* MemberBookingSlot.swift */; };
+		89C478402FACDE6400C6D726 /* MemberBookingEventStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C4783F2FACDE6400C6D726 /* MemberBookingEventStore.swift */; };
+		89C478422FACDEAE00C6D726 /* MemberBookingSlotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C478412FACDEAE00C6D726 /* MemberBookingSlotStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -139,7 +143,19 @@
 		89C1996B2F94ECA700610C65 /* MemberAnnouncementStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberAnnouncementStore.swift; sourceTree = "<group>"; };
 		89C1996D2F94ECDB00610C65 /* MemberAnnouncementListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberAnnouncementListView.swift; sourceTree = "<group>"; };
 		89C199752F98098D00610C65 /* SafariView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariView.swift; sourceTree = "<group>"; };
+		89C4783B2FACDD9000C6D726 /* MemberBookingEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberBookingEvent.swift; sourceTree = "<group>"; };
+		89C4783D2FACDDF600C6D726 /* MemberBookingSlot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberBookingSlot.swift; sourceTree = "<group>"; };
+		89C4783F2FACDE6400C6D726 /* MemberBookingEventStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberBookingEventStore.swift; sourceTree = "<group>"; };
+		89C478412FACDEAE00C6D726 /* MemberBookingSlotStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberBookingSlotStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		89C478432FACDF0200C6D726 /* Booking */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Booking;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		89C197222F8B13AF00610C65 /* Frameworks */ = {
@@ -203,6 +219,8 @@
 				89C198802F8E231300610C65 /* PhotoPickerItem.swift */,
 				89C199692F94EC6D00610C65 /* MemberAnnouncementItem.swift */,
 				896E0D0A2F9B97C40077F3B9 /* VideoItem.swift */,
+				89C4783B2FACDD9000C6D726 /* MemberBookingEvent.swift */,
+				89C4783D2FACDDF600C6D726 /* MemberBookingSlot.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -222,6 +240,8 @@
 				89C198B12F8EF8B100610C65 /* MemberPostStore.swift */,
 				89C1996B2F94ECA700610C65 /* MemberAnnouncementStore.swift */,
 				899632122FA8A2B0002FA8BC /* PushNavigationStore.swift */,
+				89C4783F2FACDE6400C6D726 /* MemberBookingEventStore.swift */,
+				89C478412FACDEAE00C6D726 /* MemberBookingSlotStore.swift */,
 			);
 			path = Stores;
 			sourceTree = "<group>";
@@ -229,6 +249,7 @@
 		89C197362F8B168000610C65 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				89C478432FACDF0200C6D726 /* Booking */,
 				89C198462F8C5A4800610C65 /* BiometricLockView.swift */,
 				89C198422F8C5A0E00610C65 /* MemberPageView.swift */,
 				89C199752F98098D00610C65 /* SafariView.swift */,
@@ -353,6 +374,9 @@
 			);
 			dependencies = (
 			);
+			fileSystemSynchronizedGroups = (
+				89C478432FACDF0200C6D726 /* Booking */,
+			);
 			name = blog.k100;
 			packageProductDependencies = (
 				89C197E82F8B9CF500610C65 /* FirebaseAuth */,
@@ -421,11 +445,13 @@
 			files = (
 				89C1986D2F8DAAF700610C65 /* AppLaunchView.swift in Sources */,
 				896E0D0B2F9B97C40077F3B9 /* VideoItem.swift in Sources */,
+				89C4783C2FACDD9000C6D726 /* MemberBookingEvent.swift in Sources */,
 				89C198832F8E233B00610C65 /* DiaryImageRowView.swift in Sources */,
 				89C198B22F8EF8B100610C65 /* MemberPostStore.swift in Sources */,
 				896E0D722F9C6E4B0077F3B9 /* MemberLoginView.swift in Sources */,
 				89C1992B2F9059C500610C65 /* MemberReplyItem.swift in Sources */,
 				89C198632F8D9D4800610C65 /* MemberAreaGateView.swift in Sources */,
+				89C478402FACDE6400C6D726 /* MemberBookingEventStore.swift in Sources */,
 				89C1974E2F8B725600610C65 /* MemberRegistrationView.swift in Sources */,
 				89C198892F8E459200610C65 /* MemberMessageListView.swift in Sources */,
 				89C1996E2F94ECDB00610C65 /* MemberAnnouncementListView.swift in Sources */,
@@ -449,6 +475,7 @@
 				896E0D072F9AFDC70077F3B9 /* MemberVideoStore.swift in Sources */,
 				89C1985D2F8CF2C900610C65 /* MemberMessageStore.swift in Sources */,
 				89C198412F8C59F700610C65 /* MemberHomeView.swift in Sources */,
+				89C478422FACDEAE00C6D726 /* MemberBookingSlotStore.swift in Sources */,
 				89C198692F8DA60000610C65 /* AppBootstrapStore.swift in Sources */,
 				89C198712F8E153500610C65 /* ScheduleStore.swift in Sources */,
 				89C1983F2F8C59E300610C65 /* ContentView.swift in Sources */,
@@ -469,6 +496,7 @@
 				89C198772F8E176F00610C65 /* DiaryStore.swift in Sources */,
 				89C1974C2F8B721400610C65 /* MemberRegistrationStore.swift in Sources */,
 				899F3D8A2F996AE100713584 /* MemberMessageItem.swift in Sources */,
+				89C4783E2FACDDF600C6D726 /* MemberBookingSlot.swift in Sources */,
 				89C199642F93C38000610C65 /* AnnouncementService.swift in Sources */,
 				89C198652F8DA54900610C65 /* OrganizationStore.swift in Sources */,
 				89C198752F8E174F00610C65 /* DiaryEntry.swift in Sources */,

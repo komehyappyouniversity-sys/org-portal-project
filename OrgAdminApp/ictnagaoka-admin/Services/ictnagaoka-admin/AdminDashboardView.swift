@@ -55,8 +55,7 @@ struct AdminDashboardView: View {
                             .environmentObject(organizationStore)
                     }
 
-                    // MARK: - 予約機能
-                    menuButton(title: "イベント予約管理") {
+                    menuButton(title: "講座予約") {
                         AdminBookingEventListView()
                             .environmentObject(organizationStore)
                     }

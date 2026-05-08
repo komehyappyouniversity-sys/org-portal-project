@@ -59,12 +59,23 @@ struct MemberPageView: View {
 
     private var menuSection: some View {
         VStack(spacing: 14) {
+
             NavigationLink {
                 ScheduleView()
                     .environmentObject(memberStore)
                     .environmentObject(organizationStore)
             } label: {
                 menuButton(title: "スケジュール")
+            }
+
+            NavigationLink {
+                MemberBookingEventListView(
+                    organizationId: organizationStore.organization.id
+                )
+                .environmentObject(memberStore)
+                .environmentObject(organizationStore)
+            } label: {
+                menuButton(title: "講座予約")
             }
 
             NavigationLink {
