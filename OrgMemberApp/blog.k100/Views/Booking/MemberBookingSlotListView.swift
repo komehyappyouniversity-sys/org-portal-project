@@ -11,6 +11,7 @@ struct MemberBookingSlotListView: View {
     let event: MemberBookingEvent
 
     @StateObject private var store = MemberBookingSlotStore()
+    @State private var cancelTargetSlot: MemberBookingSlot?
 
     private var eventId: String {
         event.id ?? ""
@@ -19,8 +20,7 @@ struct MemberBookingSlotListView: View {
     private var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ja_JP")
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
+        formatter.dateFormat = "yyyy/MM/dd"
         return formatter
     }
 
@@ -93,6 +93,38 @@ struct MemberBookingSlotListView: View {
         .onDisappear {
             store.stopListening()
         }
+        .alert("予約をキャンセルしますか？", isPresented: cancelAlertBinding) {
+            Button("やめる", role: .cancel) {
+                cancelTargetSlot = nil
+            }
+
+            Button("キャンセルする", role: .destructive) {
+                if let slot = cancelTargetSlot {
+                    store.cancelBooking(
+                        organizationId: organizationId,
+                        eventId: eventId,
+                        slot: slot
+                    )
+                }
+
+                cancelTargetSlot = nil
+            }
+        } message: {
+            Text("この時間枠の予約を取り消します。")
+        }
+    }
+
+    private var cancelAlertBinding: Binding<Bool> {
+        Binding(
+            get: {
+                cancelTargetSlot != nil
+            },
+            set: { newValue in
+                if !newValue {
+                    cancelTargetSlot = nil
+                }
+            }
+        )
     }
 
     private var eventCard: some View {
@@ -137,9 +169,14 @@ struct MemberBookingSlotListView: View {
     }
 
     private func slotRow(_ slot: MemberBookingSlot) -> some View {
+        let slotId = slot.id ?? ""
+        let isMyBooking = store.myBookedSlotIds.contains(slotId)
         let remaining = max(slot.capacity - slot.reservedCount, 0)
         let isFull = remaining <= 0
-        let canBook = slot.isOpen && !isFull && !store.isBooking
+        let isProcessingThisSlot = store.processingSlotId == slotId
+
+        let canBook = slot.isOpen && !isFull && !isProcessingThisSlot && !isMyBooking
+        let canCancel = isMyBooking && !isProcessingThisSlot
 
         return VStack(alignment: .leading, spacing: 12) {
 
@@ -149,35 +186,77 @@ struct MemberBookingSlotListView: View {
 
                 Spacer()
 
-                Text(slotStatusText(slot: slot, remaining: remaining))
-                    .font(.headline.bold())
-                    .foregroundColor(slotStatusColor(slot: slot, remaining: remaining))
+                Text(
+                    slotStatusText(
+                        slot: slot,
+                        remaining: remaining,
+                        isMyBooking: isMyBooking
+                    )
+                )
+                .font(.headline.bold())
+                .foregroundColor(
+                    slotStatusColor(
+                        slot: slot,
+                        remaining: remaining,
+                        isMyBooking: isMyBooking
+                    )
+                )
             }
 
             Text("定員 \(slot.capacity)　残り \(remaining)")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
-            Button {
-                store.book(
-                    organizationId: organizationId,
-                    eventId: eventId,
-                    slot: slot
-                )
-            } label: {
-                Text(buttonTitle(slot: slot, remaining: remaining))
+            if isMyBooking {
+                Button {
+                    cancelTargetSlot = slot
+                } label: {
+                    Text(isProcessingThisSlot ? "キャンセル中..." : "予約をキャンセルする")
+                        .font(.headline.bold())
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 54)
+                        .background(canCancel ? Color.red : Color.gray)
+                        .cornerRadius(14)
+                }
+                .disabled(!canCancel)
+
+            } else {
+                Button {
+                    store.book(
+                        organizationId: organizationId,
+                        eventId: eventId,
+                        slot: slot
+                    )
+                } label: {
+                    Text(
+                        buttonTitle(
+                            slot: slot,
+                            remaining: remaining,
+                            isProcessingThisSlot: isProcessingThisSlot
+                        )
+                    )
                     .font(.headline.bold())
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
                     .background(canBook ? Color.blue : Color.gray)
                     .cornerRadius(14)
+                }
+                .disabled(!canBook)
             }
-            .disabled(!canBook)
         }
     }
 
-    private func slotStatusText(slot: MemberBookingSlot, remaining: Int) -> String {
+    private func slotStatusText(
+        slot: MemberBookingSlot,
+        remaining: Int,
+        isMyBooking: Bool
+    ) -> String {
+        if isMyBooking {
+            return "予約済み"
+        }
+
         if !slot.isOpen {
             return "受付停止"
         }
@@ -189,7 +268,15 @@ struct MemberBookingSlotListView: View {
         return "受付中"
     }
 
-    private func slotStatusColor(slot: MemberBookingSlot, remaining: Int) -> Color {
+    private func slotStatusColor(
+        slot: MemberBookingSlot,
+        remaining: Int,
+        isMyBooking: Bool
+    ) -> Color {
+        if isMyBooking {
+            return .blue
+        }
+
         if !slot.isOpen {
             return .gray
         }
@@ -201,8 +288,12 @@ struct MemberBookingSlotListView: View {
         return .green
     }
 
-    private func buttonTitle(slot: MemberBookingSlot, remaining: Int) -> String {
-        if store.isBooking {
+    private func buttonTitle(
+        slot: MemberBookingSlot,
+        remaining: Int,
+        isProcessingThisSlot: Bool
+    ) -> String {
+        if isProcessingThisSlot {
             return "予約中..."
         }
 

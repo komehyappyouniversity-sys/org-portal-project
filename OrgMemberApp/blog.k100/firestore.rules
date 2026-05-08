@@ -117,23 +117,15 @@ service cloud.firestore {
 
         match /slots/{slotId} {
           allow read: if isSignedIn();
+
           allow create, delete: if isAdmin(organizationId);
 
+          // 管理アプリ：時間枠編集
+          // 会員アプリ：予約・キャンセル時の reservedCount 更新
           allow update: if
             isAdmin(organizationId)
             ||
-            (
-              isSignedIn()
-              &&
-              resource.data.isOpen == true
-              &&
-              resource.data.reservedCount < resource.data.capacity
-              &&
-              request.resource.data.reservedCount == resource.data.reservedCount + 1
-              &&
-              request.resource.data.diff(resource.data).changedKeys()
-                .hasOnly(["reservedCount", "updatedAt"])
-            );
+            isSignedIn();
 
           match /bookings/{memberUid} {
             allow read: if isSignedIn();
@@ -151,9 +143,15 @@ service cloud.firestore {
               &&
               request.resource.data.status == "reserved";
 
-            allow update, delete: if isAdmin(organizationId);
+            allow delete: if
+              isOwnBooking(memberUid)
+              ||
+              isAdmin(organizationId);
+
+            allow update: if isAdmin(organizationId);
           }
 
+          // 旧名称を残す場合
           match /reservations/{reservationId} {
             allow read: if isSignedIn();
             allow create, update, delete: if isAdmin(organizationId);

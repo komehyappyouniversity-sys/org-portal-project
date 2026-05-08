@@ -5,44 +5,15 @@
 
 import Foundation
 
-struct MemberBookingSlot: Identifiable {
+struct MemberBookingSlot: Identifiable, Equatable {
+    let id: String?
 
-    var id: String?
+    let startAt: Date
+    let endAt: Date
 
-    var startAt: Date
-    var endAt: Date
+    let capacity: Int
+    let reservedCount: Int
+    let paidCount: Int
 
-    var capacity: Int
-    var reservedCount: Int
-    var paidCount: Int
-
-    var isOpen: Bool
-
-    var createdAt: Date?
-    var updatedAt: Date?
-
-    var remainingCount: Int {
-        max(capacity - reservedCount, 0)
-    }
-
-    var isFull: Bool {
-        reservedCount >= capacity
-    }
-
-    var canReserve: Bool {
-        isOpen && !isFull
-    }
-
-    var displayStatus: String {
-
-        if !isOpen {
-            return "受付停止"
-        }
-
-        if isFull {
-            return "満席"
-        }
-
-        return "受付中"
-    }
+    let isOpen: Bool
 }
