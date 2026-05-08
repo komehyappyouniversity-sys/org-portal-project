@@ -1,94 +1,48 @@
-//
-//  AdminBookingSlotListView.swift
-//  ictnagaoka-admin
-//
-
 import SwiftUI
 
 struct AdminBookingSlotListView: View {
-    @EnvironmentObject var organizationStore: OrganizationStore
-    @StateObject private var store = AdminBookingSlotStore()
+    @EnvironmentObject private var organizationStore: OrganizationStore
 
     let event: AdminBookingEvent
 
+    @StateObject private var store = AdminBookingSlotStore()
     @State private var showEditor = false
     @State private var showBulkCreate = false
-    @State private var selectedSlot: AdminBookingSlot?
 
     var body: some View {
-        List {
-            Section {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(event.title.isEmpty ? "無題の予約イベント" : event.title)
-                        .font(.headline)
-
-                    Text(event.eventDate.formatted(date: .abbreviated, time: .omitted))
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-
-                    Text("参加費：¥\(event.feeAmount)")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.vertical, 4)
-            }
-
+        VStack {
             if store.isLoading {
-                ProgressView("読み込み中...")
-            }
+                ProgressView("時間枠を読み込み中...")
+                    .padding()
 
-            if !store.errorMessage.isEmpty {
-                Text(store.errorMessage)
-                    .foregroundColor(.red)
-            }
+            } else if !store.errorMessage.isEmpty {
+                errorView
 
-            Section("時間枠") {
-                if store.slots.isEmpty && !store.isLoading {
-                    Text("時間枠がまだありません。右上の＋または一括作成から追加してください。")
-                        .foregroundColor(.secondary)
-                }
+            } else if store.slots.isEmpty {
+                emptyView
 
-                ForEach(store.slots) { slot in
-                    Button {
-                        selectedSlot = slot
-                        showEditor = true
-                    } label: {
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text(timeRangeText(slot))
-                                    .font(.headline)
-
-                                Spacer()
-
-                                Text(slot.displayStatus)
-                                    .font(.caption.bold())
-                                    .foregroundColor(statusColor(slot))
-                            }
-
-                            HStack(spacing: 12) {
-                                Text("定員 \(slot.capacity)")
-                                Text("予約 \(slot.reservedCount)")
-                                Text("決済 \(slot.paidCount)")
-                                Text("残り \(slot.remainingCount)")
-                            }
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        }
-                        .padding(.vertical, 4)
+            } else {
+                List {
+                    ForEach(store.slots) { slot in
+                        slotRow(slot)
+                    }
+                    .onDelete { indexSet in
+                        deleteSlots(indexSet)
                     }
                 }
-                .onDelete(perform: delete)
             }
         }
         .navigationTitle("時間枠")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Button("一括") {
+                Button {
                     showBulkCreate = true
+                } label: {
+                    Image(systemName: "calendar.badge.plus")
                 }
 
                 Button {
-                    selectedSlot = nil
                     showEditor = true
                 } label: {
                     Image(systemName: "plus")
@@ -96,7 +50,10 @@ struct AdminBookingSlotListView: View {
             }
         }
         .onAppear {
-            guard let eventId = event.id else { return }
+            guard let eventId = event.id else {
+                store.errorMessage = "イベントIDがありません"
+                return
+            }
 
             store.startListening(
                 organizationId: organizationStore.organizationId,
@@ -107,7 +64,7 @@ struct AdminBookingSlotListView: View {
             NavigationStack {
                 AdminBookingSlotEditorView(
                     event: event,
-                    slot: selectedSlot
+                    slot: nil
                 )
                 .environmentObject(organizationStore)
             }
@@ -120,12 +77,103 @@ struct AdminBookingSlotListView: View {
         }
     }
 
-    private func delete(at offsets: IndexSet) {
-        guard let eventId = event.id else { return }
+    private var errorView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.largeTitle)
+                .foregroundColor(.orange)
 
-        for index in offsets {
+            Text(store.errorMessage)
+                .foregroundColor(.red)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+        }
+        .padding()
+    }
+
+    private var emptyView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "clock.badge.questionmark")
+                .font(.largeTitle)
+                .foregroundColor(.gray)
+
+            Text("時間枠がありません")
+                .font(.headline)
+
+            Text("右上の＋ボタン、または一括作成ボタンから時間枠を作成してください。")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+
+            Button {
+                showBulkCreate = true
+            } label: {
+                Label("時間枠を一括作成", systemImage: "calendar.badge.plus")
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding()
+    }
+
+    private func slotRow(_ slot: AdminBookingSlot) -> some View {
+        let slotTitle = "\(timeText(slot.startAt)) 〜 \(timeText(slot.endAt))"
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(slotTitle)
+                        .font(.headline)
+
+                    Text("時間枠ID: \(slot.id ?? "")")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("定員 \(slot.capacity)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Text("残り \(slot.remainingCount)")
+                        .font(.caption.bold())
+                        .foregroundColor(slot.remainingCount <= 0 ? .red : .blue)
+                }
+            }
+
+            if let eventId = event.id, let slotId = slot.id {
+                NavigationLink {
+                    AdminBookingReservationListView(
+                        eventId: eventId,
+                        slotId: slotId,
+                        slotTitle: slotTitle
+                    )
+                    .environmentObject(organizationStore)
+                } label: {
+                    Label("予約者一覧", systemImage: "person.3.fill")
+                        .font(.subheadline.bold())
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(.vertical, 6)
+    }
+
+    private func deleteSlots(_ indexSet: IndexSet) {
+        guard let eventId = event.id else {
+            store.errorMessage = "イベントIDがありません"
+            return
+        }
+
+        for index in indexSet {
             let slot = store.slots[index]
-            guard let slotId = slot.id else { continue }
+
+            guard let slotId = slot.id else {
+                continue
+            }
 
             Task {
                 await store.deleteSlot(
@@ -137,21 +185,10 @@ struct AdminBookingSlotListView: View {
         }
     }
 
-    private func timeRangeText(_ slot: AdminBookingSlot) -> String {
-        let start = slot.startAt.formatted(date: .omitted, time: .shortened)
-        let end = slot.endAt.formatted(date: .omitted, time: .shortened)
-        return "\(start)〜\(end)"
-    }
-
-    private func statusColor(_ slot: AdminBookingSlot) -> Color {
-        if !slot.isOpen {
-            return .gray
-        }
-
-        if slot.isFull {
-            return .red
-        }
-
-        return .green
+    private func timeText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: date)
     }
 }
