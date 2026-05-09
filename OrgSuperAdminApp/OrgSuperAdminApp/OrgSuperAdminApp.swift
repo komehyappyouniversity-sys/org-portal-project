@@ -4,6 +4,8 @@ import FirebaseCore
 @main
 struct OrgSuperAdminApp: App {
 
+    @StateObject private var featureStore = AdminFeatureStore()
+
     init() {
         FirebaseApp.configure()
         print("✅ Firebase configured for OrgSuperAdminApp")
@@ -12,6 +14,7 @@ struct OrgSuperAdminApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(featureStore)
         }
     }
 }

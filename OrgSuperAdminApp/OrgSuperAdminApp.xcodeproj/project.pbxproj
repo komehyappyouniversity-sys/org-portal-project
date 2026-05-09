@@ -18,6 +18,16 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		895C14F52FAEA9A500554198 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		895C14F92FAEAA5000554198 /* ictnagaoka-admin */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "ictnagaoka-admin";
+			sourceTree = "<group>";
+		};
 		89900D7D2FAA13F4008CC3E6 /* OrgSuperAdminApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = OrgSuperAdminApp;
@@ -43,6 +53,8 @@
 		89900D722FAA13F4008CC3E6 = {
 			isa = PBXGroup;
 			children = (
+				895C14F92FAEAA5000554198 /* ictnagaoka-admin */,
+				895C14F52FAEA9A500554198 /* Shared */,
 				89900D7D2FAA13F4008CC3E6 /* OrgSuperAdminApp */,
 				89900DA22FAA2AE5008CC3E6 /* Frameworks */,
 				89900D7C2FAA13F4008CC3E6 /* Products */,
@@ -80,6 +92,8 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
+				895C14F52FAEA9A500554198 /* Shared */,
+				895C14F92FAEAA5000554198 /* ictnagaoka-admin */,
 				89900D7D2FAA13F4008CC3E6 /* OrgSuperAdminApp */,
 			);
 			name = OrgSuperAdminApp;

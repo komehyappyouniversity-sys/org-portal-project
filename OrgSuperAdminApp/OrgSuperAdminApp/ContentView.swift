@@ -6,7 +6,7 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if authStore.isSignedIn && authStore.isSuperAdmin {
+            if authStore.isLoggedIn {
                 if securityStore.isUnlocked {
                     OrganizationListView()
                         .environmentObject(authStore)
@@ -40,7 +40,7 @@ struct ContentView: View {
             }
         }
         .onAppear {
-            authStore.start()
+            authStore.checkCurrentUser()
         }
     }
 }
