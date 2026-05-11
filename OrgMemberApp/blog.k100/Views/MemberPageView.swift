@@ -11,6 +11,7 @@ struct MemberPageView: View {
     @EnvironmentObject private var securityStore: MemberSecurityStore
     @EnvironmentObject private var memberStore: MemberStore
     @EnvironmentObject private var organizationStore: OrganizationStore
+    @EnvironmentObject private var featureStore: MemberFeatureStore
 
     @State private var showLogoutAlert = false
     @StateObject private var postStore = MemberPostStore()
@@ -60,68 +61,78 @@ struct MemberPageView: View {
     private var menuSection: some View {
         VStack(spacing: 14) {
 
-            NavigationLink {
-                ScheduleView()
+            if featureStore.settings.scheduleEnabled {
+                NavigationLink {
+                    ScheduleView()
+                        .environmentObject(memberStore)
+                        .environmentObject(organizationStore)
+                } label: {
+                    menuButton(title: "スケジュール")
+                }
+            }
+
+            if featureStore.bookingEnabled {
+                NavigationLink {
+                    MemberBookingEventListView(
+                        organizationId: organizationStore.organization.id
+                    )
                     .environmentObject(memberStore)
                     .environmentObject(organizationStore)
-            } label: {
-                menuButton(title: "スケジュール")
+                } label: {
+                    menuButton(title: "講座予約")
+                }
             }
 
-            NavigationLink {
-                MemberBookingEventListView(
-                    organizationId: organizationStore.organization.id
-                )
-                .environmentObject(memberStore)
-                .environmentObject(organizationStore)
-            } label: {
-                menuButton(title: "講座予約")
-            }
-
-            NavigationLink {
-                MemberMessageListView(
-                    titleText: "お知らせ",
-                    visibility: "member"
-                )
-                .environmentObject(memberStore)
-                .environmentObject(organizationStore)
-            } label: {
-                menuButton(title: "お知らせ")
-            }
-
-            NavigationLink {
-                MemberVideoListView()
+            if featureStore.announcementEnabled {
+                NavigationLink {
+                    MemberMessageListView(
+                        titleText: "お知らせ",
+                        visibility: "member"
+                    )
                     .environmentObject(memberStore)
                     .environmentObject(organizationStore)
-            } label: {
-                menuButton(title: "動画コンテンツ")
+                } label: {
+                    menuButton(title: "お知らせ")
+                }
             }
 
-            NavigationLink {
-                MemberPostView()
-                    .environmentObject(memberStore)
-                    .environmentObject(organizationStore)
-            } label: {
-                menuButton(title: "管理者へ投稿")
+            if featureStore.videoEnabled {
+                NavigationLink {
+                    MemberVideoListView()
+                        .environmentObject(memberStore)
+                        .environmentObject(organizationStore)
+                } label: {
+                    menuButton(title: "動画コンテンツ")
+                }
             }
 
-            NavigationLink {
-                MemberPostHistoryView()
-                    .environmentObject(memberStore)
-                    .environmentObject(organizationStore)
-            } label: {
-                ZStack(alignment: .topTrailing) {
-                    menuButton(title: "投稿履歴")
+            if featureStore.settings.memberPostEnabled {
+                NavigationLink {
+                    MemberPostView()
+                        .environmentObject(memberStore)
+                        .environmentObject(organizationStore)
+                } label: {
+                    menuButton(title: "管理者へ投稿")
+                }
 
-                    if unreadReplyCount > 0 {
-                        Text("\(unreadReplyCount)")
-                            .font(.caption.bold())
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.red)
-                            .clipShape(Capsule())
-                            .offset(x: -10, y: 8)
+                NavigationLink {
+                    MemberPostHistoryView()
+                        .environmentObject(memberStore)
+                        .environmentObject(organizationStore)
+                } label: {
+                    ZStack(alignment: .topTrailing) {
+                        menuButton(title: "投稿履歴")
+
+                        if unreadReplyCount > 0 {
+                            Text("\(unreadReplyCount)")
+                                .font(.caption.bold())
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.red)
+                                .clipShape(Capsule())
+                                .offset(x: -10, y: 8)
+                        }
                     }
                 }
             }

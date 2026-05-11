@@ -7,157 +7,315 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function orgPath(orgId) {
+      return /databases/$(database)/documents/organizations/$(orgId);
+    }
+
+    function orgExists(orgId) {
+      return exists(orgPath(orgId));
+    }
+
+    function orgData(orgId) {
+      return get(orgPath(orgId)).data;
+    }
+
+    function isOrgActive(orgId) {
+      return orgExists(orgId)
+        && (orgData(orgId).isActive == true || !("isActive" in orgData(orgId)));
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/superAdmins/$(request.auth.uid)).data.isActive == true;
+    }
+
     function isAdmin(orgId) {
-      return exists(
-        /databases/$(database)/documents/organizations/$(orgId)/admins/$(request.auth.uid)
-      )
-      &&
-      get(
-        /databases/$(database)/documents/organizations/$(orgId)/admins/$(request.auth.uid)
-      ).data.isActive == true;
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/organizations/$(orgId)/admins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/organizations/$(orgId)/admins/$(request.auth.uid)).data.isActive == true;
     }
 
-    function isOwnBooking(memberUid) {
-      return isSignedIn() && request.auth.uid == memberUid;
+    function isAdminOrSuperAdmin(orgId) {
+      return isAdmin(orgId) || isSuperAdmin();
     }
 
+    function isApprovedMember(orgId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.status == "approved";
+    }
+
+    function isOwnMemberDoc(memberId) {
+      return isSignedIn() && request.auth.uid == memberId;
+    }
+
+    /*
+      adminFeatures が未設定の場合は、既存運用が止まらないよう true 扱い。
+      統括アプリで false にした機能だけ Firestore 側でも停止します。
+    */
+    function isFeatureEnabled(orgId, featureName) {
+      return orgExists(orgId)
+        && (
+          !("adminFeatures" in orgData(orgId))
+          || !(featureName in orgData(orgId).adminFeatures)
+          || orgData(orgId).adminFeatures[featureName] == true
+        );
+    }
+
+    // =========================================
+    // superAdmins
+    // =========================================
+    match /superAdmins/{uid} {
+      allow read: if isSuperAdmin();
+      allow create, update: if isSuperAdmin();
+      allow delete: if false;
+    }
+
+    // =========================================
+    // organizations
+    // =========================================
     match /organizations/{organizationId} {
 
-      allow read: if isSignedIn();
-      allow write: if isAdmin(organizationId);
+      allow read:
+        if isSignedIn() && isOrgActive(organizationId);
 
-      match /admins/{adminUid} {
-        allow read: if isSignedIn();
-        allow write: if isAdmin(organizationId);
+      allow create, update:
+        if isSuperAdmin();
+
+      allow delete:
+        if false;
+
+      // -----------------------------------------
+      // admins
+      // -----------------------------------------
+      match /admins/{adminId} {
+        allow read:
+          if isAdminOrSuperAdmin(organizationId);
+
+        allow create, update:
+          if isSuperAdmin();
+
+        allow delete:
+          if isSuperAdmin();
       }
 
-      match /members/{memberUid} {
-        allow read: if isSignedIn();
-        allow create: if isSignedIn();
+      // -----------------------------------------
+      // members
+      // -----------------------------------------
+      match /members/{memberId} {
+        allow read:
+          if isOwnMemberDoc(memberId)
+          || isAdminOrSuperAdmin(organizationId);
 
-        allow update: if
-          isSignedIn()
-          &&
-          (
-            request.auth.uid == memberUid
-            ||
-            isAdmin(organizationId)
-          );
+        allow create:
+          if isOwnMemberDoc(memberId);
 
-        allow delete: if isAdmin(organizationId);
+        allow update:
+          if isOwnMemberDoc(memberId)
+          || isAdminOrSuperAdmin(organizationId);
+
+        allow delete:
+          if isAdminOrSuperAdmin(organizationId);
       }
 
+      // -----------------------------------------
+      // memberRegistrations
+      // -----------------------------------------
       match /memberRegistrations/{registrationId} {
-        allow create: if isSignedIn();
+        allow create:
+          if isSignedIn();
 
-        allow read: if
-          isSignedIn()
-          &&
-          (
-            request.auth.uid == registrationId
-            ||
-            isAdmin(organizationId)
-          );
-
-        allow update, delete: if isAdmin(organizationId);
+        allow read, update, delete:
+          if isAdminOrSuperAdmin(organizationId);
       }
 
+      // -----------------------------------------
+      // messages / お知らせ・会員通知
+      // announcementEnabled で制御
+      // -----------------------------------------
       match /messages/{messageId} {
-        allow read: if isSignedIn();
-        allow create, update, delete: if isAdmin(organizationId);
+        allow read:
+          if isSignedIn()
+          && isOrgActive(organizationId)
+          && isFeatureEnabled(organizationId, "announcementEnabled");
+
+        allow create, update, delete:
+          if isAdminOrSuperAdmin(organizationId)
+          && isFeatureEnabled(organizationId, "announcementEnabled");
       }
 
+      // -----------------------------------------
+      // categories
+      // announcementEnabled で制御
+      // -----------------------------------------
       match /categories/{categoryId} {
-        allow read: if isSignedIn();
-        allow create, update, delete: if isAdmin(organizationId);
+        allow read:
+          if isSignedIn()
+          && isFeatureEnabled(organizationId, "announcementEnabled");
+
+        allow create, update, delete:
+          if isAdminOrSuperAdmin(organizationId)
+          && isFeatureEnabled(organizationId, "announcementEnabled");
       }
 
-      match /events/{eventId} {
-        allow read: if isSignedIn();
-        allow create, update, delete: if isAdmin(organizationId);
-      }
+      // -----------------------------------------
+      // videos
+      // videoEnabled で制御
+      // paidVideoEnabled は有料動画作成・更新時に制御
+      // -----------------------------------------
+      match /videos/{videoId} {
+        allow read:
+          if isSignedIn()
+          && isOrgActive(organizationId)
+          && isFeatureEnabled(organizationId, "videoEnabled");
 
-      match /memberPosts/{postId} {
-        allow read: if isSignedIn();
-        allow create: if isSignedIn();
-
-        allow update: if
-          isSignedIn()
-          &&
-          (
-            request.auth.uid == resource.data.memberUid
-            ||
-            isAdmin(organizationId)
+        allow create, update:
+          if isAdminOrSuperAdmin(organizationId)
+          && isFeatureEnabled(organizationId, "videoEnabled")
+          && (
+            request.resource.data.isPremium != true
+            || isFeatureEnabled(organizationId, "paidVideoEnabled")
           );
 
-        allow delete: if isAdmin(organizationId);
-
-        match /replies/{replyId} {
-          allow read: if isSignedIn();
-          allow create, update, delete: if isAdmin(organizationId);
-        }
+        allow delete:
+          if isAdminOrSuperAdmin(organizationId)
+          && isFeatureEnabled(organizationId, "videoEnabled");
       }
 
-      match /videos/{videoId} {
-        allow read: if isSignedIn();
-        allow create, update, delete: if isAdmin(organizationId);
-      }
-
-      match /private/{document=**} {
-        allow read, write: if isAdmin(organizationId);
-      }
-
-      // =========================
-      // 講座予約
-      // =========================
-
+      // -----------------------------------------
+      // bookingEvents
+      // bookingEnabled で制御
+      // -----------------------------------------
       match /bookingEvents/{eventId} {
-        allow read: if isSignedIn();
-        allow create, update, delete: if isAdmin(organizationId);
+        allow read:
+          if isSignedIn()
+          && isOrgActive(organizationId)
+          && isFeatureEnabled(organizationId, "bookingEnabled");
 
+        allow create, update, delete:
+          if isAdminOrSuperAdmin(organizationId)
+          && isFeatureEnabled(organizationId, "bookingEnabled");
+
+        // ---------------------------------------
+        // slots
+        // ---------------------------------------
         match /slots/{slotId} {
-          allow read: if isSignedIn();
+          allow read:
+            if isSignedIn()
+            && isOrgActive(organizationId)
+            && isFeatureEnabled(organizationId, "bookingEnabled");
 
-          allow create, delete: if isAdmin(organizationId);
+          allow create, update, delete:
+            if isAdminOrSuperAdmin(organizationId)
+            && isFeatureEnabled(organizationId, "bookingEnabled");
+        }
 
-          // 管理アプリ：時間枠編集
-          // 会員アプリ：予約・キャンセル時の reservedCount 更新
-          allow update: if
-            isAdmin(organizationId)
-            ||
-            isSignedIn();
+        // ---------------------------------------
+        // reservations
+        // ---------------------------------------
+        match /reservations/{reservationId} {
+          allow read:
+            if isAdminOrSuperAdmin(organizationId)
+            || (
+              isSignedIn()
+              && resource.data.memberUid == request.auth.uid
+              && isFeatureEnabled(organizationId, "bookingEnabled")
+            );
 
-          match /bookings/{memberUid} {
-            allow read: if isSignedIn();
+          allow create:
+            if isSignedIn()
+            && isFeatureEnabled(organizationId, "bookingEnabled")
+            && request.resource.data.memberUid == request.auth.uid;
 
-            allow create: if
-              isOwnBooking(memberUid)
-              &&
-              request.resource.data.memberUid == request.auth.uid
-              &&
-              request.resource.data.organizationId == organizationId
-              &&
-              request.resource.data.eventId == eventId
-              &&
-              request.resource.data.slotId == slotId
-              &&
-              request.resource.data.status == "reserved";
+          allow update:
+            if isAdminOrSuperAdmin(organizationId)
+            || (
+              isSignedIn()
+              && resource.data.memberUid == request.auth.uid
+              && isFeatureEnabled(organizationId, "bookingEnabled")
+            );
 
-            allow delete: if
-              isOwnBooking(memberUid)
-              ||
-              isAdmin(organizationId);
-
-            allow update: if isAdmin(organizationId);
-          }
-
-          // 旧名称を残す場合
-          match /reservations/{reservationId} {
-            allow read: if isSignedIn();
-            allow create, update, delete: if isAdmin(organizationId);
-          }
+          allow delete:
+            if isAdminOrSuperAdmin(organizationId)
+            || (
+              isSignedIn()
+              && resource.data.memberUid == request.auth.uid
+              && isFeatureEnabled(organizationId, "bookingEnabled")
+            );
         }
       }
+
+      // -----------------------------------------
+      // private settings
+      // Vimeo設定など
+      // videoEnabled で制御
+      // -----------------------------------------
+      match /private/{docId} {
+        allow read, write:
+          if isAdminOrSuperAdmin(organizationId)
+          && isFeatureEnabled(organizationId, "videoEnabled");
+      }
+
+      // -----------------------------------------
+      // fcmTokens / devices
+      // -----------------------------------------
+      match /fcmTokens/{tokenId} {
+        allow read:
+          if isAdminOrSuperAdmin(organizationId);
+
+        allow create, update:
+          if isSignedIn();
+
+        allow delete:
+          if isSignedIn();
+      }
+
+      match /devices/{deviceId} {
+        allow read:
+          if isAdminOrSuperAdmin(organizationId);
+
+        allow create, update:
+          if isSignedIn();
+
+        allow delete:
+          if isSignedIn();
+      }
+
+      // -----------------------------------------
+      // memberPosts / 会員から管理者への投稿
+      // announcementEnabled で制御
+      // -----------------------------------------
+      match /memberPosts/{postId} {
+        allow read:
+          if isAdminOrSuperAdmin(organizationId)
+          || (
+            isSignedIn()
+            && resource.data.memberUid == request.auth.uid
+          );
+
+        allow create:
+          if isSignedIn()
+          && isFeatureEnabled(organizationId, "announcementEnabled")
+          && request.resource.data.memberUid == request.auth.uid;
+
+        allow update:
+          if isAdminOrSuperAdmin(organizationId)
+          || (
+            isSignedIn()
+            && resource.data.memberUid == request.auth.uid
+          );
+
+        allow delete:
+          if isAdminOrSuperAdmin(organizationId);
+      }
+    }
+
+    // =========================================
+    // 旧パス・想定外パスは拒否
+    // =========================================
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

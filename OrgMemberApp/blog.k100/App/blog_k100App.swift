@@ -4,17 +4,15 @@ import FirebaseCore
 @main
 struct blog_k100App: App {
 
-    // 🔥 これが重要（AppDelegateを有効化）
-    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-
     @StateObject private var organizationStore = OrganizationStore()
     @StateObject private var memberStore = MemberStore()
     @StateObject private var securityStore = MemberSecurityStore()
+    @StateObject private var featureStore = MemberFeatureStore()
 
     init() {
-        if FirebaseApp.app() == nil {
-            FirebaseApp.configure()
-        }
+        FirebaseApp.configure()
+
+        print("✅ Firebase configured for member app")
     }
 
     var body: some Scene {
@@ -23,6 +21,7 @@ struct blog_k100App: App {
                 .environmentObject(organizationStore)
                 .environmentObject(memberStore)
                 .environmentObject(securityStore)
+                .environmentObject(featureStore)
         }
     }
 }

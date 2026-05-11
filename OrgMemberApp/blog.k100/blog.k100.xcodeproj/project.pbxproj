@@ -16,6 +16,8 @@
 		89900DAA2FAAFC43008CC3E6 /* VideoPurchaseStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89900DA92FAAFC43008CC3E6 /* VideoPurchaseStore.swift */; };
 		899632132FA8A2B0002FA8BC /* PushNavigationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 899632122FA8A2B0002FA8BC /* PushNavigationStore.swift */; };
 		899F3D8A2F996AE100713584 /* MemberMessageItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 899F3D892F996AE100713584 /* MemberMessageItem.swift */; };
+		89A3A90A2FB1AA600026FC39 /* MemberFeatureSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89A3A9092FB1AA600026FC39 /* MemberFeatureSettings.swift */; };
+		89A3A90C2FB1AAD60026FC39 /* MemberFeatureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89A3A90B2FB1AAD60026FC39 /* MemberFeatureStore.swift */; };
 		89C1973D2F8B61EB00610C65 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 89C1973C2F8B61EB00610C65 /* Assets.xcassets */; };
 		89C197472F8B6A2000610C65 /* blog_k100App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C197392F8B5CD100610C65 /* blog_k100App.swift */; };
 		89C1974A2F8B71BE00610C65 /* MemberRegistration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C197492F8B71BE00610C65 /* MemberRegistration.swift */; };
@@ -90,6 +92,8 @@
 		89900DA92FAAFC43008CC3E6 /* VideoPurchaseStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPurchaseStore.swift; sourceTree = "<group>"; };
 		899632122FA8A2B0002FA8BC /* PushNavigationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNavigationStore.swift; sourceTree = "<group>"; };
 		899F3D892F996AE100713584 /* MemberMessageItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberMessageItem.swift; sourceTree = "<group>"; };
+		89A3A9092FB1AA600026FC39 /* MemberFeatureSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberFeatureSettings.swift; sourceTree = "<group>"; };
+		89A3A90B2FB1AAD60026FC39 /* MemberFeatureStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberFeatureStore.swift; sourceTree = "<group>"; };
 		89C197252F8B13AF00610C65 /* blog.k100.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = blog.k100.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		89C197392F8B5CD100610C65 /* blog_k100App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = blog_k100App.swift; sourceTree = "<group>"; };
 		89C1973C2F8B61EB00610C65 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -219,6 +223,7 @@
 		89C197342F8B164900610C65 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				89A3A9092FB1AA600026FC39 /* MemberFeatureSettings.swift */,
 				89C197492F8B71BE00610C65 /* MemberRegistration.swift */,
 				89C1986E2F8E150C00610C65 /* ScheduleEvent.swift */,
 				89C198742F8E174F00610C65 /* DiaryEntry.swift */,
@@ -248,6 +253,7 @@
 				899632122FA8A2B0002FA8BC /* PushNavigationStore.swift */,
 				89C4783F2FACDE6400C6D726 /* MemberBookingEventStore.swift */,
 				89C478412FACDEAE00C6D726 /* MemberBookingSlotStore.swift */,
+				89A3A90B2FB1AAD60026FC39 /* MemberFeatureStore.swift */,
 			);
 			path = Stores;
 			sourceTree = "<group>";
@@ -462,6 +468,7 @@
 				89C478402FACDE6400C6D726 /* MemberBookingEventStore.swift in Sources */,
 				89C1974E2F8B725600610C65 /* MemberRegistrationView.swift in Sources */,
 				89C198892F8E459200610C65 /* MemberMessageListView.swift in Sources */,
+				89A3A90A2FB1AA600026FC39 /* MemberFeatureSettings.swift in Sources */,
 				89C1996E2F94ECDB00610C65 /* MemberAnnouncementListView.swift in Sources */,
 				89C1983D2F8C594600610C65 /* KeychainHelper.swift in Sources */,
 				89C1987B2F8E1EA400610C65 /* DiaryCreateView.swift in Sources */,
@@ -479,6 +486,7 @@
 				89C1985F2F8CF35200610C65 /* OrganizationConfig.swift in Sources */,
 				899632132FA8A2B0002FA8BC /* PushNavigationStore.swift in Sources */,
 				89900DAA2FAAFC43008CC3E6 /* VideoPurchaseStore.swift in Sources */,
+				89A3A90C2FB1AAD60026FC39 /* MemberFeatureStore.swift in Sources */,
 				89C198A62F8EF42600610C65 /* MessageService.swift in Sources */,
 				896E0D072F9AFDC70077F3B9 /* MemberVideoStore.swift in Sources */,
 				89C1985D2F8CF2C900610C65 /* MemberMessageStore.swift in Sources */,

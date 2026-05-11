@@ -4,6 +4,7 @@ struct MemberHomeView: View {
     @EnvironmentObject private var memberStore: MemberStore
     @EnvironmentObject private var organizationStore: OrganizationStore
     @EnvironmentObject private var securityStore: MemberSecurityStore
+    @EnvironmentObject private var featureStore: MemberFeatureStore
 
     private var isAlreadyRegistered: Bool {
         memberStore.profile != nil
@@ -16,33 +17,38 @@ struct MemberHomeView: View {
                     headerSection
 
                     VStack(spacing: 16) {
-                        NavigationLink {
-                            MemberMessageListView(
-                                titleText: "お知らせ",
-                                visibility: "public"
-                            )
-                            .environmentObject(memberStore)
-                            .environmentObject(organizationStore)
-                        } label: {
-                            menuButton(
-                                title: "お知らせ",
-                                subtitle: "未会員の方も見ることができます",
-                                systemImage: "megaphone.fill",
-                                color: .orange
-                            )
-                        }
 
-                        NavigationLink {
-                            MemberVideoListView()
+                        if featureStore.announcementEnabled {
+                            NavigationLink {
+                                MemberMessageListView(
+                                    titleText: "お知らせ",
+                                    visibility: "public"
+                                )
                                 .environmentObject(memberStore)
                                 .environmentObject(organizationStore)
-                        } label: {
-                            menuButton(
-                                title: "動画コンテンツ",
-                                subtitle: "公開中の動画を見ることができます",
-                                systemImage: "play.rectangle.fill",
-                                color: .purple
-                            )
+                            } label: {
+                                menuButton(
+                                    title: "お知らせ",
+                                    subtitle: "未会員の方も見ることができます",
+                                    systemImage: "megaphone.fill",
+                                    color: .orange
+                                )
+                            }
+                        }
+
+                        if featureStore.videoEnabled {
+                            NavigationLink {
+                                MemberVideoListView()
+                                    .environmentObject(memberStore)
+                                    .environmentObject(organizationStore)
+                            } label: {
+                                menuButton(
+                                    title: "動画コンテンツ",
+                                    subtitle: "公開中の動画を見ることができます",
+                                    systemImage: "play.rectangle.fill",
+                                    color: .purple
+                                )
+                            }
                         }
 
                         if isAlreadyRegistered {
@@ -75,6 +81,7 @@ struct MemberHomeView: View {
                                     .environmentObject(memberStore)
                                     .environmentObject(organizationStore)
                                     .environmentObject(securityStore)
+                                    .environmentObject(featureStore)
                             } label: {
                                 menuButton(
                                     title: "会員ページへ",
@@ -98,6 +105,12 @@ struct MemberHomeView: View {
                                 )
                             }
                         }
+                    }
+
+                    if !featureStore.errorMessage.isEmpty {
+                        Text(featureStore.errorMessage)
+                            .font(.footnote)
+                            .foregroundColor(.red)
                     }
                 }
                 .padding(24)
