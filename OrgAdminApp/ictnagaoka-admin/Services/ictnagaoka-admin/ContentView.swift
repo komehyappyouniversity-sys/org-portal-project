@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct ContentView: View {
-
     @EnvironmentObject var organizationStore: OrganizationStore
     @EnvironmentObject var authStore: AdminAuthStore
     @EnvironmentObject var featureStore: AdminFeatureStore
@@ -9,43 +8,29 @@ struct ContentView: View {
     @StateObject private var securityStore = AdminSecurityStore()
 
     var body: some View {
-
-        NavigationStack {
-
-            if authStore.isSignedIn {
-
-                signedInView
-
-            } else {
-
-                AdminLoginView()
-                    .environmentObject(authStore)
-                    .environmentObject(organizationStore)
-            }
-        }
+        content
     }
-
-    // MARK: - Signed In View
 
     @ViewBuilder
-    private var signedInView: some View {
-
-        if securityStore.isUnlocked {
-
-            AdminDashboardView()
-
+    private var content: some View {
+        if authStore.isSignedIn {
+            if securityStore.isUnlocked {
+                AdminDashboardView()
+                    .environmentObject(organizationStore)
+                    .environmentObject(authStore)
+                    .environmentObject(featureStore)
+            } else {
+                lockView
+            }
         } else {
-
-            faceIDView
+            AdminLoginView()
+                .environmentObject(authStore)
+                .environmentObject(organizationStore)
         }
     }
 
-    // MARK: - Face ID View
-
-    private var faceIDView: some View {
-
+    private var lockView: some View {
         VStack(spacing: 20) {
-
             Text("管理アプリ")
                 .font(.largeTitle.bold())
 
@@ -53,25 +38,16 @@ struct ContentView: View {
                 .foregroundColor(.gray)
 
             Button("Face IDで開く") {
-
-                securityStore.authenticate()
+                securityStore.unlockWithFaceID()
             }
             .buttonStyle(.borderedProminent)
 
-            if let errorMessage = securityStore.errorMessage,
-               !errorMessage.isEmpty {
-
-                Text(errorMessage)
+            if !securityStore.errorMessage.isEmpty {
+                Text(securityStore.errorMessage)
                     .foregroundColor(.red)
                     .font(.footnote)
-                    .multilineTextAlignment(.center)
             }
         }
         .padding()
-
-        .onAppear {
-
-            securityStore.authenticate()
-        }
     }
 }

@@ -50,10 +50,6 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == memberId;
     }
 
-    /*
-      adminFeatures が未設定の場合は、既存運用が止まらないよう true 扱い。
-      統括アプリで false にした機能だけ Firestore 側でも停止します。
-    */
     function isFeatureEnabled(orgId, featureName) {
       return orgExists(orgId)
         && (
@@ -63,18 +59,12 @@ service cloud.firestore {
         );
     }
 
-    // =========================================
-    // superAdmins
-    // =========================================
     match /superAdmins/{uid} {
       allow read: if isSuperAdmin();
       allow create, update: if isSuperAdmin();
       allow delete: if false;
     }
 
-    // =========================================
-    // organizations
-    // =========================================
     match /organizations/{organizationId} {
 
       allow read:
@@ -86,9 +76,6 @@ service cloud.firestore {
       allow delete:
         if false;
 
-      // -----------------------------------------
-      // admins
-      // -----------------------------------------
       match /admins/{adminId} {
         allow read:
           if isAdminOrSuperAdmin(organizationId);
@@ -100,9 +87,6 @@ service cloud.firestore {
           if isSuperAdmin();
       }
 
-      // -----------------------------------------
-      // members
-      // -----------------------------------------
       match /members/{memberId} {
         allow read:
           if isOwnMemberDoc(memberId)
@@ -119,9 +103,6 @@ service cloud.firestore {
           if isAdminOrSuperAdmin(organizationId);
       }
 
-      // -----------------------------------------
-      // memberRegistrations
-      // -----------------------------------------
       match /memberRegistrations/{registrationId} {
         allow create:
           if isSignedIn();
@@ -130,10 +111,6 @@ service cloud.firestore {
           if isAdminOrSuperAdmin(organizationId);
       }
 
-      // -----------------------------------------
-      // messages / お知らせ・会員通知
-      // announcementEnabled で制御
-      // -----------------------------------------
       match /messages/{messageId} {
         allow read:
           if isSignedIn()
@@ -145,10 +122,6 @@ service cloud.firestore {
           && isFeatureEnabled(organizationId, "announcementEnabled");
       }
 
-      // -----------------------------------------
-      // categories
-      // announcementEnabled で制御
-      // -----------------------------------------
       match /categories/{categoryId} {
         allow read:
           if isSignedIn()
@@ -159,11 +132,6 @@ service cloud.firestore {
           && isFeatureEnabled(organizationId, "announcementEnabled");
       }
 
-      // -----------------------------------------
-      // videos
-      // videoEnabled で制御
-      // paidVideoEnabled は有料動画作成・更新時に制御
-      // -----------------------------------------
       match /videos/{videoId} {
         allow read:
           if isSignedIn()
@@ -184,9 +152,38 @@ service cloud.firestore {
       }
 
       // -----------------------------------------
-      // bookingEvents
-      // bookingEnabled で制御
+      // videoWatchLogs / 動画視聴状況
+      // 会員は自分の視聴ログのみ作成・更新可能
+      // 管理者・統括管理者は一覧確認可能
       // -----------------------------------------
+      match /videoWatchLogs/{logId} {
+        allow read:
+          if isAdminOrSuperAdmin(organizationId)
+          || (
+            isSignedIn()
+            && resource.data.memberUid == request.auth.uid
+            && isFeatureEnabled(organizationId, "videoEnabled")
+          );
+
+        allow create:
+          if isSignedIn()
+          && isOrgActive(organizationId)
+          && isFeatureEnabled(organizationId, "videoEnabled")
+          && request.resource.data.memberUid == request.auth.uid;
+
+        allow update:
+          if isAdminOrSuperAdmin(organizationId)
+          || (
+            isSignedIn()
+            && resource.data.memberUid == request.auth.uid
+            && request.resource.data.memberUid == request.auth.uid
+            && isFeatureEnabled(organizationId, "videoEnabled")
+          );
+
+        allow delete:
+          if isAdminOrSuperAdmin(organizationId);
+      }
+
       match /bookingEvents/{eventId} {
         allow read:
           if isSignedIn()
@@ -197,9 +194,6 @@ service cloud.firestore {
           if isAdminOrSuperAdmin(organizationId)
           && isFeatureEnabled(organizationId, "bookingEnabled");
 
-        // ---------------------------------------
-        // slots
-        // ---------------------------------------
         match /slots/{slotId} {
           allow read:
             if isSignedIn()
@@ -211,9 +205,6 @@ service cloud.firestore {
             && isFeatureEnabled(organizationId, "bookingEnabled");
         }
 
-        // ---------------------------------------
-        // reservations
-        // ---------------------------------------
         match /reservations/{reservationId} {
           allow read:
             if isAdminOrSuperAdmin(organizationId)
@@ -246,20 +237,12 @@ service cloud.firestore {
         }
       }
 
-      // -----------------------------------------
-      // private settings
-      // Vimeo設定など
-      // videoEnabled で制御
-      // -----------------------------------------
       match /private/{docId} {
         allow read, write:
           if isAdminOrSuperAdmin(organizationId)
           && isFeatureEnabled(organizationId, "videoEnabled");
       }
 
-      // -----------------------------------------
-      // fcmTokens / devices
-      // -----------------------------------------
       match /fcmTokens/{tokenId} {
         allow read:
           if isAdminOrSuperAdmin(organizationId);
@@ -282,10 +265,6 @@ service cloud.firestore {
           if isSignedIn();
       }
 
-      // -----------------------------------------
-      // memberPosts / 会員から管理者への投稿
-      // announcementEnabled で制御
-      // -----------------------------------------
       match /memberPosts/{postId} {
         allow read:
           if isAdminOrSuperAdmin(organizationId)
@@ -311,9 +290,6 @@ service cloud.firestore {
       }
     }
 
-    // =========================================
-    // 旧パス・想定外パスは拒否
-    // =========================================
     match /{document=**} {
       allow read, write: if false;
     }
