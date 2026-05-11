@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		895DBEFE2FB200AD008B23B8 /* OrganizationSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 895DBEFD2FB200AD008B23B8 /* OrganizationSelectionView.swift */; };
 		89613D102F98432000A2B048 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 89613D0F2F98432000A2B048 /* FirebaseStorage */; };
 		89C198142F8BAE4A00610C65 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 89C198132F8BAE4A00610C65 /* FirebaseFirestore */; };
 		89C198162F8BAE5500610C65 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 89C198152F8BAE5500610C65 /* FirebaseAuth */; };
@@ -18,6 +19,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		895DBEFD2FB200AD008B23B8 /* OrganizationSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationSelectionView.swift; sourceTree = "<group>"; };
 		89C197F52F8BA66A00610C65 /* ictnagaoka-admin.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ictnagaoka-admin.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		89C198A32F8EF3DF00610C65 /* MemberService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberService.swift; sourceTree = "<group>"; };
 		89C198A72F8EF43300610C65 /* MessageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageService.swift; sourceTree = "<group>"; };
@@ -80,6 +82,7 @@
 		89C1989E2F8EF2CE00610C65 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				895DBEFD2FB200AD008B23B8 /* OrganizationSelectionView.swift */,
 				89C198A32F8EF3DF00610C65 /* MemberService.swift */,
 				89C198A72F8EF43300610C65 /* MessageService.swift */,
 				89C198AB2F8EF4D000610C65 /* CategoryService.swift */,
@@ -173,6 +176,7 @@
 			files = (
 				89C198AC2F8EF4D000610C65 /* CategoryService.swift in Sources */,
 				89C198B02F8EF51100610C65 /* OrganizationService.swift in Sources */,
+				895DBEFE2FB200AD008B23B8 /* OrganizationSelectionView.swift in Sources */,
 				89C198A82F8EF43300610C65 /* MessageService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

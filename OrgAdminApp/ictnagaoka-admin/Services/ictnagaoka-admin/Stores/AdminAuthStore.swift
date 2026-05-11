@@ -2,8 +2,6 @@
 //  AdminAuthStore.swift
 //  ictnagaoka-admin
 //
-//  Created by 根津浩 on 2026/04/19.
-//
 
 import Foundation
 import Combine
@@ -22,6 +20,8 @@ final class AdminAuthStore: NSObject, ObservableObject {
     @Published var errorMessage: String?
 
     private let db = Firestore.firestore()
+    private let organizationService = OrganizationService()
+
     private var authHandle: AuthStateDidChangeListenerHandle?
     private var adminListener: ListenerRegistration?
 
@@ -34,6 +34,7 @@ final class AdminAuthStore: NSObject, ObservableObject {
         if let authHandle {
             Auth.auth().removeStateDidChangeListener(authHandle)
         }
+
         adminListener?.remove()
     }
 
@@ -54,28 +55,73 @@ final class AdminAuthStore: NSObject, ObservableObject {
             guard let uid = user?.uid else { return }
 
             print("🔐 current uid:", uid)
-            print("🔐 organizationId:", OrganizationConfig.organizationId)
 
-            self.startAdminListener(uid: uid)
-            self.setupNotificationsAndFCM()
-            self.refreshFCMTokenIfNeeded()
+            Task { @MainActor in
+                self.startAdminListenerIfOrganizationSelected(uid: uid)
+                self.setupNotificationsAndFCM()
+                self.refreshFCMTokenIfNeeded()
+            }
         }
     }
 
-    private func startAdminListener(uid: String) {
+    private func startAdminListenerIfOrganizationSelected(uid: String) {
+        do {
+            guard let selection = try organizationService.loadLocalOrganizationSelection() else {
+                print("ℹ️ 保存済み organizationId なし。組織コード入力後に管理者確認します。")
+                self.isAdminApproved = false
+                self.errorMessage = nil
+                return
+            }
+
+            let organizationId = selection.organizationId
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            guard !organizationId.isEmpty else {
+                self.errorMessage = "保存済み organizationId が空です。"
+                self.isAdminApproved = false
+                return
+            }
+
+            print("🔐 saved organizationId:", organizationId)
+
+            startAdminListener(
+                uid: uid,
+                organizationId: organizationId
+            )
+
+        } catch {
+            self.errorMessage = "保存済み組織情報の読み込みに失敗しました: \(error.localizedDescription)"
+            self.isAdminApproved = false
+            print("❌ load organization selection error:", error.localizedDescription)
+        }
+    }
+
+    func restartAdminListenerForSelectedOrganization() {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            self.isAdminApproved = false
+            return
+        }
+
+        startAdminListenerIfOrganizationSelected(uid: uid)
+        refreshFCMTokenIfNeeded()
+    }
+
+    private func startAdminListener(
+        uid: String,
+        organizationId: String
+    ) {
         adminListener?.remove()
 
-        let organizationId = OrganizationConfig.organizationId
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let orgId = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard !organizationId.isEmpty else {
+        guard !orgId.isEmpty else {
             self.errorMessage = "organizationId が空です。"
             self.isAdminApproved = false
             return
         }
 
         adminListener = db.collection("organizations")
-            .document(organizationId)
+            .document(orgId)
             .collection("admins")
             .document(uid)
             .addSnapshotListener { [weak self] snapshot, error in
@@ -96,6 +142,7 @@ final class AdminAuthStore: NSObject, ObservableObject {
 
                 guard exists else {
                     self.isAdminApproved = false
+                    self.errorMessage = "この組織の管理者として登録されていません。"
                     return
                 }
 
@@ -106,6 +153,7 @@ final class AdminAuthStore: NSObject, ObservableObject {
                     (data["status"] as? String) == "approved"
 
                 self.isAdminApproved = approved
+                self.errorMessage = approved ? nil : "この組織の管理者権限が有効ではありません。"
 
                 print("🔐 isSignedIn:", self.isSignedIn)
                 print("🔐 isAdminApproved:", self.isAdminApproved)
@@ -126,12 +174,18 @@ final class AdminAuthStore: NSObject, ObservableObject {
         isLoading = true
 
         do {
-            let result = try await Auth.auth().signIn(withEmail: trimmedEmail, password: password)
+            let result = try await Auth.auth().signIn(
+                withEmail: trimmedEmail,
+                password: password
+            )
+
             currentUid = result.user.uid
             isSignedIn = true
+            isLoading = false
+
             setupNotificationsAndFCM()
             refreshFCMTokenIfNeeded()
-            isLoading = false
+
         } catch {
             errorMessage = "ログインに失敗しました: \(error.localizedDescription)"
             isSignedIn = false
@@ -143,13 +197,16 @@ final class AdminAuthStore: NSObject, ObservableObject {
     func signOut() {
         do {
             try Auth.auth().signOut()
+
             isSignedIn = false
             isAdminApproved = false
             isLoading = false
             currentUid = nil
             errorMessage = nil
+
             adminListener?.remove()
             adminListener = nil
+
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -162,6 +219,7 @@ final class AdminAuthStore: NSObject, ObservableObject {
         Messaging.messaging().delegate = self
 
         let options: UNAuthorizationOptions = [.alert, .badge, .sound]
+
         UNUserNotificationCenter.current().requestAuthorization(options: options) { granted, error in
             if let error {
                 print("管理アプリ 通知許可エラー:", error.localizedDescription)
@@ -182,8 +240,21 @@ final class AdminAuthStore: NSObject, ObservableObject {
             return
         }
 
-        let organizationId = OrganizationConfig.organizationId
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let organizationId: String
+
+        do {
+            guard let selection = try organizationService.loadLocalOrganizationSelection() else {
+                print("保存済み organizationId がないため管理者FCM保存をスキップ")
+                return
+            }
+
+            organizationId = selection.organizationId
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        } catch {
+            print("保存済み organizationId 読み込み失敗:", error.localizedDescription)
+            return
+        }
 
         guard !organizationId.isEmpty else {
             print("organizationId がないため管理者FCM保存をスキップ")
@@ -201,6 +272,7 @@ final class AdminAuthStore: NSObject, ObservableObject {
                 ], merge: true)
 
             print("管理者FCMトークン保存成功:", token)
+
         } catch {
             print("管理者FCMトークン保存失敗:", error.localizedDescription)
         }

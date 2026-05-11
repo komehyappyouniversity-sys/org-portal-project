@@ -59,14 +59,17 @@ struct AdminMemberPostListView: View {
         .onAppear {
             startListening()
         }
+        .onChange(of: organizationStore.organization.id) { _ in
+            startListening()
+        }
     }
 
     private func startListening() {
-        let organizationId = OrganizationConfig.organizationId
+        let organizationId = organizationStore.organization.id
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !organizationId.isEmpty else {
-            store.errorMessage = "organizationId が空です。"
+            store.errorMessage = "organizationId が空です。組織コードで接続してください。"
             return
         }
 
