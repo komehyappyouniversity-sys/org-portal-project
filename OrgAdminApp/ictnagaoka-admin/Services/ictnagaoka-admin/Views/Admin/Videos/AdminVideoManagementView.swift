@@ -6,14 +6,16 @@ struct AdminVideoManagementView: View {
     @EnvironmentObject var organizationStore: OrganizationStore
     @StateObject private var store = AdminVideoManagementStore()
 
+    @State private var saveAllSignal = 0
+
     var body: some View {
         VStack(spacing: 0) {
             headerSection
-
                 .onAppear {
-                        print("現在ログイン中 UID:", Auth.auth().currentUser?.uid ?? "nil")
-                        print("現在ログイン中 email:", Auth.auth().currentUser?.email ?? "nil")
-                    }
+                    print("現在ログイン中 UID:", Auth.auth().currentUser?.uid ?? "nil")
+                    print("現在ログイン中 email:", Auth.auth().currentUser?.email ?? "nil")
+                }
+
             if store.isLoading {
                 ProgressView("Vimeoから読み込み中...")
                     .padding()
@@ -34,13 +36,14 @@ struct AdminVideoManagementView: View {
                     ForEach(store.videos) { video in
                         VideoSettingRow(
                             video: video,
+                            saveAllSignal: saveAllSignal,
                             onChange: { updatedVideo in
                                 store.updateVideo(updatedVideo)
                             },
                             onSave: { updatedVideo in
                                 store.saveVideo(
                                     updatedVideo,
-                                    organizationId: organizationStore.organizationId
+                                    organizationId: resolvedOrganizationId
                                 )
                             }
                         )
@@ -52,11 +55,17 @@ struct AdminVideoManagementView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("全て保存") {
-                    store.saveAll(organizationId: organizationStore.organizationId)
+                    store.saveAll(organizationId: resolvedOrganizationId)
+                    saveAllSignal += 1
                 }
                 .disabled(store.videos.isEmpty)
             }
         }
+    }
+
+    private var resolvedOrganizationId: String {
+        let current = organizationStore.organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
+        return current.isEmpty ? OrganizationConfig.organizationId : current
     }
 
     private var headerSection: some View {
@@ -68,12 +77,12 @@ struct AdminVideoManagementView: View {
                 .font(.subheadline)
                 .foregroundColor(.gray)
 
-            Text("organizationId: \(organizationStore.organizationId)")
+            Text("organizationId: \(resolvedOrganizationId)")
                 .font(.caption)
                 .foregroundColor(.gray)
 
             Button {
-                store.fetchFromVimeo(organizationId: organizationStore.organizationId)
+                store.fetchFromVimeo(organizationId: resolvedOrganizationId)
             } label: {
                 Label("Vimeoから読み込み", systemImage: "arrow.down.circle")
                     .font(.headline)
@@ -107,18 +116,23 @@ struct AdminVideoManagementView: View {
 
 private struct VideoSettingRow: View {
     let video: AdminManagedVideo
+    let saveAllSignal: Int
     let onChange: (AdminManagedVideo) -> Void
     let onSave: (AdminManagedVideo) -> Void
 
     @State private var editedVideo: AdminManagedVideo
     @State private var priceInput: String
+    @State private var isSaved = false
+    @State private var isEditingAfterSave = true
 
     init(
         video: AdminManagedVideo,
+        saveAllSignal: Int,
         onChange: @escaping (AdminManagedVideo) -> Void,
         onSave: @escaping (AdminManagedVideo) -> Void
     ) {
         self.video = video
+        self.saveAllSignal = saveAllSignal
         self.onChange = onChange
         self.onSave = onSave
         _editedVideo = State(initialValue: video)
@@ -130,41 +144,71 @@ private struct VideoSettingRow: View {
             videoHeader
 
             Toggle("公開する", isOn: binding(\.isPublished))
+                .disabled(!isEditingAfterSave)
+
             Toggle("会員限定にする", isOn: binding(\.isMembersOnly))
+                .disabled(!isEditingAfterSave)
+
             Toggle("有料 / プレミアム動画", isOn: binding(\.isPremium))
+                .disabled(!isEditingAfterSave)
 
             if editedVideo.isPremium {
                 premiumSection
             }
 
             Stepper("並び順: \(editedVideo.sortOrder)", value: binding(\.sortOrder), in: 0...999)
+                .disabled(!isEditingAfterSave)
 
             HStack {
                 Spacer()
 
-                Button {
-                    updatePriceText()
-                    onSave(editedVideo)
-                } label: {
-                    Text("この動画を保存")
+                if isSaved && !isEditingAfterSave {
+                    Label("保存済", systemImage: "checkmark.circle.fill")
                         .font(.subheadline.bold())
+                        .foregroundColor(.green)
+
+                    Button("再設定する") {
+                        isEditingAfterSave = true
+                        isSaved = false
+                    }
+                    .buttonStyle(.bordered)
+                } else {
+                    Button {
+                        saveThisRow()
+                    } label: {
+                        Text("この動画を保存")
+                            .font(.subheadline.bold())
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
             }
         }
         .padding(.vertical, 8)
-        .onChange(of: editedVideo.isPublished) { _ in onChange(editedVideo) }
-        .onChange(of: editedVideo.isMembersOnly) { _ in onChange(editedVideo) }
+        .onChange(of: saveAllSignal) { _ in
+            isSaved = true
+            isEditingAfterSave = false
+        }
+        .onChange(of: editedVideo.isPublished) { _ in
+            markChanged()
+            onChange(editedVideo)
+        }
+        .onChange(of: editedVideo.isMembersOnly) { _ in
+            markChanged()
+            onChange(editedVideo)
+        }
         .onChange(of: editedVideo.isPremium) { _ in
             updatePriceText()
+            markChanged()
             onChange(editedVideo)
         }
         .onChange(of: editedVideo.billingType) { _ in
             updatePriceText()
+            markChanged()
             onChange(editedVideo)
         }
         .onChange(of: priceInput) { newValue in
             let filtered = newValue.filter { $0.isNumber }
+
             if filtered != newValue {
                 priceInput = filtered
                 return
@@ -172,9 +216,13 @@ private struct VideoSettingRow: View {
 
             editedVideo.price = Int(filtered) ?? 0
             updatePriceText()
+            markChanged()
             onChange(editedVideo)
         }
-        .onChange(of: editedVideo.sortOrder) { _ in onChange(editedVideo) }
+        .onChange(of: editedVideo.sortOrder) { _ in
+            markChanged()
+            onChange(editedVideo)
+        }
     }
 
     private var videoHeader: some View {
@@ -221,10 +269,12 @@ private struct VideoSettingRow: View {
                 Text("1本ごと").tag("oneTime")
             }
             .pickerStyle(.segmented)
+            .disabled(!isEditingAfterSave)
 
             TextField("金額を入力 例: 1000", text: $priceInput)
                 .keyboardType(.numberPad)
                 .textFieldStyle(.roundedBorder)
+                .disabled(!isEditingAfterSave)
 
             Text(editedVideo.priceText.isEmpty ? "表示例: 月額 1,000円" : "表示: \(editedVideo.priceText)")
                 .font(.caption)
@@ -233,6 +283,19 @@ private struct VideoSettingRow: View {
         .padding(12)
         .background(Color.gray.opacity(0.08))
         .cornerRadius(10)
+    }
+
+    private func saveThisRow() {
+        updatePriceText()
+        onSave(editedVideo)
+        isSaved = true
+        isEditingAfterSave = false
+    }
+
+    private func markChanged() {
+        if isEditingAfterSave {
+            isSaved = false
+        }
     }
 
     private func updatePriceText() {

@@ -13,6 +13,9 @@ struct AdminVimeoSettingsView: View {
     @State private var message = ""
     @State private var isError = false
 
+    @State private var isConnectionTestCompleted = false
+    @State private var isSaveCompleted = false
+
     private var organizationId: String {
         let current = organizationStore.organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
         return current.isEmpty ? OrganizationConfig.organizationId : current
@@ -24,26 +27,49 @@ struct AdminVimeoSettingsView: View {
                 SecureField("Vimeoアクセストークン", text: $accessToken)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .onChange(of: accessToken) { _ in
+                        isConnectionTestCompleted = false
+                        isSaveCompleted = false
+                    }
 
                 TextField("VimeoユーザーID", text: $userId)
                     .keyboardType(.asciiCapable)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .onChange(of: userId) { _ in
+                        isConnectionTestCompleted = false
+                        isSaveCompleted = false
+                    }
 
                 TextField("動画取得条件（任意）", text: $query)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .onChange(of: query) { _ in
+                        isSaveCompleted = false
+                    }
             }
 
             Section {
-                Button("接続テスト") {
+                Button {
                     testConnection()
+                } label: {
+                    Label(
+                        isConnectionTestCompleted ? "接続テスト完了" : "接続テスト",
+                        systemImage: isConnectionTestCompleted ? "checkmark.circle.fill" : "network"
+                    )
                 }
+                .foregroundColor(isConnectionTestCompleted ? .green : .blue)
                 .disabled(isLoading || accessToken.isEmpty || userId.isEmpty)
 
-                Button("保存") {
+                Button {
                     saveSettingsHttp()
+                } label: {
+                    Label(
+                        isSaveCompleted ? "保存完了" : "保存",
+                        systemImage: isSaveCompleted ? "checkmark.circle.fill" : "tray.and.arrow.down"
+                    )
                 }
+                .foregroundColor(isSaveCompleted ? .green : .blue)
                 .disabled(isLoading || accessToken.isEmpty || userId.isEmpty)
             }
 
@@ -77,6 +103,8 @@ struct AdminVimeoSettingsView: View {
         isLoading = true
         message = ""
         isError = false
+        isConnectionTestCompleted = false
+        isSaveCompleted = false
 
         let data: [String: Any] = [
             "organizationId": organizationId,
@@ -92,12 +120,14 @@ struct AdminVimeoSettingsView: View {
 
                 if let error {
                     isError = true
+                    isConnectionTestCompleted = false
                     message = "接続テスト失敗: \(error.localizedDescription)"
                     return
                 }
 
                 isError = false
-                message = "接続テスト成功"
+                isConnectionTestCompleted = true
+                message = "接続テスト完了"
             }
         }
     }
@@ -108,6 +138,7 @@ struct AdminVimeoSettingsView: View {
         isLoading = true
         message = ""
         isError = false
+        isSaveCompleted = false
 
         guard let user = Auth.auth().currentUser else {
             isLoading = false
@@ -176,9 +207,10 @@ struct AdminVimeoSettingsView: View {
                         return
                     }
 
-                    accessToken = ""
                     isError = false
-                    message = "Vimeo設定を保存しました"
+                    isConnectionTestCompleted = true
+                    isSaveCompleted = true
+                    message = "保存完了"
                 }
             }.resume()
         }

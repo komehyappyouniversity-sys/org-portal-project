@@ -15,6 +15,8 @@ struct AdminVimeoVideoListView: View {
     @EnvironmentObject var organizationStore: OrganizationStore
 
     @State private var videos: [AdminVimeoVideoItem] = []
+    @State private var registeredIds: Set<String> = []
+
     @State private var isLoading = false
     @State private var message = ""
 
@@ -33,7 +35,8 @@ struct AdminVimeoVideoListView: View {
             }
 
             ForEach(videos) { video in
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
+
                     Text(video.title)
                         .font(.headline)
 
@@ -44,10 +47,28 @@ struct AdminVimeoVideoListView: View {
                             .lineLimit(2)
                     }
 
-                    Button("Firestoreに登録") {
-                        registerVideo(video)
+                    if registeredIds.contains(video.id) {
+
+                        HStack {
+                            Label("登録済み", systemImage: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+
+                            Spacer()
+
+                            Button(role: .destructive) {
+                                unregisterVideo(video)
+                            } label: {
+                                Text("登録解除")
+                            }
+                        }
+
+                    } else {
+
+                        Button("Firestoreに登録") {
+                            registerVideo(video)
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
-                    .buttonStyle(.borderedProminent)
                 }
                 .padding(.vertical, 6)
             }
@@ -72,6 +93,7 @@ struct AdminVimeoVideoListView: View {
         ]
 
         functions.httpsCallable("fetchVimeoVideos").call(data) { result, error in
+
             isLoading = false
 
             if let error {
@@ -88,7 +110,10 @@ struct AdminVimeoVideoListView: View {
             }
 
             videos = items.compactMap { item in
-                guard let id = item["id"] as? String else { return nil }
+
+                guard let id = item["id"] as? String else {
+                    return nil
+                }
 
                 return AdminVimeoVideoItem(
                     id: id,
@@ -100,11 +125,35 @@ struct AdminVimeoVideoListView: View {
                 )
             }
 
+            loadRegisteredVideos()
+
             message = "\(videos.count)件の動画を取得しました"
         }
     }
 
+    private func loadRegisteredVideos() {
+
+        let orgId = organizationStore.organizationId
+
+        guard !orgId.isEmpty else {
+            return
+        }
+
+        db.collection("organizations")
+            .document(orgId)
+            .collection("videos")
+            .getDocuments { snapshot, error in
+
+                guard let documents = snapshot?.documents else {
+                    return
+                }
+
+                registeredIds = Set(documents.map { $0.documentID })
+            }
+    }
+
     private func registerVideo(_ video: AdminVimeoVideoItem) {
+
         let orgId = organizationStore.organizationId
 
         guard !orgId.isEmpty else {
@@ -132,10 +181,40 @@ struct AdminVimeoVideoListView: View {
             .collection("videos")
             .document(video.id)
             .setData(data, merge: true) { error in
+
                 if let error {
                     message = "Firestore登録失敗: \(error.localizedDescription)"
                 } else {
+
+                    registeredIds.insert(video.id)
+
                     message = "Firestoreに登録しました: \(video.title)"
+                }
+            }
+    }
+
+    private func unregisterVideo(_ video: AdminVimeoVideoItem) {
+
+        let orgId = organizationStore.organizationId
+
+        guard !orgId.isEmpty else {
+            message = "organizationId がありません"
+            return
+        }
+
+        db.collection("organizations")
+            .document(orgId)
+            .collection("videos")
+            .document(video.id)
+            .delete { error in
+
+                if let error {
+                    message = "登録解除失敗: \(error.localizedDescription)"
+                } else {
+
+                    registeredIds.remove(video.id)
+
+                    message = "登録解除しました: \(video.title)"
                 }
             }
     }
