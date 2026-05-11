@@ -7,6 +7,10 @@ struct ContentView: View {
     @EnvironmentObject var securityStore: MemberSecurityStore
     @EnvironmentObject var featureStore: MemberFeatureStore
 
+    @Environment(\.scenePhase) private var scenePhase
+
+    @State private var didStart = false
+
     var body: some View {
         NavigationStack {
             Group {
@@ -24,7 +28,6 @@ struct ContentView: View {
                           !errorMessage.isEmpty {
 
                     VStack(spacing: 16) {
-
                         Text("起動エラー")
                             .font(.title2.bold())
 
@@ -39,6 +42,14 @@ struct ContentView: View {
                     }
                     .padding()
 
+                } else if !securityStore.isUnlocked {
+
+                    BiometricLockView()
+                        .environmentObject(securityStore)
+                        .onAppear {
+                            securityStore.authenticateIfNeededOnFirstEntry()
+                        }
+
                 } else {
 
                     MemberHomeView()
@@ -51,12 +62,17 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .onAppear {
+            guard !didStart else { return }
+            didStart = true
+
             startApp()
+        }
+        .onChange(of: scenePhase) { newPhase in
+            securityStore.handleScenePhaseChange(to: newPhase)
         }
     }
 
     private func startApp() {
-
         print("📱 ContentView opened")
 
         memberStore.ensureSignedIn()

@@ -10,10 +10,17 @@ final class MemberSecurityStore: ObservableObject {
     @Published var errorMessage = ""
 
     private var lastInactiveDate: Date?
+    private var didAuthenticateOnFirstEntry = false
+
     let relockInterval: TimeInterval = 30
 
     func authenticateIfNeededOnFirstEntry() {
-        // 今回は自動認証を止める
+        guard !didAuthenticateOnFirstEntry else { return }
+        guard !isUnlocked else { return }
+        guard !isAuthenticating else { return }
+
+        didAuthenticateOnFirstEntry = true
+        authenticate()
     }
 
     func handleScenePhaseChange(to newPhase: ScenePhase) {
@@ -26,6 +33,7 @@ final class MemberSecurityStore: ObservableObject {
         case .active:
             if shouldRelock {
                 isUnlocked = false
+                authenticate()
             }
 
         @unknown default:
@@ -64,6 +72,7 @@ final class MemberSecurityStore: ObservableObject {
                 guard let self else { return }
 
                 print("🟡 evaluatePolicy returned success =", success)
+
                 if let evalError {
                     print("🟠 evalError =", evalError.localizedDescription)
                 }
@@ -88,6 +97,7 @@ final class MemberSecurityStore: ObservableObject {
         isUnlocked = false
         isAuthenticating = false
         errorMessage = ""
+        didAuthenticateOnFirstEntry = false
     }
 
     private var shouldRelock: Bool {

@@ -1,8 +1,11 @@
 import Foundation
+import Combine
 import FirebaseAuth
 import FirebaseFirestore
 
 final class MemberVideoWatchLogStore: ObservableObject {
+
+    let objectWillChange = ObservableObjectPublisher()
 
     private let db = Firestore.firestore()
 
@@ -155,7 +158,6 @@ final class MemberVideoWatchLogStore: ObservableObject {
 
             let now = Timestamp(date: Date())
 
-            // 再生履歴追加
             if addWatchCount {
                 playHistory.append([
                     "playedAt": now,
@@ -163,12 +165,29 @@ final class MemberVideoWatchLogStore: ObservableObject {
                 ])
             }
 
-            // 視聴完了履歴追加
             if isCompleted {
                 completionHistory.append([
                     "completedAt": now,
                     "durationSeconds": durationSeconds
                 ])
+            }
+
+            let completedAtValue: Any
+
+            if isCompleted {
+                completedAtValue = now
+            } else if let existingCompletedAt = existingData["completedAt"] {
+                completedAtValue = existingCompletedAt
+            } else {
+                completedAtValue = NSNull()
+            }
+
+            let createdAtValue: Any
+
+            if let existingCreatedAt = existingData["createdAt"] {
+                createdAtValue = existingCreatedAt
+            } else {
+                createdAtValue = FieldValue.serverTimestamp()
             }
 
             let data: [String: Any] = [
@@ -189,10 +208,7 @@ final class MemberVideoWatchLogStore: ObservableObject {
 
                 "isCompleted": isCompleted,
 
-                "completedAt": isCompleted
-                    ? now
-                    : existingData["completedAt"] as Any,
-
+                "completedAt": completedAtValue,
                 "completionHistory": completionHistory,
 
                 "playHistory": playHistory,
@@ -200,9 +216,7 @@ final class MemberVideoWatchLogStore: ObservableObject {
                 "lastWatchedAt": now,
                 "updatedAt": FieldValue.serverTimestamp(),
 
-                "createdAt":
-                    existingData["createdAt"]
-                    ?? FieldValue.serverTimestamp()
+                "createdAt": createdAtValue
             ]
 
             transaction.setData(

@@ -2,8 +2,6 @@
 //  AdminMemberPostListView.swift
 //  ictnagaoka-admin
 //
-//  Created by OpenAI on 2026/04/22.
-//
 
 import SwiftUI
 
@@ -64,10 +62,15 @@ struct AdminMemberPostListView: View {
     }
 
     private func startListening() {
-        let organizationId = organizationStore.organization.id
+        let organizationId = OrganizationConfig.organizationId
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard !organizationId.isEmpty else { return }
+        guard !organizationId.isEmpty else {
+            store.errorMessage = "organizationId が空です。"
+            return
+        }
+
+        print("📩 AdminMemberPostListView startListening organizationId:", organizationId)
 
         store.startListeningPosts(organizationId: organizationId)
     }
@@ -76,7 +79,7 @@ struct AdminMemberPostListView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(item.title)
+                    Text(item.title.isEmpty ? "タイトルなし" : item.title)
                         .font(.headline)
                         .lineLimit(2)
 
