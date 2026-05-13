@@ -83,7 +83,9 @@ struct MemberPageView: View {
                 }
             }
 
-            if featureStore.announcementEnabled {
+            // 会員ページのお知らせ
+            // 公開お知らせOFFとは別に、memberMessageEnabled で制御
+            if featureStore.settings.memberMessageEnabled {
                 NavigationLink {
                     MemberMessageListView(
                         titleText: "お知らせ",

@@ -3,10 +3,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // =========================================
-    // Common Functions
-    // =========================================
-
     function isSignedIn() {
       return request.auth != null;
     }
@@ -31,84 +27,97 @@ service cloud.firestore {
         );
     }
 
+    function featurePath(orgId) {
+      return /databases/$(database)/documents/organizations/$(orgId)/settings/adminFeatures;
+    }
+
+    function featureExists(orgId) {
+      return exists(featurePath(orgId));
+    }
+
+    function featureData(orgId) {
+      return get(featurePath(orgId)).data;
+    }
+
+    function isFeatureEnabled(orgId, featureName) {
+      return !featureExists(orgId)
+        || !(featureName in featureData(orgId))
+        || featureData(orgId)[featureName] == true;
+    }
+
     function isSuperAdmin() {
       return isSignedIn()
-        && exists(
-          /databases/$(database)/documents/superAdmins/$(request.auth.uid)
-        )
-        && get(
-          /databases/$(database)/documents/superAdmins/$(request.auth.uid)
-        ).data.isActive == true;
+        && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/superAdmins/$(request.auth.uid)).data.isActive == true;
     }
 
     function isAdmin(orgId) {
       return isSignedIn()
-        && exists(
-          /databases/$(database)/documents/organizations/$(orgId)/admins/$(request.auth.uid)
-        )
-        && get(
-          /databases/$(database)/documents/organizations/$(orgId)/admins/$(request.auth.uid)
-        ).data.isActive == true;
+        && exists(/databases/$(database)/documents/organizations/$(orgId)/admins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/organizations/$(orgId)/admins/$(request.auth.uid)).data.isActive == true;
     }
 
     function isAdminOrSuperAdmin(orgId) {
       return isAdmin(orgId) || isSuperAdmin();
     }
 
-    function isApprovedMember(orgId) {
-      return isSignedIn()
-        && exists(
-          /databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)
-        )
-        && get(
-          /databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)
-        ).data.status == "approved";
-    }
-
     function isOwnMemberDoc(memberId) {
-      return isSignedIn()
-        && request.auth.uid == memberId;
+      return isSignedIn() && request.auth.uid == memberId;
     }
 
-    function isFeatureEnabled(orgId, featureName) {
-      return orgExists(orgId)
+    function isPublicMessageEnabled(orgId) {
+      return isFeatureEnabled(orgId, "publicAnnouncementEnabled");
+    }
+
+    function isMemberMessageEnabled(orgId) {
+      return isFeatureEnabled(orgId, "memberMessageEnabled");
+    }
+
+    function isReadableMessage(orgId) {
+      return isSignedIn()
+        && isOrgActive(orgId)
         && (
-          !("adminFeatures" in orgData(orgId))
-          || !(featureName in orgData(orgId).adminFeatures)
-          || orgData(orgId).adminFeatures[featureName] == true
+          (
+            resource.data.visibility == "public"
+            && isPublicMessageEnabled(orgId)
+          )
+          ||
+          (
+            resource.data.visibility == "member"
+            && isMemberMessageEnabled(orgId)
+          )
+          ||
+          (
+            !("visibility" in resource.data)
+            && (
+              isPublicMessageEnabled(orgId)
+              || isMemberMessageEnabled(orgId)
+            )
+          )
         );
     }
 
-    // =========================================
-    // superAdmins
-    // =========================================
-
-    match /superAdmins/{uid} {
-
-      allow read:
-        if isSuperAdmin();
-
-      allow create, update:
-        if isSuperAdmin();
-
-      allow delete:
-        if false;
+    function isWritableMessage(orgId) {
+      return isAdminOrSuperAdmin(orgId)
+        && (
+          isPublicMessageEnabled(orgId)
+          || isMemberMessageEnabled(orgId)
+        );
     }
 
-    // =========================================
-    // organizations
-    // =========================================
+    match /superAdmins/{uid} {
+      allow read: if isSuperAdmin();
+      allow create, update: if isSuperAdmin();
+      allow delete: if false;
+    }
 
     match /organizations/{organizationId} {
 
-      // 組織コード入力画面用：
-      // 未ログインでも「有効な組織ドキュメントの単体取得」だけ許可
       allow get:
         if resource.data.isActive == true
         || !("isActive" in resource.data)
         || isAdminOrSuperAdmin(organizationId);
 
-      // 組織一覧の取得は統括管理者のみ
       allow list:
         if isSuperAdmin();
 
@@ -118,33 +127,14 @@ service cloud.firestore {
       allow delete:
         if false;
 
-      // =========================================
-      // settings
-      // =========================================
-
       match /settings/{settingId} {
-
-        allow read:
-          if isAdminOrSuperAdmin(organizationId);
-
-        allow create, update:
-          if isSuperAdmin();
-
-        allow delete:
-          if isSuperAdmin();
-      }
-
-      // =========================================
-      // admins
-      // =========================================
-
-      match /admins/{adminId} {
 
         allow read:
           if isAdminOrSuperAdmin(organizationId)
           || (
-            isSignedIn()
-            && request.auth.uid == adminId
+            settingId == "adminFeatures"
+            && isSignedIn()
+            && isOrgActive(organizationId)
           );
 
         allow create, update:
@@ -154,12 +144,19 @@ service cloud.firestore {
           if isSuperAdmin();
       }
 
-      // =========================================
-      // members
-      // =========================================
+      match /admins/{adminId} {
+        allow read:
+          if isAdminOrSuperAdmin(organizationId)
+          || (isSignedIn() && request.auth.uid == adminId);
+
+        allow create, update:
+          if isSuperAdmin();
+
+        allow delete:
+          if isSuperAdmin();
+      }
 
       match /members/{memberId} {
-
         allow read:
           if isOwnMemberDoc(memberId)
           || isAdminOrSuperAdmin(organizationId);
@@ -175,12 +172,7 @@ service cloud.firestore {
           if isAdminOrSuperAdmin(organizationId);
       }
 
-      // =========================================
-      // memberRegistrations
-      // =========================================
-
       match /memberRegistrations/{registrationId} {
-
         allow create:
           if isSignedIn();
 
@@ -188,43 +180,31 @@ service cloud.firestore {
           if isAdminOrSuperAdmin(organizationId);
       }
 
-      // =========================================
-      // messages
-      // =========================================
-
       match /messages/{messageId} {
-
         allow read:
-          if isSignedIn()
-          && isOrgActive(organizationId)
-          && isFeatureEnabled(organizationId, "announcementEnabled");
+          if isReadableMessage(organizationId);
 
         allow create, update, delete:
-          if isAdminOrSuperAdmin(organizationId)
-          && isFeatureEnabled(organizationId, "announcementEnabled");
+          if isWritableMessage(organizationId);
       }
-
-      // =========================================
-      // categories
-      // =========================================
 
       match /categories/{categoryId} {
-
         allow read:
           if isSignedIn()
-          && isFeatureEnabled(organizationId, "announcementEnabled");
+          && (
+            isPublicMessageEnabled(organizationId)
+            || isMemberMessageEnabled(organizationId)
+          );
 
         allow create, update, delete:
           if isAdminOrSuperAdmin(organizationId)
-          && isFeatureEnabled(organizationId, "announcementEnabled");
+          && (
+            isPublicMessageEnabled(organizationId)
+            || isMemberMessageEnabled(organizationId)
+          );
       }
 
-      // =========================================
-      // videos
-      // =========================================
-
       match /videos/{videoId} {
-
         allow read:
           if isSignedIn()
           && isOrgActive(organizationId)
@@ -243,12 +223,7 @@ service cloud.firestore {
           && isFeatureEnabled(organizationId, "videoEnabled");
       }
 
-      // =========================================
-      // videoWatchLogs
-      // =========================================
-
       match /videoWatchLogs/{logId} {
-
         allow read:
           if isAdminOrSuperAdmin(organizationId)
           || (
@@ -277,12 +252,7 @@ service cloud.firestore {
           if isAdminOrSuperAdmin(organizationId);
       }
 
-      // =========================================
-      // bookingEvents
-      // =========================================
-
       match /bookingEvents/{eventId} {
-
         allow read:
           if isSignedIn()
           && isOrgActive(organizationId)
@@ -293,7 +263,6 @@ service cloud.firestore {
           && isFeatureEnabled(organizationId, "bookingEnabled");
 
         match /slots/{slotId} {
-
           allow read:
             if isSignedIn()
             && isOrgActive(organizationId)
@@ -305,7 +274,6 @@ service cloud.firestore {
         }
 
         match /reservations/{reservationId} {
-
           allow read:
             if isAdminOrSuperAdmin(organizationId)
             || (
@@ -337,23 +305,13 @@ service cloud.firestore {
         }
       }
 
-      // =========================================
-      // private
-      // =========================================
-
       match /private/{docId} {
-
         allow read, write:
           if isAdminOrSuperAdmin(organizationId)
           && isFeatureEnabled(organizationId, "videoEnabled");
       }
 
-      // =========================================
-      // fcmTokens
-      // =========================================
-
       match /fcmTokens/{tokenId} {
-
         allow read:
           if isAdminOrSuperAdmin(organizationId);
 
@@ -363,13 +321,8 @@ service cloud.firestore {
         allow delete:
           if isSignedIn();
       }
-
-      // =========================================
-      // devices
-      // =========================================
 
       match /devices/{deviceId} {
-
         allow read:
           if isAdminOrSuperAdmin(organizationId);
 
@@ -380,12 +333,7 @@ service cloud.firestore {
           if isSignedIn();
       }
 
-      // =========================================
-      // memberPosts
-      // =========================================
-
       match /memberPosts/{postId} {
-
         allow read:
           if isAdminOrSuperAdmin(organizationId)
           || (
@@ -395,7 +343,7 @@ service cloud.firestore {
 
         allow create:
           if isSignedIn()
-          && isFeatureEnabled(organizationId, "announcementEnabled")
+          && isMemberMessageEnabled(organizationId)
           && request.resource.data.memberUid == request.auth.uid;
 
         allow update:
@@ -408,12 +356,7 @@ service cloud.firestore {
         allow delete:
           if isAdminOrSuperAdmin(organizationId);
 
-        // =========================================
-        // replies
-        // =========================================
-
         match /replies/{replyId} {
-
           allow read:
             if isAdminOrSuperAdmin(organizationId)
             || (
@@ -423,21 +366,11 @@ service cloud.firestore {
               ).data.memberUid == request.auth.uid
             );
 
-          allow create:
-            if isAdminOrSuperAdmin(organizationId);
-
-          allow update:
-            if isAdminOrSuperAdmin(organizationId);
-
-          allow delete:
+          allow create, update, delete:
             if isAdminOrSuperAdmin(organizationId);
         }
       }
     }
-
-    // =========================================
-    // fallback deny
-    // =========================================
 
     match /{document=**} {
       allow read, write: if false;

@@ -2,6 +2,8 @@ import SwiftUI
 import FirebaseFirestore
 
 struct AdminSentMessageListView: View {
+    @EnvironmentObject private var organizationStore: OrganizationStore
+
     private let db = Firestore.firestore()
 
     @State private var messages: [AdminSentMessage] = []
@@ -9,19 +11,26 @@ struct AdminSentMessageListView: View {
     @State private var errorMessage = ""
 
     private var organizationId: String {
-        OrganizationConfig.organizationId
+        organizationStore.organization.id.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var body: some View {
         List {
-            if isLoading {
+            if organizationId.isEmpty {
+                Text("organizationId がありません")
+                    .foregroundColor(.red)
+
+            } else if isLoading {
                 ProgressView("読み込み中...")
+
             } else if !errorMessage.isEmpty {
                 Text(errorMessage)
                     .foregroundColor(.red)
+
             } else if messages.isEmpty {
                 Text("送信済みメッセージはありません")
                     .foregroundColor(.secondary)
+
             } else {
                 ForEach(messages) { message in
                     NavigationLink {
@@ -57,7 +66,7 @@ struct AdminSentMessageListView: View {
         }
         .navigationTitle("送信済み一覧")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
+        .task(id: organizationId) {
             await loadMessages()
         }
     }
@@ -75,6 +84,14 @@ struct AdminSentMessageListView: View {
     }
 
     private func loadMessages() async {
+        guard !organizationId.isEmpty else {
+            errorMessage = "organizationId がありません"
+            messages = []
+            return
+        }
+
+        print("📨 AdminSentMessageListView organizationId:", organizationId)
+
         isLoading = true
         errorMessage = ""
 
