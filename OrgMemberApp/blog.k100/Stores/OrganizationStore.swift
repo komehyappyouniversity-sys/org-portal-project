@@ -1,54 +1,148 @@
+
 import Foundation
 import Combine
 import FirebaseFirestore
 
+struct MemberOrganization {
+    let id: String
+    let name: String
+    let organizationCode: String
+    let logoImageURL: String
+    let logoDisplayHeight: Double
+    let isActive: Bool
+
+    static let empty = MemberOrganization(
+        id: "",
+        name: "",
+        organizationCode: "",
+        logoImageURL: "",
+        logoDisplayHeight: 260,
+        isActive: false
+    )
+}
+
 @MainActor
 final class OrganizationStore: ObservableObject {
-    @Published var organization: OrganizationModel = .empty
-    @Published var organizationId: String = ""
-    @Published var organizationCode: String = ""
-    @Published var isLoading: Bool = false
-    @Published var errorMessage: String?
 
-    private let service: OrganizationServiceProtocol
+    @Published var organization: MemberOrganization = .empty
+    @Published var organizationId = ""
+    @Published var organizationCode = ""
+    @Published var displayName = ""
+    @Published var logoImageURL = ""
+    @Published var logoDisplayHeight: Double = 260
+    @Published var isActive = false
+    @Published var isLoading = false
+    @Published var errorMessage: String? = nil
+
+    private let db = Firestore.firestore()
     private var listener: ListenerRegistration?
 
-    init(service: OrganizationServiceProtocol? = nil) {
-        self.service = service ?? MemberOrganizationService()
-    }
+    private let localOrganizationIdKey = "selectedOrganizationId"
+    private let localOrganizationCodeKey = "selectedOrganizationCode"
 
-    deinit {
-        listener?.remove()
+    var hasSelection: Bool {
+        !organizationId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     func restoreFromLocal() {
+        let savedId = UserDefaults.standard.string(forKey: localOrganizationIdKey) ?? ""
+
+        guard !savedId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+
+        organizationId = savedId
+        startListening(organizationId: savedId)
+    }
+
+    func startListening(organizationId: String) {
+        stopListening()
+
+        let trimmedId = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedId.isEmpty else {
+            errorMessage = "organizationId が空です。"
+            return
+        }
+
+        self.organizationId = trimmedId
         isLoading = true
         errorMessage = nil
 
-        do {
-            guard let selection = try service.loadLocalOrganizationSelection() else {
-                isLoading = false
-                organization = .empty
-                organizationId = ""
-                organizationCode = ""
-                return
+        listener = db.collection("organizations")
+            .document(trimmedId)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self else { return }
+
+                Task { @MainActor in
+                    self.isLoading = false
+
+                    if let error {
+                        self.errorMessage = "組織情報の取得に失敗しました。"
+                        print("❌ organization listen error:", error.localizedDescription)
+                        return
+                    }
+
+                    guard let snapshot,
+                          snapshot.exists,
+                          let data = snapshot.data() else {
+                        self.errorMessage = "組織情報が見つかりません。"
+                        self.organization = .empty
+                        return
+                    }
+
+                    let name =
+                        data["displayName"] as? String ??
+                        data["name"] as? String ??
+                        ""
+
+                    let code =
+                        data["organizationCode"] as? String ??
+                        data["code"] as? String ??
+                        trimmedId
+
+                    let logoURL =
+                        data["logoImageURL"] as? String ?? ""
+
+                    let displayHeight =
+                        data["logoDisplayHeight"] as? Double ?? 260
+
+                    let active =
+                        data["isActive"] as? Bool ?? true
+
+                    self.organizationId = trimmedId
+                    self.organizationCode = code
+                    self.displayName = name
+                    self.logoImageURL = logoURL
+                    self.logoDisplayHeight = displayHeight
+                    self.isActive = active
+
+                    self.organization = MemberOrganization(
+                        id: trimmedId,
+                        name: name,
+                        organizationCode: code,
+                        logoImageURL: logoURL,
+                        logoDisplayHeight: displayHeight,
+                        isActive: active
+                    )
+
+                    self.errorMessage = nil
+
+                    UserDefaults.standard.set(trimmedId, forKey: self.localOrganizationIdKey)
+                    UserDefaults.standard.set(code, forKey: self.localOrganizationCodeKey)
+
+                    print("✅ organization loaded:", trimmedId)
+                    print("✅ organizationCode:", code)
+                    print("✅ logoImageURL:", logoURL)
+                    print("✅ logoDisplayHeight:", displayHeight)
+                }
             }
-
-            organizationId = selection.organizationId
-            organizationCode = selection.organizationCode
-
-            startListening(organizationId: selection.organizationId)
-
-        } catch {
-            isLoading = false
-            errorMessage = error.localizedDescription
-        }
     }
 
     func setupOrganization(byCode code: String) async -> Bool {
-        let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedCode = code.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard !trimmed.isEmpty else {
+        guard !trimmedCode.isEmpty else {
             errorMessage = "団体コードを入力してください。"
             return false
         }
@@ -57,117 +151,61 @@ final class OrganizationStore: ObservableObject {
         errorMessage = nil
 
         do {
-            guard let found = try await service.findOrganization(byCode: trimmed) else {
+            let snapshot = try await db.collection("organizations")
+                .whereField("organizationCode", isEqualTo: trimmedCode)
+                .limit(to: 1)
+                .getDocuments()
+
+            guard let document = snapshot.documents.first else {
                 isLoading = false
                 errorMessage = "団体コードが見つかりません。"
                 return false
             }
 
-            guard found.isActive else {
-                isLoading = false
-                errorMessage = "この団体は現在利用停止中です。"
-                return false
-            }
+            let foundId = document.documentID
 
-            try service.saveLocalOrganizationSelection(
-                organizationId: found.id,
-                organizationCode: found.organizationCode
-            )
+            UserDefaults.standard.set(foundId, forKey: localOrganizationIdKey)
+            UserDefaults.standard.set(trimmedCode, forKey: localOrganizationCodeKey)
 
-            organizationId = found.id
-            organizationCode = found.organizationCode
-            organization = found
+            self.organizationId = foundId
+            self.organizationCode = trimmedCode
 
-            startListening(organizationId: found.id)
+            startListening(organizationId: foundId)
+
+            isLoading = false
             return true
 
         } catch {
             isLoading = false
-            errorMessage = error.localizedDescription
+            errorMessage = "団体情報の確認に失敗しました。"
+            print("❌ setup organization error:", error.localizedDescription)
             return false
         }
     }
 
-    func startListening(organizationId: String) {
-        listener?.remove()
-        isLoading = true
-        errorMessage = nil
-
-        self.organizationId = organizationId
-
-        listener = service.listenOrganization(organizationId: organizationId) { [weak self] result in
-            Task { @MainActor in
-                guard let self else { return }
-
-                switch result {
-                case .success(let organization):
-                    self.organization = organization
-                    self.organizationCode = organization.organizationCode
-                    self.isLoading = false
-                    self.errorMessage = nil
-
-                case .failure(let error):
-                    self.isLoading = false
-                    self.errorMessage = error.localizedDescription
-                }
-            }
-        }
-    }
-
     func clearSelection() {
-        listener?.remove()
-        listener = nil
+        stopListening()
 
-        do {
-            try service.clearLocalOrganizationSelection()
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        UserDefaults.standard.removeObject(forKey: localOrganizationIdKey)
+        UserDefaults.standard.removeObject(forKey: localOrganizationCodeKey)
 
         organization = .empty
         organizationId = ""
         organizationCode = ""
+        displayName = ""
+        logoImageURL = ""
+        logoDisplayHeight = 260
+        isActive = false
         isLoading = false
-    }
-
-    func reload() async {
-        guard !organizationId.isEmpty else { return }
-
-        isLoading = true
         errorMessage = nil
-
-        do {
-            let fetched = try await service.fetchOrganization(organizationId: organizationId)
-            organization = fetched
-            organizationCode = fetched.organizationCode
-            isLoading = false
-        } catch {
-            isLoading = false
-            errorMessage = error.localizedDescription
-        }
     }
 
-    var hasSelection: Bool {
-        !organizationId.isEmpty
+    func stopListening() {
+        listener?.remove()
+        listener = nil
     }
 
-    var displayName: String {
-        organization.displayName
-    }
-
-    var openingEnabled: Bool {
-        organization.openingEnabled
-    }
-
-    var openingImageURL: String {
-        organization.openingImageURL
-    }
-
-    var logoImageURL: String {
-        organization.logoImageURL
-    }
-
-    var isActive: Bool {
-        organization.isActive
+    deinit {
+        listener?.remove()
     }
 }

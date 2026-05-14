@@ -35,6 +35,19 @@ struct OrganizationDetailView: View {
                 }
             }
 
+            Section("組織表示設定") {
+                NavigationLink {
+                    OrganizationLogoSettingsView(
+                        organization: organization
+                    )
+                } label: {
+                    Label(
+                        "組織ロゴ設定",
+                        systemImage: "photo"
+                    )
+                }
+            }
+
             Section("管理アプリ設定") {
 
                 NavigationLink {
