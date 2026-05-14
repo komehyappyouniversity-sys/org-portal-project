@@ -2,8 +2,6 @@
 //  ScheduleView.swift
 //  blog.k100
 //
-//  Created by 根津浩 on 2026/04/14.
-//
 
 import SwiftUI
 
@@ -20,6 +18,7 @@ struct ScheduleView: View {
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+
             } else if let errorMessage = store.errorMessage, !errorMessage.isEmpty {
                 VStack(spacing: 16) {
                     Text("スケジュール")
@@ -35,14 +34,13 @@ struct ScheduleView: View {
                         .padding(.horizontal)
 
                     Button("再読み込み") {
-                        store.startListening(
-                            organizationId: OrganizationConfig.organizationId
-                        )
+                        startListening()
                     }
                     .buttonStyle(.borderedProminent)
                 }
                 .padding()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+
             } else if store.events.isEmpty {
                 VStack(spacing: 16) {
                     Text("スケジュール")
@@ -52,6 +50,7 @@ struct ScheduleView: View {
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+
             } else {
                 List {
                     ForEach(groupedDates, id: \.date) { section in
@@ -87,13 +86,30 @@ struct ScheduleView: View {
         .navigationTitle("スケジュール")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            store.startListening(
-                organizationId: OrganizationConfig.organizationId
-            )
+            startListening()
+        }
+        .onChange(of: organizationStore.organizationId) { _, _ in
+            startListening()
         }
         .onDisappear {
             store.stopListening()
         }
+    }
+
+    private func startListening() {
+        let organizationId = organizationStore.organizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !organizationId.isEmpty else {
+            print("⚠️ ScheduleView organizationId empty")
+            return
+        }
+
+        print("📅 ScheduleView organizationId:", organizationId)
+
+        store.startListening(
+            organizationId: organizationId
+        )
     }
 
     private var groupedDates: [(date: Date, dateText: String, items: [ScheduleEvent])] {

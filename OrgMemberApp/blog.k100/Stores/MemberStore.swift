@@ -26,11 +26,14 @@ final class MemberStore: ObservableObject {
     private var memberListener: ListenerRegistration?
 
     private let db = Firestore.firestore()
+    private var currentOrganizationId: String = ""
+    private var watchingMemberPath: String = ""
 
     deinit {
         if let authHandle {
             Auth.auth().removeStateDidChangeListener(authHandle)
         }
+
         memberListener?.remove()
     }
 
@@ -46,74 +49,99 @@ final class MemberStore: ObservableObject {
             self.profile = nil
 
             if let uid = user?.uid, !uid.isEmpty {
-                self.watchMember(uid: uid)
+                self.watchMemberIfPossible(uid: uid)
             } else {
                 self.memberListener?.remove()
                 self.memberListener = nil
+                self.watchingMemberPath = ""
+                self.isLoading = false
             }
         }
     }
 
-    private func watchMember(uid: String) {
-        let organizationId = OrganizationConfig.organizationId
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+    func setOrganizationId(_ organizationId: String) {
+        let trimmed = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard !organizationId.isEmpty else {
-            print("❌ organizationId が空")
+        guard !trimmed.isEmpty else {
+            print("⚠️ MemberStore organizationId empty")
             return
         }
 
-        memberListener?.remove()
-        isLoading = true
+        if currentOrganizationId == trimmed {
+            print("ℹ️ MemberStore organizationId unchanged:", trimmed)
+            return
+        }
 
+        currentOrganizationId = trimmed
+        watchingMemberPath = ""
+
+        print("🏢 MemberStore organizationId:", trimmed)
+
+        if let uid = authUid, !uid.isEmpty {
+            watchMemberIfPossible(uid: uid)
+        }
+    }
+
+    private func watchMemberIfPossible(uid: String) {
+        guard !currentOrganizationId.isEmpty else {
+            print("⚠️ organizationId 未設定のため member 監視を待機")
+            isLoading = false
+            return
+        }
+
+        watchMember(uid: uid, organizationId: currentOrganizationId)
+    }
+
+    private func watchMember(uid: String, organizationId: String) {
         let ref = db
             .collection("organizations")
             .document(organizationId)
             .collection("members")
             .document(uid)
 
+        if watchingMemberPath == ref.path {
+            print("ℹ️ watchMember already active:", ref.path)
+            return
+        }
+
+        memberListener?.remove()
+        memberListener = nil
+
+        watchingMemberPath = ref.path
+        isLoading = true
+
         print("🔥 watchMember path:", ref.path)
 
         memberListener = ref.addSnapshotListener { [weak self] snapshot, error in
             guard let self else { return }
 
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self.isLoading = false
-            }
 
-            if let error {
-                print("❌ member 読み込み失敗:", error.localizedDescription)
-                return
-            }
-
-            guard let data = snapshot?.data() else {
-                print("⚠️ member ドキュメントなし")
-                DispatchQueue.main.async {
+                if let error {
+                    print("❌ member 読み込み失敗:", error.localizedDescription)
                     self.profile = nil
+                    return
                 }
-                return
-            }
 
-            let name = data["name"] as? String ?? ""
-            let status = data["status"] as? String ?? "pending"
-
-            let baselineAt = (data["messageReadBaselineAt"] as? Timestamp)?.dateValue()
-
-            if baselineAt == nil {
-                ref.setData([
-                    "messageReadBaselineAt": FieldValue.serverTimestamp()
-                ], merge: true) { error in
-                    if let error {
-                        print("❌ messageReadBaselineAt 保存失敗:", error.localizedDescription)
-                    } else {
-                        print("✅ messageReadBaselineAt 初回保存")
-                    }
+                guard let data = snapshot?.data() else {
+                    print("⚠️ member ドキュメントなし")
+                    self.profile = nil
+                    return
                 }
-            }
 
-            print("✅ member 読み込み:", name, status)
+                let name = data["name"] as? String ?? ""
+                let status = data["status"] as? String ?? "pending"
+                let baselineAt = (data["messageReadBaselineAt"] as? Timestamp)?.dateValue()
 
-            DispatchQueue.main.async {
+                if baselineAt == nil {
+                    ref.setData([
+                        "messageReadBaselineAt": FieldValue.serverTimestamp()
+                    ], merge: true)
+                }
+
+                print("✅ member 読み込み:", name, status)
+
                 self.profile = MemberProfile(
                     id: uid,
                     uid: uid,
@@ -126,14 +154,26 @@ final class MemberStore: ObservableObject {
     }
 
     func signIn(email: String, password: String) async throws {
-        let result = try await Auth.auth().signIn(withEmail: email, password: password)
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let result = try await Auth.auth().signIn(
+            withEmail: trimmedEmail,
+            password: password
+        )
+
         self.authUid = result.user.uid
+        watchMemberIfPossible(uid: result.user.uid)
     }
 
     func signOut() {
         try? Auth.auth().signOut()
+
         authUid = nil
         profile = nil
+        isLoading = false
+        watchingMemberPath = ""
+
         memberListener?.remove()
+        memberListener = nil
     }
 }

@@ -10,6 +10,13 @@ struct MemberHomeView: View {
         memberStore.profile != nil
     }
 
+    private var organizationTitle: String {
+        let name = organizationStore.displayName
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return name.isEmpty ? "会員アプリ" : name
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -18,7 +25,7 @@ struct MemberHomeView: View {
 
                     VStack(spacing: 16) {
 
-                        if featureStore.announcementEnabled {
+                        if featureStore.settings.publicAnnouncementEnabled {
                             NavigationLink {
                                 MemberMessageListView(
                                     titleText: "お知らせ",
@@ -52,13 +59,20 @@ struct MemberHomeView: View {
                         }
 
                         if isAlreadyRegistered {
-                            menuButton(
-                                title: "会員登録",
-                                subtitle: "登録済みのため申請は不要です",
-                                systemImage: "person.badge.plus.fill",
-                                color: .green
-                            )
-                            .opacity(0.35)
+                            NavigationLink {
+                                MemberAreaGateView()
+                                    .environmentObject(memberStore)
+                                    .environmentObject(organizationStore)
+                                    .environmentObject(securityStore)
+                                    .environmentObject(featureStore)
+                            } label: {
+                                menuButton(
+                                    title: "会員ページを開く",
+                                    subtitle: "Face IDで認証して会員メニューを開きます",
+                                    systemImage: "faceid",
+                                    color: .blue
+                                )
+                            }
                         } else {
                             NavigationLink {
                                 MemberRegistrationView()
@@ -73,24 +87,7 @@ struct MemberHomeView: View {
                                     color: .green
                                 )
                             }
-                        }
 
-                        if isAlreadyRegistered {
-                            NavigationLink {
-                                MemberAreaGateView()
-                                    .environmentObject(memberStore)
-                                    .environmentObject(organizationStore)
-                                    .environmentObject(securityStore)
-                                    .environmentObject(featureStore)
-                            } label: {
-                                menuButton(
-                                    title: "会員ページへ",
-                                    subtitle: "登録済み会員メニューを開く",
-                                    systemImage: "lock.fill",
-                                    color: .blue
-                                )
-                            }
-                        } else {
                             NavigationLink {
                                 MemberLoginView()
                                     .environmentObject(memberStore)
@@ -118,17 +115,16 @@ struct MemberHomeView: View {
             .navigationTitle("ホーム")
             .navigationBarTitleDisplayMode(.inline)
         }
+        .onAppear {
+            memberStore.setOrganizationId(organizationStore.organizationId)
+        }
     }
 
     private var headerSection: some View {
         VStack(spacing: 12) {
-            Text("生命の貯蓄体操")
+            Text(organizationTitle)
                 .font(.largeTitle.bold())
                 .multilineTextAlignment(.center)
-
-            Text("長岡支部")
-                .font(.title3)
-                .foregroundColor(.secondary)
 
             Text("お知らせの確認、動画の閲覧、会員登録、登録済み会員のログインができます。")
                 .font(.body)

@@ -93,28 +93,41 @@ struct MemberMessageListView: View {
         .navigationTitle(titleText)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            let organizationId = resolvedOrganizationId()
-            guard !organizationId.isEmpty else { return }
-
-            store.startListening(
-                organizationId: organizationId,
-                mode: visibility
-            )
+            startListening()
+        }
+        .onChange(of: organizationStore.organizationId) { _, _ in
+            startListening()
         }
         .onDisappear {
             store.stopListening()
         }
     }
 
+    private func startListening() {
+        let organizationId = resolvedOrganizationId()
+
+        guard !organizationId.isEmpty else {
+            print("⚠️ MemberMessageListView organizationId empty")
+            return
+        }
+
+        print("📩 MemberMessageListView organizationId:", organizationId)
+
+        store.startListening(
+            organizationId: organizationId,
+            mode: visibility
+        )
+    }
+
     private func resolvedOrganizationId() -> String {
-        let fromStore = organizationStore.organization.id
+        let fromStore = organizationStore.organizationId
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         if !fromStore.isEmpty {
             return fromStore
         }
 
-        return OrganizationConfig.organizationId
+        return organizationStore.organization.id
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 

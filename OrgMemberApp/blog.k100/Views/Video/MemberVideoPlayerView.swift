@@ -7,12 +7,22 @@ import SwiftUI
 import WebKit
 
 struct MemberVideoPlayerView: View {
+    @EnvironmentObject private var organizationStore: OrganizationStore
+
     let video: MemberVideoItem
 
     @StateObject private var watchLogStore = MemberVideoWatchLogStore()
 
     private var organizationId: String {
-        OrganizationConfig.organizationId
+        let fromStore = organizationStore.organizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !fromStore.isEmpty {
+            return fromStore
+        }
+
+        return organizationStore.organization.id
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var body: some View {
@@ -21,6 +31,8 @@ struct MemberVideoPlayerView: View {
                 VimeoPlayerWebView(
                     embedURL: video.embedURL,
                     onPlayStarted: {
+                        guard !organizationId.isEmpty else { return }
+
                         watchLogStore.recordVideoPlayStarted(
                             organizationId: organizationId,
                             videoId: video.id,
@@ -28,6 +40,8 @@ struct MemberVideoPlayerView: View {
                         )
                     },
                     onProgress: { current, duration in
+                        guard !organizationId.isEmpty else { return }
+
                         watchLogStore.updatePlaybackProgress(
                             organizationId: organizationId,
                             videoId: video.id,
@@ -37,6 +51,8 @@ struct MemberVideoPlayerView: View {
                         )
                     },
                     onCompleted: { duration in
+                        guard !organizationId.isEmpty else { return }
+
                         watchLogStore.recordCompleted(
                             organizationId: organizationId,
                             videoId: video.id,
@@ -46,6 +62,7 @@ struct MemberVideoPlayerView: View {
                     }
                 )
                 .ignoresSafeArea(edges: .bottom)
+
             } else {
                 VStack(spacing: 16) {
                     Image(systemName: "exclamationmark.triangle")
@@ -65,6 +82,8 @@ struct MemberVideoPlayerView: View {
         .navigationTitle(video.title)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
+            guard !organizationId.isEmpty else { return }
+
             watchLogStore.recordVideoOpened(
                 organizationId: organizationId,
                 videoId: video.id,

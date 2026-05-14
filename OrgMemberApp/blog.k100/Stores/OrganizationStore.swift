@@ -14,7 +14,7 @@ final class OrganizationStore: ObservableObject {
     private var listener: ListenerRegistration?
 
     init(service: OrganizationServiceProtocol? = nil) {
-        self.service = service ?? OrganizationService()
+        self.service = service ?? MemberOrganizationService()
     }
 
     deinit {

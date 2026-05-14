@@ -127,9 +127,11 @@ struct MemberRegistrationView: View {
         }
 
         guard !organizationId.isEmpty else {
-            errorMessage = "organizationId が取得できません。"
+            errorMessage = "団体情報が取得できません。団体コードを再設定してください。"
             return
         }
+
+        print("📝 MemberRegistration organizationId:", organizationId)
 
         isLoading = true
 
@@ -210,14 +212,14 @@ struct MemberRegistrationView: View {
     }
 
     private func resolvedOrganizationId() -> String {
-        let fromStore = organizationStore.organization.id
+        let fromStoreId = organizationStore.organizationId
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if !fromStore.isEmpty {
-            return fromStore
+        if !fromStoreId.isEmpty {
+            return fromStoreId
         }
 
-        return OrganizationConfig.organizationId
+        return organizationStore.organization.id
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
