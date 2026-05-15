@@ -3,9 +3,16 @@ import FirebaseAuth
 
 struct AdminDashboardView: View {
 
-    @EnvironmentObject var organizationStore: OrganizationStore
+    @EnvironmentObject var organizationStore: AdminOrganizationStore
     @EnvironmentObject var authStore: AdminAuthStore
     @EnvironmentObject var featureStore: AdminFeatureStore
+
+    private var resolvedOrganizationId: String {
+        let id = organizationStore.organization.id
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return id.isEmpty ? OrganizationConfig.organizationId : id
+    }
 
     var body: some View {
         NavigationStack {
@@ -101,13 +108,6 @@ struct AdminDashboardView: View {
             }
             .navigationTitle("管理メニュー")
             .onAppear {
-                let organizationId = organizationStore.organization.id
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-
-                let resolvedOrganizationId = organizationId.isEmpty
-                    ? OrganizationConfig.organizationId
-                    : organizationId
-
                 print("[DEBUG] 機能監視 organizationId:", resolvedOrganizationId)
 
                 guard !resolvedOrganizationId.isEmpty else {
@@ -127,11 +127,9 @@ struct AdminDashboardView: View {
             Text("管理アプリ")
                 .font(.largeTitle.bold())
 
-            Text(
-                "organizationId: \(organizationStore.organization.id.isEmpty ? OrganizationConfig.organizationId : organizationStore.organization.id)"
-            )
-            .font(.caption)
-            .foregroundColor(.gray)
+            Text("organizationId: \(resolvedOrganizationId)")
+                .font(.caption)
+                .foregroundColor(.gray)
         }
         .padding(.bottom, 8)
     }
