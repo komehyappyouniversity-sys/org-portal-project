@@ -4,6 +4,8 @@ import FirebaseFirestore
 struct AdminSentMessageDetailView: View {
     let message: AdminSentMessage
 
+    @EnvironmentObject var organizationStore: AdminOrganizationStore
+
     private let db = Firestore.firestore()
 
     @State private var targetMembers: [AdminMessageMember] = []
@@ -13,7 +15,14 @@ struct AdminSentMessageDetailView: View {
     @State private var showSuccess = false
 
     private var organizationId: String {
-        OrganizationConfig.organizationId
+        let id = organizationStore.currentOrganizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !id.isEmpty {
+            return id
+        }
+
+        return OrganizationConfig.organizationId
     }
 
     private var readMembers: [AdminMessageMember] {
@@ -141,6 +150,7 @@ struct AdminSentMessageDetailView: View {
                 let data = doc.data()
 
                 let status = data["status"] as? String ?? ""
+
                 guard status == "approved" || status == "active" else {
                     return nil
                 }
@@ -151,11 +161,15 @@ struct AdminSentMessageDetailView: View {
                 return AdminMessageMember(
                     uid: doc.documentID,
                     name: data["name"] as? String ?? "",
-                    categories: categories + (legacyCategory.isEmpty ? [] : [legacyCategory])
+                    categories: categories + (
+                        legacyCategory.isEmpty ? [] : [legacyCategory]
+                    )
                 )
             }
 
-            targetMembers = resolveTargetMembers(from: approvedMembers)
+            targetMembers = resolveTargetMembers(
+                from: approvedMembers
+            )
 
         } catch {
             errorMessage = "会員情報の読み込みに失敗しました: \(error.localizedDescription)"
@@ -182,7 +196,9 @@ struct AdminSentMessageDetailView: View {
             }
         }
 
-        let targetSet = Set(message.targetMemberUids + message.toUids)
+        let targetSet = Set(
+            message.targetMemberUids + message.toUids
+        )
 
         return approvedMembers.filter { member in
             targetSet.contains(member.uid)
@@ -192,7 +208,16 @@ struct AdminSentMessageDetailView: View {
     private func resendToUnreadMembers() async {
         let unreadUids = unreadMembers.map { $0.uid }
 
-        guard !unreadUids.isEmpty else { return }
+        print("===== 未読者だけ再送 開始 =====")
+        print("organizationId:", organizationId)
+        print("unreadUids:", unreadUids)
+        print("unreadCount:", unreadUids.count)
+
+        guard !unreadUids.isEmpty else {
+            errorMessage = "未読会員がいないため再送できません。"
+            print("❌ 未読会員なし")
+            return
+        }
 
         isResending = true
         errorMessage = ""
@@ -222,11 +247,21 @@ struct AdminSentMessageDetailView: View {
                 "updatedAt": FieldValue.serverTimestamp()
             ]
 
+            print("保存先:", newMessageRef.path)
+            print("保存データ:", data)
+
             try await newMessageRef.setData(data)
+
+            print("✅ 未読者だけ再送 保存成功")
 
             showSuccess = true
 
         } catch {
+            print(
+                "❌ 未読者だけ再送 保存失敗:",
+                error.localizedDescription
+            )
+
             errorMessage = "再送に失敗しました: \(error.localizedDescription)"
         }
 
