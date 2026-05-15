@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AdminCategorySettingsView: View {
-    @EnvironmentObject private var organizationStore: OrganizationStore
+    @EnvironmentObject private var organizationStore: AdminOrganizationStore
     @StateObject private var store = AdminCategoryStore()
 
     var body: some View {

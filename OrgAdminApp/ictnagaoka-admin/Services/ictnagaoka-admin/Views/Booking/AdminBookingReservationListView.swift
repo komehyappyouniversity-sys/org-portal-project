@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AdminBookingReservationListView: View {
-    @EnvironmentObject private var organizationStore: OrganizationStore
+    @EnvironmentObject private var organizationStore: AdminOrganizationStore
 
     let eventId: String
     let slotId: String
@@ -64,7 +64,7 @@ struct AdminBookingReservationListView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             store.startListening(
-                organizationId: organizationStore.organizationId,
+                organizationId: organizationStore.organization.id,
                 eventId: eventId,
                 slotId: slotId
             )

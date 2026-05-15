@@ -3,7 +3,7 @@ import FirebaseAuth
 import FirebaseFunctions
 
 struct AdminVimeoSettingsView: View {
-    @EnvironmentObject var organizationStore: OrganizationStore
+    @EnvironmentObject var organizationStore: AdminOrganizationStore
 
     @State private var accessToken = ""
     @State private var userId = "user111104433"
@@ -17,7 +17,7 @@ struct AdminVimeoSettingsView: View {
     @State private var isSaveCompleted = false
 
     private var organizationId: String {
-        let current = organizationStore.organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let current = organizationStore.organization.id.trimmingCharacters(in: .whitespacesAndNewlines)
         return current.isEmpty ? OrganizationConfig.organizationId : current
     }
 
@@ -89,7 +89,7 @@ struct AdminVimeoSettingsView: View {
         }
         .navigationTitle("Vimeo連携設定")
         .onAppear {
-            if organizationStore.organizationId.isEmpty {
+            if organizationStore.organization.id.isEmpty {
                 organizationStore.startListening(
                     organizationId: OrganizationConfig.organizationId
                 )

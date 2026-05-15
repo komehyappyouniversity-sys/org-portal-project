@@ -6,7 +6,7 @@
 import SwiftUI
 
 struct AdminMemberPostListView: View {
-    @EnvironmentObject private var organizationStore: OrganizationStore
+    @EnvironmentObject private var organizationStore: AdminOrganizationStore
     @StateObject private var store = AdminMemberPostStore()
 
     var body: some View {

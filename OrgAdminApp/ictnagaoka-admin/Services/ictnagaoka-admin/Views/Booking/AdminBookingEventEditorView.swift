@@ -6,7 +6,7 @@
 import SwiftUI
 
 struct AdminBookingEventEditorView: View {
-    @EnvironmentObject var organizationStore: OrganizationStore
+    @EnvironmentObject var organizationStore: AdminOrganizationStore
     @Environment(\.dismiss) private var dismiss
 
     @StateObject private var store = AdminBookingEventStore()
@@ -161,7 +161,7 @@ struct AdminBookingEventEditorView: View {
         )
 
         await store.saveEvent(
-            organizationId: organizationStore.organizationId,
+            organizationId: organizationStore.organization.id,
             event: newEvent
         )
 

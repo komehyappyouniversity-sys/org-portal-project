@@ -3,7 +3,7 @@ import Combine
 import FirebaseAuth
 
 struct AdminVideoManagementView: View {
-    @EnvironmentObject var organizationStore: OrganizationStore
+    @EnvironmentObject var organizationStore: AdminOrganizationStore
     @StateObject private var store = AdminVideoManagementStore()
 
     @State private var saveAllSignal = 0
@@ -64,7 +64,7 @@ struct AdminVideoManagementView: View {
     }
 
     private var resolvedOrganizationId: String {
-        let current = organizationStore.organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let current = organizationStore.organization.id.trimmingCharacters(in: .whitespacesAndNewlines)
         return current.isEmpty ? OrganizationConfig.organizationId : current
     }
 

@@ -29,16 +29,23 @@ struct OrganizationModel: Equatable {
 protocol OrganizationServiceProtocol {
     func fetchOrganization(organizationId: String) async throws -> OrganizationModel
     func findOrganization(byCode code: String) async throws -> OrganizationModel?
+
     func listenOrganization(
         organizationId: String,
         onChange: @escaping (Result<OrganizationModel, Error>) -> Void
     ) -> ListenerRegistration
-    func saveLocalOrganizationSelection(organizationId: String, organizationCode: String) throws
+
+    func saveLocalOrganizationSelection(
+        organizationId: String,
+        organizationCode: String
+    ) throws
+
     func loadLocalOrganizationSelection() throws -> LocalOrganizationSelection?
     func clearLocalOrganizationSelection() throws
 }
 
 final class OrganizationService: OrganizationServiceProtocol {
+
     private let db = Firestore.firestore()
     private let userDefaults = UserDefaults.standard
     private let localSelectionKey = "localOrganizationSelection"
@@ -46,20 +53,23 @@ final class OrganizationService: OrganizationServiceProtocol {
     func fetchOrganization(organizationId: String) async throws -> OrganizationModel {
         let orgId = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
 
+        guard !orgId.isEmpty else {
+            throw Self.makeError("organizationId が空です。")
+        }
+
         let snapshot = try await db
             .collection("organizations")
             .document(orgId)
             .getDocument()
 
-        guard let data = snapshot.data() else {
-            throw NSError(
-                domain: "OrganizationService",
-                code: -1,
-                userInfo: [NSLocalizedDescriptionKey: "組織情報が見つかりません。"]
-            )
+        guard snapshot.exists, let data = snapshot.data() else {
+            throw Self.makeError("組織情報が見つかりません。")
         }
 
-        return Self.makeOrganizationModel(id: snapshot.documentID, data: data)
+        return Self.makeOrganizationModel(
+            id: snapshot.documentID,
+            data: data
+        )
     }
 
     func findOrganization(byCode code: String) async throws -> OrganizationModel? {
@@ -80,7 +90,10 @@ final class OrganizationService: OrganizationServiceProtocol {
             return nil
         }
 
-        return Self.makeOrganizationModel(id: snapshot.documentID, data: data)
+        return Self.makeOrganizationModel(
+            id: snapshot.documentID,
+            data: data
+        )
     }
 
     func listenOrganization(
@@ -93,26 +106,27 @@ final class OrganizationService: OrganizationServiceProtocol {
             .collection("organizations")
             .document(orgId)
             .addSnapshotListener { snapshot, error in
+
                 if let error {
                     onChange(.failure(error))
                     return
                 }
 
-                guard let snapshot, let data = snapshot.data() else {
-                    onChange(.failure(NSError(
-                        domain: "OrganizationService",
-                        code: -1,
-                        userInfo: [NSLocalizedDescriptionKey: "組織情報が取得できません。"]
-                    )))
+                guard
+                    let snapshot,
+                    snapshot.exists,
+                    let data = snapshot.data()
+                else {
+                    onChange(.failure(Self.makeError("組織情報が取得できません。")))
                     return
                 }
 
-                onChange(.success(
-                    Self.makeOrganizationModel(
-                        id: snapshot.documentID,
-                        data: data
-                    )
-                ))
+                let organization = Self.makeOrganizationModel(
+                    id: snapshot.documentID,
+                    data: data
+                )
+
+                onChange(.success(organization))
             }
     }
 
@@ -120,9 +134,20 @@ final class OrganizationService: OrganizationServiceProtocol {
         organizationId: String,
         organizationCode: String
     ) throws {
+        let orgId = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let orgCode = organizationCode.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !orgId.isEmpty else {
+            throw Self.makeError("保存する organizationId が空です。")
+        }
+
+        guard !orgCode.isEmpty else {
+            throw Self.makeError("保存する organizationCode が空です。")
+        }
+
         let selection = LocalOrganizationSelection(
-            organizationId: organizationId,
-            organizationCode: organizationCode
+            organizationId: orgId,
+            organizationCode: orgCode
         )
 
         let data = try JSONEncoder().encode(selection)
@@ -134,7 +159,10 @@ final class OrganizationService: OrganizationServiceProtocol {
             return nil
         }
 
-        return try JSONDecoder().decode(LocalOrganizationSelection.self, from: data)
+        return try JSONDecoder().decode(
+            LocalOrganizationSelection.self,
+            from: data
+        )
     }
 
     func clearLocalOrganizationSelection() throws {
@@ -150,7 +178,7 @@ final class OrganizationService: OrganizationServiceProtocol {
         let displayName =
             data["displayName"] as? String ??
             data["name"] as? String ??
-            ""
+            id
 
         return OrganizationModel(
             id: id,
@@ -160,6 +188,16 @@ final class OrganizationService: OrganizationServiceProtocol {
             openingImageURL: data["openingImageURL"] as? String ?? "",
             logoImageURL: data["logoImageURL"] as? String ?? "",
             isActive: data["isActive"] as? Bool ?? true
+        )
+    }
+
+    private static func makeError(_ message: String) -> NSError {
+        NSError(
+            domain: "OrganizationService",
+            code: -1,
+            userInfo: [
+                NSLocalizedDescriptionKey: message
+            ]
         )
     }
 }

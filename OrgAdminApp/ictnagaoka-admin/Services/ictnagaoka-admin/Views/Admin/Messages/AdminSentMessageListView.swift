@@ -2,7 +2,7 @@ import SwiftUI
 import FirebaseFirestore
 
 struct AdminSentMessageListView: View {
-    @EnvironmentObject private var organizationStore: OrganizationStore
+    @EnvironmentObject private var organizationStore: AdminOrganizationStore
 
     private let db = Firestore.firestore()
 

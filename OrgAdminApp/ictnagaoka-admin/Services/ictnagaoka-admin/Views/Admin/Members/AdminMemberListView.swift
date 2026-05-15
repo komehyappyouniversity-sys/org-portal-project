@@ -11,7 +11,7 @@ struct AdminMemberItem: Identifiable {
 }
 
 struct AdminMemberListView: View {
-    @EnvironmentObject var organizationStore: OrganizationStore
+    @EnvironmentObject var organizationStore: AdminOrganizationStore
 
     @State private var members: [AdminMemberItem] = []
     @State private var isLoading = false
@@ -24,7 +24,7 @@ struct AdminMemberListView: View {
             ForEach(members) { member in
                 NavigationLink {
                     AdminMemberCategoryEditView(
-                        organizationId: organizationStore.organizationId,
+                        organizationId: organizationStore.organization.id,
                         member: member
                     )
                 } label: {
@@ -73,7 +73,7 @@ struct AdminMemberListView: View {
     }
 
     private func fetch() {
-        let orgId = organizationStore.organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let orgId = organizationStore.organization.id.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !orgId.isEmpty else {
             errorMessage = "organizationId がありません"

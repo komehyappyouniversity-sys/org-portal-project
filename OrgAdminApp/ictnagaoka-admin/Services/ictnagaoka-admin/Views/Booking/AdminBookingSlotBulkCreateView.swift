@@ -6,7 +6,7 @@
 import SwiftUI
 
 struct AdminBookingSlotBulkCreateView: View {
-    @EnvironmentObject var organizationStore: OrganizationStore
+    @EnvironmentObject var organizationStore: AdminOrganizationStore
     @Environment(\.dismiss) private var dismiss
 
     @StateObject private var store = AdminBookingSlotStore()
@@ -179,7 +179,7 @@ struct AdminBookingSlotBulkCreateView: View {
 
         for slot in slotsToCreate {
             await store.saveSlot(
-                organizationId: organizationStore.organizationId,
+                organizationId: organizationStore.organization.id,
                 eventId: eventId,
                 slot: slot
             )

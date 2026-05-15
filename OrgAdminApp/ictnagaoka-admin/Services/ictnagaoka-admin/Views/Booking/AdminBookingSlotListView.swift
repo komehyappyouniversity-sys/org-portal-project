@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AdminBookingSlotListView: View {
-    @EnvironmentObject private var organizationStore: OrganizationStore
+    @EnvironmentObject private var organizationStore: AdminOrganizationStore
 
     let event: AdminBookingEvent
 
@@ -56,7 +56,7 @@ struct AdminBookingSlotListView: View {
             }
 
             store.startListening(
-                organizationId: organizationStore.organizationId,
+                organizationId: organizationStore.organization.id,
                 eventId: eventId
             )
         }
@@ -177,7 +177,7 @@ struct AdminBookingSlotListView: View {
 
             Task {
                 await store.deleteSlot(
-                    organizationId: organizationStore.organizationId,
+                    organizationId: organizationStore.organization.id,
                     eventId: eventId,
                     slotId: slotId
                 )

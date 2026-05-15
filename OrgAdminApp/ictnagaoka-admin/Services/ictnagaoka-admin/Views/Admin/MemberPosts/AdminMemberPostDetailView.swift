@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct AdminMemberPostDetailView: View {
-    @EnvironmentObject private var organizationStore: OrganizationStore
+    @EnvironmentObject private var organizationStore: AdminOrganizationStore
     @ObservedObject var store: AdminMemberPostStore
 
     let item: AdminMemberPostItem

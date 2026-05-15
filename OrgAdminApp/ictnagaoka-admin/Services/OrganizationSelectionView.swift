@@ -32,9 +32,10 @@ struct OrganizationSelectionView: View {
                         .multilineTextAlignment(.center)
                 }
 
-                TextField("例：KOME-2026", text: $organizationCode)
-                    .textInputAutocapitalization(.characters)
+                TextField("例：k100u", text: $organizationCode)
+                    .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .keyboardType(.asciiCapable)
                     .textFieldStyle(.roundedBorder)
                     .padding(.horizontal)
 
@@ -91,6 +92,7 @@ struct OrganizationSelectionView: View {
     private func connectOrganization() async {
         let code = organizationCode
             .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
 
         guard !code.isEmpty else {
             errorMessage = "組織コードを入力してください。"

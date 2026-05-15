@@ -1,11 +1,11 @@
 import SwiftUI
 
 struct AdminRequestsListView: View {
-    @EnvironmentObject var organizationStore: OrganizationStore
+    @EnvironmentObject var organizationStore: AdminOrganizationStore
     @StateObject private var store = AdminRequestsStore()
 
     private var safeOrganizationId: String {
-        (organizationStore.organizationId ?? "")
+        (organizationStore.organization.id ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -96,7 +96,7 @@ struct AdminRequestsListView: View {
                 store.startListening(organizationId: safeOrganizationId)
             }
         }
-        .onChange(of: organizationStore.organizationId) { _, newValue in
+        .onChange(of: organizationStore.organization.id) { _, newValue in
             let newOrganizationId = (newValue ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
 

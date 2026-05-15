@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @EnvironmentObject var organizationStore: OrganizationStore
+    @EnvironmentObject var organizationStore: AdminOrganizationStore
     @EnvironmentObject var authStore: AdminAuthStore
     @EnvironmentObject var featureStore: AdminFeatureStore
 

@@ -6,7 +6,7 @@
 import SwiftUI
 
 struct AdminBookingEventListView: View {
-    @EnvironmentObject var organizationStore: OrganizationStore
+    @EnvironmentObject var organizationStore: AdminOrganizationStore
     @StateObject private var store = AdminBookingEventStore()
 
     @State private var showEditor = false
@@ -84,7 +84,7 @@ struct AdminBookingEventListView: View {
         }
         .onAppear {
             store.startListening(
-                organizationId: organizationStore.organizationId
+                organizationId: organizationStore.organization.id
             )
         }
         .sheet(isPresented: $showEditor) {
@@ -102,7 +102,7 @@ struct AdminBookingEventListView: View {
 
             Task {
                 await store.deleteEvent(
-                    organizationId: organizationStore.organizationId,
+                    organizationId: organizationStore.organization.id,
                     eventId: eventId
                 )
             }

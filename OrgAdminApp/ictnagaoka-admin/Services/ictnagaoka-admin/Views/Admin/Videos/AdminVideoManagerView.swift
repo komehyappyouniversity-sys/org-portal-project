@@ -6,7 +6,7 @@
 import SwiftUI
 
 struct AdminVideoManagerView: View {
-    @EnvironmentObject var organizationStore: OrganizationStore
+    @EnvironmentObject var organizationStore: AdminOrganizationStore
 
     @StateObject private var store = AdminVideoStore()
 

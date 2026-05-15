@@ -2,7 +2,7 @@ import SwiftUI
 import Combine
 
 struct AdminVideoComposerView: View {
-    @EnvironmentObject var organizationStore: OrganizationStore
+    @EnvironmentObject var organizationStore: AdminOrganizationStore
 
     @StateObject private var store = AdminVideoStore()
 

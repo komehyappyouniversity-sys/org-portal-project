@@ -13,14 +13,19 @@ import UIKit
 
 @MainActor
 final class AdminAuthStore: NSObject, ObservableObject {
+
     @Published var isSignedIn: Bool = false
     @Published var isAdminApproved: Bool = false
     @Published var isLoading: Bool = false
+
     @Published var currentUid: String?
+    @Published var organizationId: String = ""
+    @Published var organizationCode: String = ""
+    @Published var organizationName: String = ""
+
     @Published var errorMessage: String?
 
     private let db = Firestore.firestore()
-    private let organizationService = OrganizationService()
 
     private var authHandle: AuthStateDidChangeListenerHandle?
     private var adminListener: ListenerRegistration?
@@ -44,66 +49,109 @@ final class AdminAuthStore: NSObject, ObservableObject {
         authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             guard let self else { return }
 
-            self.currentUid = user?.uid
-            self.isSignedIn = (user != nil)
-            self.errorMessage = nil
-
             self.adminListener?.remove()
             self.adminListener = nil
-            self.isAdminApproved = false
 
-            guard let uid = user?.uid else { return }
+            self.currentUid = user?.uid
+            self.isSignedIn = (user != nil)
+            self.isAdminApproved = false
+            self.organizationId = ""
+            self.organizationCode = ""
+            self.organizationName = ""
+            self.errorMessage = nil
+
+            guard let uid = user?.uid else {
+                print("ℹ️ 管理者ログアウト状態")
+                return
+            }
 
             print("🔐 current uid:", uid)
 
             Task { @MainActor in
-                self.startAdminListenerIfOrganizationSelected(uid: uid)
+                await self.resolveAdminOrganization(uid: uid)
                 self.setupNotificationsAndFCM()
                 self.refreshFCMTokenIfNeeded()
             }
         }
     }
 
-    private func startAdminListenerIfOrganizationSelected(uid: String) {
+    // MARK: - Resolve Admin Organization
+
+    private func resolveAdminOrganization(uid: String) async {
+        isLoading = true
+        errorMessage = nil
+
         do {
-            guard let selection = try organizationService.loadLocalOrganizationSelection() else {
-                print("ℹ️ 保存済み organizationId なし。組織コード入力後に管理者確認します。")
-                self.isAdminApproved = false
+            let organizationsSnapshot = try await db
+                .collection("organizations")
+                .getDocuments()
+
+            for organizationDocument in organizationsSnapshot.documents {
+                let orgId = organizationDocument.documentID
+                let orgData = organizationDocument.data()
+
+                let adminSnapshot = try await db
+                    .collection("organizations")
+                    .document(orgId)
+                    .collection("admins")
+                    .document(uid)
+                    .getDocument()
+
+                guard adminSnapshot.exists else {
+                    continue
+                }
+
+                let adminData = adminSnapshot.data() ?? [:]
+
+                let approved =
+                    (adminData["isApproved"] as? Bool) == true ||
+                    (adminData["approved"] as? Bool) == true ||
+                    (adminData["isActive"] as? Bool) == true ||
+                    (adminData["status"] as? String) == "approved"
+
+                guard approved else {
+                    continue
+                }
+
+                self.organizationId = orgId
+                self.organizationCode =
+                    orgData["organizationCode"] as? String
+                    ?? orgId
+
+                self.organizationName =
+                    orgData["displayName"] as? String
+                    ?? orgData["name"] as? String
+                    ?? orgId
+
+                self.isAdminApproved = true
+                self.isLoading = false
                 self.errorMessage = nil
+
+                print("✅ 管理者所属組織を確認")
+                print("✅ organizationId:", orgId)
+                print("✅ organizationName:", self.organizationName)
+
+                startAdminListener(
+                    uid: uid,
+                    organizationId: orgId
+                )
+
                 return
             }
 
-            let organizationId = selection.organizationId
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+            self.isAdminApproved = false
+            self.isLoading = false
+            self.errorMessage = "この管理者が所属する組織が見つかりません。"
 
-            guard !organizationId.isEmpty else {
-                self.errorMessage = "保存済み organizationId が空です。"
-                self.isAdminApproved = false
-                return
-            }
-
-            print("🔐 saved organizationId:", organizationId)
-
-            startAdminListener(
-                uid: uid,
-                organizationId: organizationId
-            )
+            print("❌ 管理者所属組織なし uid:", uid)
 
         } catch {
-            self.errorMessage = "保存済み組織情報の読み込みに失敗しました: \(error.localizedDescription)"
             self.isAdminApproved = false
-            print("❌ load organization selection error:", error.localizedDescription)
-        }
-    }
+            self.isLoading = false
+            self.errorMessage = "管理者所属組織の確認に失敗しました: \(error.localizedDescription)"
 
-    func restartAdminListenerForSelectedOrganization() {
-        guard let uid = Auth.auth().currentUser?.uid else {
-            self.isAdminApproved = false
-            return
+            print("❌ 管理者所属組織確認エラー:", error.localizedDescription)
         }
-
-        startAdminListenerIfOrganizationSelected(uid: uid)
-        refreshFCMTokenIfNeeded()
     }
 
     private func startAdminListener(
@@ -137,9 +185,6 @@ final class AdminAuthStore: NSObject, ObservableObject {
                 let exists = snapshot?.exists ?? false
                 let data = snapshot?.data() ?? [:]
 
-                print("🔐 admin doc exists:", exists)
-                print("🔐 admin data:", data)
-
                 guard exists else {
                     self.isAdminApproved = false
                     self.errorMessage = "この組織の管理者として登録されていません。"
@@ -157,7 +202,20 @@ final class AdminAuthStore: NSObject, ObservableObject {
 
                 print("🔐 isSignedIn:", self.isSignedIn)
                 print("🔐 isAdminApproved:", self.isAdminApproved)
+                print("🔐 organizationId:", self.organizationId)
             }
+    }
+
+    func restartAdminListenerForSelectedOrganization() {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            self.isAdminApproved = false
+            return
+        }
+
+        Task {
+            await resolveAdminOrganization(uid: uid)
+            refreshFCMTokenIfNeeded()
+        }
     }
 
     // MARK: - Sign In / Out
@@ -181,7 +239,8 @@ final class AdminAuthStore: NSObject, ObservableObject {
 
             currentUid = result.user.uid
             isSignedIn = true
-            isLoading = false
+
+            await resolveAdminOrganization(uid: result.user.uid)
 
             setupNotificationsAndFCM()
             refreshFCMTokenIfNeeded()
@@ -202,6 +261,9 @@ final class AdminAuthStore: NSObject, ObservableObject {
             isAdminApproved = false
             isLoading = false
             currentUid = nil
+            organizationId = ""
+            organizationCode = ""
+            organizationName = ""
             errorMessage = nil
 
             adminListener?.remove()
@@ -240,30 +302,16 @@ final class AdminAuthStore: NSObject, ObservableObject {
             return
         }
 
-        let organizationId: String
+        let orgId = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        do {
-            guard let selection = try organizationService.loadLocalOrganizationSelection() else {
-                print("保存済み organizationId がないため管理者FCM保存をスキップ")
-                return
-            }
-
-            organizationId = selection.organizationId
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        } catch {
-            print("保存済み organizationId 読み込み失敗:", error.localizedDescription)
-            return
-        }
-
-        guard !organizationId.isEmpty else {
+        guard !orgId.isEmpty else {
             print("organizationId がないため管理者FCM保存をスキップ")
             return
         }
 
         do {
             try await db.collection("organizations")
-                .document(organizationId)
+                .document(orgId)
                 .collection("admins")
                 .document(uid)
                 .setData([
