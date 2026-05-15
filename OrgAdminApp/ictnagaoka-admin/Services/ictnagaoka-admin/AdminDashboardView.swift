@@ -107,18 +107,7 @@ struct AdminDashboardView: View {
                 .padding()
             }
             .navigationTitle("管理メニュー")
-            .onAppear {
-                print("[DEBUG] 機能監視 organizationId:", resolvedOrganizationId)
-
-                guard !resolvedOrganizationId.isEmpty else {
-                    print("[ERROR] organizationId が空です。")
-                    return
-                }
-
-                featureStore.startListening(
-                    organizationId: resolvedOrganizationId
-                )
-            }
+            
         }
     }
 
