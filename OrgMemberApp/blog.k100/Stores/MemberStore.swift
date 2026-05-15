@@ -26,14 +26,16 @@ final class MemberStore: ObservableObject {
     private var memberListener: ListenerRegistration?
 
     private let db = Firestore.firestore()
+
     private var currentOrganizationId: String = ""
     private var watchingMemberPath: String = ""
+
+    private var baselineWriteRequestedPaths: Set<String> = []
 
     deinit {
         if let authHandle {
             Auth.auth().removeStateDidChangeListener(authHandle)
         }
-
         memberListener?.remove()
     }
 
@@ -41,20 +43,22 @@ final class MemberStore: ObservableObject {
         if authHandle != nil { return }
 
         authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
-            guard let self else { return }
+            Task { @MainActor in
+                guard let self else { return }
 
-            print("👤 Auth state changed:", user?.uid ?? "未ログイン")
+                print("👤 Auth state changed:", user?.uid ?? "未ログイン")
 
-            self.authUid = user?.uid
-            self.profile = nil
+                self.authUid = user?.uid
+                self.profile = nil
 
-            if let uid = user?.uid, !uid.isEmpty {
-                self.watchMemberIfPossible(uid: uid)
-            } else {
-                self.memberListener?.remove()
-                self.memberListener = nil
-                self.watchingMemberPath = ""
-                self.isLoading = false
+                if let uid = user?.uid, !uid.isEmpty {
+                    self.watchMemberIfPossible(uid: uid)
+                } else {
+                    self.memberListener?.remove()
+                    self.memberListener = nil
+                    self.watchingMemberPath = ""
+                    self.isLoading = false
+                }
             }
         }
     }
@@ -113,9 +117,9 @@ final class MemberStore: ObservableObject {
         print("🔥 watchMember path:", ref.path)
 
         memberListener = ref.addSnapshotListener { [weak self] snapshot, error in
-            guard let self else { return }
-
             Task { @MainActor in
+                guard let self else { return }
+
                 self.isLoading = false
 
                 if let error {
@@ -124,8 +128,8 @@ final class MemberStore: ObservableObject {
                     return
                 }
 
-                guard let data = snapshot?.data() else {
-                    print("⚠️ member ドキュメントなし")
+                guard let snapshot, snapshot.exists, let data = snapshot.data() else {
+                    print("⚠️ member ドキュメントなし:", ref.path)
                     self.profile = nil
                     return
                 }
@@ -134,10 +138,20 @@ final class MemberStore: ObservableObject {
                 let status = data["status"] as? String ?? "pending"
                 let baselineAt = (data["messageReadBaselineAt"] as? Timestamp)?.dateValue()
 
-                if baselineAt == nil {
+                if baselineAt == nil,
+                   !self.baselineWriteRequestedPaths.contains(ref.path) {
+
+                    self.baselineWriteRequestedPaths.insert(ref.path)
+
                     ref.setData([
                         "messageReadBaselineAt": FieldValue.serverTimestamp()
-                    ], merge: true)
+                    ], merge: true) { error in
+                        if let error {
+                            print("❌ baseline 保存失敗:", error.localizedDescription)
+                        } else {
+                            print("✅ baseline 初期保存:", ref.path)
+                        }
+                    }
                 }
 
                 print("✅ member 読み込み:", name, status)
@@ -161,7 +175,7 @@ final class MemberStore: ObservableObject {
             password: password
         )
 
-        self.authUid = result.user.uid
+        authUid = result.user.uid
         watchMemberIfPossible(uid: result.user.uid)
     }
 

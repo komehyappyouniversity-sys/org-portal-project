@@ -1,157 +1,197 @@
 import Foundation
 import Combine
+import FirebaseAuth
 import FirebaseFirestore
+
+struct AdminOrganization: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let isActive: Bool
+
+    init(id: String, data: [String: Any]) {
+        self.id = id
+
+        let displayName = data["displayName"] as? String
+        let name = data["name"] as? String
+
+        self.name = displayName?.isEmpty == false
+            ? displayName!
+            : (name?.isEmpty == false ? name! : id)
+
+        self.isActive = data["isActive"] as? Bool ?? true
+    }
+}
 
 @MainActor
 final class AdminOrganizationStore: ObservableObject {
 
-    @Published var isLoading: Bool = false
-    @Published var organization: OrganizationModel = AdminOrganizationStore.emptyOrganization()
-    @Published var errorMessage: String?
+    @Published var isLoading = false
+    @Published var organizations: [AdminOrganization] = []
+    @Published var selectedOrganization: AdminOrganization?
+    @Published var errorMessage = ""
+
+    @Published var organizationId: String = ""
+    @Published var organizationName: String = ""
 
     private let db = Firestore.firestore()
-    private var listener: ListenerRegistration?
+    private var authHandle: AuthStateDidChangeListenerHandle?
+
+    private let selectedOrganizationIdKey = "admin_selected_organization_id"
 
     deinit {
-        listener?.remove()
+        if let authHandle {
+            Auth.auth().removeStateDidChangeListener(authHandle)
+        }
     }
 
-    var organizationCode: String {
-        organization.organizationCode
-    }
-
-    var displayName: String {
-        organization.displayName
-    }
-
-    var name: String {
-        organization.displayName
-    }
-
-    var openingEnabled: Bool {
-        organization.openingEnabled
-    }
-
-    var openingImageURL: String {
-        organization.openingImageURL
-    }
-
-    var logoImageURL: String {
-        organization.logoImageURL
-    }
-
-    var isActive: Bool {
-        organization.isActive
-    }
-
-    func startListening(organizationId: String) {
-        listener?.remove()
-
-        let trimmedId = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !trimmedId.isEmpty else {
-            organization = Self.emptyOrganization()
-            errorMessage = "organizationId が空です"
+    func start() {
+        if authHandle != nil {
             return
         }
 
-        isLoading = true
-        errorMessage = nil
+        authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
+            Task { @MainActor in
+                guard let self else { return }
 
-        listener = db
-            .collection("organizations")
-            .document(trimmedId)
-            .addSnapshotListener { [weak self] snapshot, error in
-                Task { @MainActor in
-                    guard let self else { return }
-
-                    self.isLoading = false
-
-                    if let error {
-                        self.organization = Self.emptyOrganization()
-                        self.errorMessage = error.localizedDescription
-                        return
-                    }
-
-                    guard let snapshot, snapshot.exists else {
-                        self.organization = Self.emptyOrganization()
-                        self.errorMessage = "組織情報が見つかりません"
-                        return
-                    }
-
-                    self.organization = Self.makeOrganization(from: snapshot)
+                guard let user else {
+                    self.clear()
+                    return
                 }
+
+                await self.loadAvailableOrganizations(uid: user.uid)
             }
+        }
     }
 
-    func loadOrganization(organizationId: String) async {
-        let trimmedId = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !trimmedId.isEmpty else {
-            organization = Self.emptyOrganization()
-            errorMessage = "organizationId が空です"
+    func reload() async {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            clear()
             return
         }
 
+        await loadAvailableOrganizations(uid: uid)
+    }
+
+    func selectOrganization(_ organization: AdminOrganization) {
+        selectedOrganization = organization
+        organizationId = organization.id
+        organizationName = organization.name
+        errorMessage = ""
+
+        UserDefaults.standard.set(
+            organization.id,
+            forKey: selectedOrganizationIdKey
+        )
+
+        print("✅ 管理アプリ 組織切替: \(organization.id) / \(organization.name)")
+    }
+    func startListening(organizationId newOrganizationId: String) {
+        if let organization = organizations.first(where: { $0.id == newOrganizationId }) {
+            selectOrganization(organization)
+            return
+        }
+
+        organizationId = newOrganizationId
+        organizationName = newOrganizationId
+        errorMessage = ""
+
+        UserDefaults.standard.set(
+            newOrganizationId,
+            forKey: selectedOrganizationIdKey
+        )
+
+        print("✅ 管理アプリ 組織ID指定: \(newOrganizationId)")
+    }
+
+    private func loadAvailableOrganizations(uid: String) async {
         isLoading = true
-        errorMessage = nil
+        errorMessage = ""
 
         do {
-            let snapshot = try await db
-                .collection("organizations")
-                .document(trimmedId)
-                .getDocument()
+            let snapshot = try await db.collection("organizations")
+                .whereField("isActive", isEqualTo: true)
+                .getDocuments()
 
-            isLoading = false
+            var availableOrganizations: [AdminOrganization] = []
 
-            guard snapshot.exists else {
-                organization = Self.emptyOrganization()
-                errorMessage = "組織情報が見つかりません"
-                return
+            for document in snapshot.documents {
+                let orgId = document.documentID
+
+                let adminDoc = try await db.collection("organizations")
+                    .document(orgId)
+                    .collection("admins")
+                    .document(uid)
+                    .getDocument()
+
+                guard adminDoc.exists else {
+                    continue
+                }
+
+                let adminData = adminDoc.data() ?? [:]
+                let isAdminActive = adminData["isActive"] as? Bool ?? false
+
+                guard isAdminActive else {
+                    continue
+                }
+
+                let organization = AdminOrganization(
+                    id: orgId,
+                    data: document.data()
+                )
+
+                availableOrganizations.append(organization)
             }
 
-            organization = Self.makeOrganization(from: snapshot)
+            availableOrganizations.sort {
+                $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
+
+            organizations = availableOrganizations
+
+            restoreSelectedOrganization()
+
+            if organizations.isEmpty {
+                errorMessage = "管理できる組織がありません。"
+                organizationId = ""
+                organizationName = ""
+                selectedOrganization = nil
+            }
 
         } catch {
-            organization = Self.emptyOrganization()
-            errorMessage = error.localizedDescription
-            isLoading = false
+            errorMessage = "組織の取得に失敗しました: \(error.localizedDescription)"
+            print("❌ 管理アプリ 組織取得エラー:", error.localizedDescription)
         }
-    }
 
-    func reset() {
-        listener?.remove()
-        listener = nil
-        organization = Self.emptyOrganization()
-        errorMessage = nil
         isLoading = false
     }
 
-    private static func emptyOrganization() -> OrganizationModel {
-        OrganizationModel(
-            id: "",
-            organizationCode: "",
-            displayName: "",
-            openingEnabled: false,
-            openingImageURL: "",
-            logoImageURL: "",
-            isActive: false
+    private func restoreSelectedOrganization() {
+        let savedId = UserDefaults.standard.string(
+            forKey: selectedOrganizationIdKey
         )
+
+        if let savedId,
+           let savedOrganization = organizations.first(where: { $0.id == savedId }) {
+            selectOrganization(savedOrganization)
+            return
+        }
+
+        if let firstOrganization = organizations.first {
+            selectOrganization(firstOrganization)
+            return
+        }
+
+        selectedOrganization = nil
+        organizationId = ""
+        organizationName = ""
     }
 
-    private static func makeOrganization(from snapshot: DocumentSnapshot) -> OrganizationModel {
-        let data = snapshot.data() ?? [:]
-
-        return OrganizationModel(
-            id: snapshot.documentID,
-            organizationCode: data["organizationCode"] as? String ?? snapshot.documentID,
-            displayName: data["displayName"] as? String
-                ?? data["name"] as? String
-                ?? snapshot.documentID,
-            openingEnabled: data["openingEnabled"] as? Bool ?? false,
-            openingImageURL: data["openingImageURL"] as? String ?? "",
-            logoImageURL: data["logoImageURL"] as? String ?? "",
-            isActive: data["isActive"] as? Bool ?? true
-        )
+    private func clear() {
+        isLoading = false
+        organizations = []
+        selectedOrganization = nil
+        errorMessage = ""
+        organizationId = ""
+        organizationName = ""
     }
 }

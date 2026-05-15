@@ -2,6 +2,8 @@ import SwiftUI
 import Combine
 import FirebaseFirestore
 
+// MARK: - Login View
+
 struct SuperAdminLoginView: View {
     @EnvironmentObject var authStore: SuperAdminAuthStore
 
@@ -11,6 +13,7 @@ struct SuperAdminLoginView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 20) {
+
                 Text("上位管理アプリ")
                     .font(.largeTitle.bold())
 
@@ -34,7 +37,10 @@ struct SuperAdminLoginView: View {
 
                 Button {
                     Task {
-                        await authStore.signIn(email: email, password: password)
+                        await authStore.signIn(
+                            email: email,
+                            password: password
+                        )
                     }
                 } label: {
                     if authStore.isLoading {
@@ -47,7 +53,11 @@ struct SuperAdminLoginView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(email.isEmpty || password.isEmpty || authStore.isLoading)
+                .disabled(
+                    email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                    password.isEmpty ||
+                    authStore.isLoading
+                )
 
                 Spacer()
             }
@@ -56,14 +66,19 @@ struct SuperAdminLoginView: View {
     }
 }
 
+// MARK: - Model
+
 struct OrganizationItem: Identifiable {
     let id: String
     let name: String
     let isActive: Bool
 }
 
+// MARK: - Store
+
 @MainActor
 final class OrganizationListStore: ObservableObject {
+
     @Published var organizations: [OrganizationItem] = []
     @Published var isLoading = false
     @Published var errorMessage = ""
@@ -73,12 +88,14 @@ final class OrganizationListStore: ObservableObject {
     private var listener: ListenerRegistration?
 
     func startListening() {
+        if listener != nil {
+            return
+        }
+
         isLoading = true
-        errorMessage = ""
 
-        listener?.remove()
-
-        listener = db.collection("organizations")
+        listener = db
+            .collection("organizations")
             .order(by: "createdAt", descending: true)
             .addSnapshotListener { [weak self] snapshot, error in
                 Task { @MainActor in
@@ -92,6 +109,9 @@ final class OrganizationListStore: ObservableObject {
                         return
                     }
 
+                    // 成功した時点で、過去の赤エラーを消す
+                    self.errorMessage = ""
+
                     self.organizations = snapshot?.documents.map { doc in
                         let data = doc.data()
 
@@ -102,15 +122,22 @@ final class OrganizationListStore: ObservableObject {
                         )
                     } ?? []
 
-                    print("✅ organizations loaded:", self.organizations.count)
+                    print("✅ organizations realtime loaded:", self.organizations.count)
                 }
             }
+    }
+
+    func refresh() {
+        listener?.remove()
+        listener = nil
+        startListening()
     }
 
     func createOrganization(
         organizationId: String,
         name: String
     ) async -> Bool {
+
         errorMessage = ""
         successMessage = ""
 
@@ -132,7 +159,10 @@ final class OrganizationListStore: ObservableObject {
         }
 
         do {
-            let ref = db.collection("organizations").document(trimmedId)
+            let ref = db
+                .collection("organizations")
+                .document(trimmedId)
+
             let doc = try await ref.getDocument()
 
             if doc.exists {
@@ -147,8 +177,13 @@ final class OrganizationListStore: ObservableObject {
                 "updatedAt": FieldValue.serverTimestamp()
             ])
 
+            errorMessage = ""
             successMessage = "組織を作成しました。"
+
             print("✅ organization created:", trimmedId)
+
+            refresh()
+
             return true
 
         } catch {
@@ -164,7 +199,10 @@ final class OrganizationListStore: ObservableObject {
     }
 }
 
+// MARK: - List View
+
 struct OrganizationListView: View {
+
     @EnvironmentObject var authStore: SuperAdminAuthStore
     @StateObject private var store = OrganizationListStore()
 
@@ -216,6 +254,7 @@ struct OrganizationListView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("ログアウト") {
+                        store.stopListening()
                         authStore.signOut()
                     }
                 }
@@ -234,14 +273,14 @@ struct OrganizationListView: View {
             .onAppear {
                 store.startListening()
             }
-            .onDisappear {
-                store.stopListening()
-            }
         }
     }
 }
 
+// MARK: - Create View
+
 struct CreateOrganizationView: View {
+
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var store: OrganizationListStore
 
@@ -285,10 +324,12 @@ struct CreateOrganizationView: View {
                     Button {
                         Task {
                             isSaving = true
+
                             let success = await store.createOrganization(
                                 organizationId: organizationId,
                                 name: organizationName
                             )
+
                             isSaving = false
 
                             if success {

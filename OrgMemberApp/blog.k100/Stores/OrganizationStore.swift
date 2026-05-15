@@ -1,211 +1,175 @@
-
 import Foundation
 import Combine
 import FirebaseFirestore
 
-struct MemberOrganization {
-    let id: String
-    let name: String
-    let organizationCode: String
-    let logoImageURL: String
-    let logoDisplayHeight: Double
-    let isActive: Bool
-
-    static let empty = MemberOrganization(
-        id: "",
-        name: "",
-        organizationCode: "",
-        logoImageURL: "",
-        logoDisplayHeight: 260,
-        isActive: false
-    )
-}
-
 @MainActor
 final class OrganizationStore: ObservableObject {
 
-    @Published var organization: MemberOrganization = .empty
-    @Published var organizationId = ""
-    @Published var organizationCode = ""
-    @Published var displayName = ""
-    @Published var logoImageURL = ""
-    @Published var logoDisplayHeight: Double = 260
-    @Published var isActive = false
-    @Published var isLoading = false
-    @Published var errorMessage: String? = nil
+    @Published var isLoading: Bool = false
+    @Published var organizationId: String = ""
+    @Published var organizationName: String = ""
+    @Published var organizationCode: String = ""
+    @Published var openingEnabled: Bool = false
+    @Published var openingImageURL: String = ""
+    @Published var logoImageURL: String = ""
+    @Published var isActive: Bool = true
+    @Published var errorMessage: String?
 
-    private let db = Firestore.firestore()
     private var listener: ListenerRegistration?
+    private let db = Firestore.firestore()
 
-    private let localOrganizationIdKey = "selectedOrganizationId"
-    private let localOrganizationCodeKey = "selectedOrganizationCode"
-
-    var hasSelection: Bool {
-        !organizationId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    deinit {
+        listener?.remove()
     }
 
-    func restoreFromLocal() {
-        let savedId = UserDefaults.standard.string(forKey: localOrganizationIdKey) ?? ""
+    var displayName: String {
+        organizationName
+    }
 
-        guard !savedId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return
-        }
-
-        organizationId = savedId
-        startListening(organizationId: savedId)
+    var name: String {
+        organizationName
     }
 
     func startListening(organizationId: String) {
-        stopListening()
+        listener?.remove()
 
-        let trimmedId = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !trimmedId.isEmpty else {
-            errorMessage = "organizationId が空です。"
+        guard !organizationId.isEmpty else {
+            reset()
+            errorMessage = "organizationId が空です"
             return
         }
 
-        self.organizationId = trimmedId
+        self.organizationId = organizationId
         isLoading = true
         errorMessage = nil
 
-        listener = db.collection("organizations")
-            .document(trimmedId)
+        listener = db
+            .collection("organizations")
+            .document(organizationId)
             .addSnapshotListener { [weak self] snapshot, error in
-                guard let self else { return }
-
                 Task { @MainActor in
+                    guard let self else { return }
+
                     self.isLoading = false
 
                     if let error {
-                        self.errorMessage = "組織情報の取得に失敗しました。"
-                        print("❌ organization listen error:", error.localizedDescription)
+                        self.errorMessage = error.localizedDescription
+                        print("❌ OrganizationStore listen error:", error.localizedDescription)
                         return
                     }
 
-                    guard let snapshot,
-                          snapshot.exists,
-                          let data = snapshot.data() else {
-                        self.errorMessage = "組織情報が見つかりません。"
-                        self.organization = .empty
+                    guard let snapshot, snapshot.exists else {
+                        self.errorMessage = "組織情報が見つかりません"
+                        print("⚠️ OrganizationStore: organization not found:", organizationId)
                         return
                     }
 
-                    let name =
-                        data["displayName"] as? String ??
-                        data["name"] as? String ??
-                        ""
+                    let data = snapshot.data() ?? [:]
 
-                    let code =
-                        data["organizationCode"] as? String ??
-                        data["code"] as? String ??
-                        trimmedId
+                    self.organizationId = snapshot.documentID
+                    self.organizationCode =
+                        data["organizationCode"] as? String
+                        ?? snapshot.documentID
 
-                    let logoURL =
-                        data["logoImageURL"] as? String ?? ""
+                    self.organizationName =
+                        data["displayName"] as? String
+                        ?? data["name"] as? String
+                        ?? snapshot.documentID
 
-                    let displayHeight =
-                        data["logoDisplayHeight"] as? Double ?? 260
+                    self.openingEnabled =
+                        data["openingEnabled"] as? Bool
+                        ?? false
 
-                    let active =
-                        data["isActive"] as? Bool ?? true
+                    self.openingImageURL =
+                        data["openingImageURL"] as? String
+                        ?? ""
 
-                    self.organizationId = trimmedId
-                    self.organizationCode = code
-                    self.displayName = name
-                    self.logoImageURL = logoURL
-                    self.logoDisplayHeight = displayHeight
-                    self.isActive = active
+                    self.logoImageURL =
+                        data["logoImageURL"] as? String
+                        ?? ""
 
-                    self.organization = MemberOrganization(
-                        id: trimmedId,
-                        name: name,
-                        organizationCode: code,
-                        logoImageURL: logoURL,
-                        logoDisplayHeight: displayHeight,
-                        isActive: active
-                    )
+                    self.isActive =
+                        data["isActive"] as? Bool
+                        ?? true
 
-                    self.errorMessage = nil
-
-                    UserDefaults.standard.set(trimmedId, forKey: self.localOrganizationIdKey)
-                    UserDefaults.standard.set(code, forKey: self.localOrganizationCodeKey)
-
-                    print("✅ organization loaded:", trimmedId)
-                    print("✅ organizationCode:", code)
-                    print("✅ logoImageURL:", logoURL)
-                    print("✅ logoDisplayHeight:", displayHeight)
+                    print("✅ Member OrganizationStore loaded:", self.organizationId, self.organizationName)
                 }
             }
     }
 
-    func setupOrganization(byCode code: String) async -> Bool {
-        let trimmedCode = code.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !trimmedCode.isEmpty else {
-            errorMessage = "団体コードを入力してください。"
-            return false
+    func loadOrganization(organizationId: String) async {
+        guard !organizationId.isEmpty else {
+            reset()
+            errorMessage = "organizationId が空です"
+            return
         }
 
+        self.organizationId = organizationId
         isLoading = true
         errorMessage = nil
 
         do {
-            let snapshot = try await db.collection("organizations")
-                .whereField("organizationCode", isEqualTo: trimmedCode)
-                .limit(to: 1)
-                .getDocuments()
-
-            guard let document = snapshot.documents.first else {
-                isLoading = false
-                errorMessage = "団体コードが見つかりません。"
-                return false
-            }
-
-            let foundId = document.documentID
-
-            UserDefaults.standard.set(foundId, forKey: localOrganizationIdKey)
-            UserDefaults.standard.set(trimmedCode, forKey: localOrganizationCodeKey)
-
-            self.organizationId = foundId
-            self.organizationCode = trimmedCode
-
-            startListening(organizationId: foundId)
+            let snapshot = try await db
+                .collection("organizations")
+                .document(organizationId)
+                .getDocument()
 
             isLoading = false
-            return true
+
+            guard snapshot.exists else {
+                errorMessage = "組織情報が見つかりません"
+                return
+            }
+
+            let data = snapshot.data() ?? [:]
+
+            self.organizationId = snapshot.documentID
+            self.organizationCode =
+                data["organizationCode"] as? String
+                ?? snapshot.documentID
+
+            self.organizationName =
+                data["displayName"] as? String
+                ?? data["name"] as? String
+                ?? snapshot.documentID
+
+            self.openingEnabled =
+                data["openingEnabled"] as? Bool
+                ?? false
+
+            self.openingImageURL =
+                data["openingImageURL"] as? String
+                ?? ""
+
+            self.logoImageURL =
+                data["logoImageURL"] as? String
+                ?? ""
+
+            self.isActive =
+                data["isActive"] as? Bool
+                ?? true
+
+            print("✅ Member OrganizationStore loaded once:", self.organizationId, self.organizationName)
 
         } catch {
             isLoading = false
-            errorMessage = "団体情報の確認に失敗しました。"
-            print("❌ setup organization error:", error.localizedDescription)
-            return false
+            errorMessage = error.localizedDescription
+            print("❌ Member OrganizationStore load error:", error.localizedDescription)
         }
     }
 
-    func clearSelection() {
-        stopListening()
-
-        UserDefaults.standard.removeObject(forKey: localOrganizationIdKey)
-        UserDefaults.standard.removeObject(forKey: localOrganizationCodeKey)
-
-        organization = .empty
-        organizationId = ""
-        organizationCode = ""
-        displayName = ""
-        logoImageURL = ""
-        logoDisplayHeight = 260
-        isActive = false
-        isLoading = false
-        errorMessage = nil
-    }
-
-    func stopListening() {
+    func reset() {
         listener?.remove()
         listener = nil
-    }
 
-    deinit {
-        listener?.remove()
+        isLoading = false
+        organizationId = ""
+        organizationName = ""
+        organizationCode = ""
+        openingEnabled = false
+        openingImageURL = ""
+        logoImageURL = ""
+        isActive = true
+        errorMessage = nil
     }
 }

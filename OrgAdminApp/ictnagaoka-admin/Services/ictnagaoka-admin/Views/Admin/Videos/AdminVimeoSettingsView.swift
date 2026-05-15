@@ -80,12 +80,7 @@ struct AdminVimeoSettingsView: View {
                 }
             }
 
-            if !message.isEmpty {
-                Section {
-                    Text(message)
-                        .foregroundColor(isError ? .red : .green)
-                }
-            }
+            
         }
         .navigationTitle("Vimeo連携設定")
         .onAppear {

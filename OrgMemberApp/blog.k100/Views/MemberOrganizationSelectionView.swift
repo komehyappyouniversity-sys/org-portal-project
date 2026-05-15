@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MemberOrganizationSelectionView: View {
+
     @EnvironmentObject private var organizationStore: OrganizationStore
     @EnvironmentObject private var featureStore: MemberFeatureStore
 
@@ -9,6 +10,7 @@ struct MemberOrganizationSelectionView: View {
 
     var body: some View {
         VStack(spacing: 24) {
+
             Spacer()
 
             Image(systemName: "building.2.crop.circle.fill")
@@ -16,6 +18,7 @@ struct MemberOrganizationSelectionView: View {
                 .foregroundColor(.blue)
 
             VStack(spacing: 8) {
+
                 Text("団体設定")
                     .font(.title.bold())
 
@@ -36,6 +39,7 @@ struct MemberOrganizationSelectionView: View {
 
             if let errorMessage = organizationStore.errorMessage,
                !errorMessage.isEmpty {
+
                 Text(errorMessage)
                     .font(.subheadline)
                     .foregroundColor(.red)
@@ -45,15 +49,22 @@ struct MemberOrganizationSelectionView: View {
 
             Button {
                 connectOrganization()
+
             } label: {
+
                 HStack {
+
                     if isConnecting {
                         ProgressView()
                             .tint(.white)
                     }
 
-                    Text(isConnecting ? "接続中..." : "この団体に接続")
-                        .font(.headline)
+                    Text(
+                        isConnecting
+                        ? "接続中..."
+                        : "この団体に接続"
+                    )
+                    .font(.headline)
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
@@ -62,7 +73,14 @@ struct MemberOrganizationSelectionView: View {
                 .cornerRadius(16)
                 .padding(.horizontal, 24)
             }
-            .disabled(isConnecting || organizationCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(
+                isConnecting
+                || organizationCode
+                    .trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    )
+                    .isEmpty
+            )
 
             Text("一度接続すると、次回から自動でこの団体の会員アプリとして起動します。")
                 .font(.footnote)
@@ -76,16 +94,22 @@ struct MemberOrganizationSelectionView: View {
     }
 
     private func connectOrganization() {
-        let code = organizationCode.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard !code.isEmpty else { return }
+        let code = organizationCode
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !code.isEmpty else {
+            return
+        }
 
         isConnecting = true
 
         Task {
-            let success = await organizationStore.setupOrganization(byCode: code)
 
-            if success {
+            await organizationStore.findOrganization(byCode: code)
+
+            if !organizationStore.organizationId.isEmpty {
+
                 featureStore.startListening(
                     organizationId: organizationStore.organizationId
                 )
