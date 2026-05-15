@@ -12,6 +12,7 @@ final class OrganizationStore: ObservableObject {
     @Published var openingEnabled: Bool = false
     @Published var openingImageURL: String = ""
     @Published var logoImageURL: String = ""
+    @Published var homepageURL: String = ""
     @Published var isActive: Bool = true
     @Published var errorMessage: String?
 
@@ -64,34 +65,7 @@ final class OrganizationStore: ObservableObject {
                         return
                     }
 
-                    let data = snapshot.data() ?? [:]
-
-                    self.organizationId = snapshot.documentID
-                    self.organizationCode =
-                        data["organizationCode"] as? String
-                        ?? snapshot.documentID
-
-                    self.organizationName =
-                        data["displayName"] as? String
-                        ?? data["name"] as? String
-                        ?? snapshot.documentID
-
-                    self.openingEnabled =
-                        data["openingEnabled"] as? Bool
-                        ?? false
-
-                    self.openingImageURL =
-                        data["openingImageURL"] as? String
-                        ?? ""
-
-                    self.logoImageURL =
-                        data["logoImageURL"] as? String
-                        ?? ""
-
-                    self.isActive =
-                        data["isActive"] as? Bool
-                        ?? true
-
+                    self.applySnapshot(snapshot)
                     print("✅ Member OrganizationStore loaded:", self.organizationId, self.organizationName)
                 }
             }
@@ -121,33 +95,7 @@ final class OrganizationStore: ObservableObject {
                 return
             }
 
-            let data = snapshot.data() ?? [:]
-
-            self.organizationId = snapshot.documentID
-            self.organizationCode =
-                data["organizationCode"] as? String
-                ?? snapshot.documentID
-
-            self.organizationName =
-                data["displayName"] as? String
-                ?? data["name"] as? String
-                ?? snapshot.documentID
-
-            self.openingEnabled =
-                data["openingEnabled"] as? Bool
-                ?? false
-
-            self.openingImageURL =
-                data["openingImageURL"] as? String
-                ?? ""
-
-            self.logoImageURL =
-                data["logoImageURL"] as? String
-                ?? ""
-
-            self.isActive =
-                data["isActive"] as? Bool
-                ?? true
+            applySnapshot(snapshot)
 
             print("✅ Member OrganizationStore loaded once:", self.organizationId, self.organizationName)
 
@@ -169,7 +117,83 @@ final class OrganizationStore: ObservableObject {
         openingEnabled = false
         openingImageURL = ""
         logoImageURL = ""
+        homepageURL = ""
         isActive = true
         errorMessage = nil
+    }
+
+    func findOrganization(byCode code: String) async {
+        let trimmed = code
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmed.isEmpty else {
+            errorMessage = "団体コードを入力してください"
+            return
+        }
+
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            let snapshot = try await db
+                .collection("organizations")
+                .whereField("organizationCode", isEqualTo: trimmed)
+                .limit(to: 1)
+                .getDocuments()
+
+            isLoading = false
+
+            guard let document = snapshot.documents.first else {
+                errorMessage = "団体が見つかりません"
+                return
+            }
+
+            let organizationId = document.documentID
+
+            print("✅ findOrganization success:", organizationId)
+
+            startListening(organizationId: organizationId)
+
+        } catch {
+            isLoading = false
+            errorMessage = error.localizedDescription
+
+            print("❌ findOrganization error:", error.localizedDescription)
+        }
+    }
+
+    private func applySnapshot(_ snapshot: DocumentSnapshot) {
+        let data = snapshot.data() ?? [:]
+
+        organizationId = snapshot.documentID
+
+        organizationCode =
+            data["organizationCode"] as? String
+            ?? snapshot.documentID
+
+        organizationName =
+            data["displayName"] as? String
+            ?? data["name"] as? String
+            ?? snapshot.documentID
+
+        openingEnabled =
+            data["openingEnabled"] as? Bool
+            ?? false
+
+        openingImageURL =
+            data["openingImageURL"] as? String
+            ?? ""
+
+        logoImageURL =
+            data["logoImageURL"] as? String
+            ?? ""
+
+        homepageURL =
+            data["homepageURL"] as? String
+            ?? ""
+
+        isActive =
+            data["isActive"] as? Bool
+            ?? true
     }
 }

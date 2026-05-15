@@ -17,6 +17,17 @@ struct MemberHomeView: View {
         return name.isEmpty ? "会員アプリ" : name
     }
 
+    private var homepageURL: URL? {
+        let urlString = organizationStore.homepageURL
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !urlString.isEmpty else {
+            return nil
+        }
+
+        return URL(string: urlString)
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -24,6 +35,18 @@ struct MemberHomeView: View {
                     headerSection
 
                     VStack(spacing: 16) {
+
+                        if let homepageURL {
+                            Link(destination: homepageURL) {
+                                menuButton(
+                                    title: "ホームページ",
+                                    subtitle: "ホームページを開きます",
+                                    systemImage: "globe",
+                                    color: .cyan,
+                                    showsChevron: false
+                                )
+                            }
+                        }
 
                         if featureStore.settings.publicAnnouncementEnabled {
                             NavigationLink {
@@ -140,7 +163,8 @@ struct MemberHomeView: View {
         title: String,
         subtitle: String,
         systemImage: String,
-        color: Color
+        color: Color,
+        showsChevron: Bool = true
     ) -> some View {
         HStack(spacing: 16) {
             Image(systemName: systemImage)
@@ -162,7 +186,7 @@ struct MemberHomeView: View {
 
             Spacer()
 
-            Image(systemName: "chevron.right")
+            Image(systemName: showsChevron ? "chevron.right" : "arrow.up.right.square")
                 .foregroundColor(.secondary)
         }
         .padding(18)
