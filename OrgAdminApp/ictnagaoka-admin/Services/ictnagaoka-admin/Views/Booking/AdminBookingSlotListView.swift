@@ -9,6 +9,11 @@ struct AdminBookingSlotListView: View {
     @State private var showEditor = false
     @State private var showBulkCreate = false
 
+    private var organizationId: String {
+        organizationStore.currentOrganizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var body: some View {
         VStack {
             if store.isLoading {
@@ -56,7 +61,7 @@ struct AdminBookingSlotListView: View {
             }
 
             store.startListening(
-                organizationId: organizationStore.organization.id,
+                organizationId: organizationId,
                 eventId: eventId
             )
         }
@@ -177,7 +182,7 @@ struct AdminBookingSlotListView: View {
 
             Task {
                 await store.deleteSlot(
-                    organizationId: organizationStore.organization.id,
+                    organizationId: organizationId,
                     eventId: eventId,
                     slotId: slotId
                 )

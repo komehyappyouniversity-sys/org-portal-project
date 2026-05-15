@@ -8,10 +8,17 @@ struct AdminDashboardView: View {
     @EnvironmentObject var featureStore: AdminFeatureStore
 
     private var resolvedOrganizationId: String {
-        let id = organizationStore.organization.id
+        let id = organizationStore.currentOrganizationId
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         return id.isEmpty ? OrganizationConfig.organizationId : id
+    }
+
+    private var resolvedOrganizationName: String {
+        let name = organizationStore.currentOrganizationName
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return name.isEmpty ? "管理アプリ" : name
     }
 
     var body: some View {
@@ -20,6 +27,11 @@ struct AdminDashboardView: View {
                 VStack(spacing: 16) {
 
                     headerSection
+
+                    menuButton(title: "組織切替") {
+                        AdminOrganizationSwitcherView()
+                            .environmentObject(organizationStore)
+                    }
 
                     if featureStore.announcementEnabled {
                         menuButton(title: "公開お知らせ送信") {
@@ -106,14 +118,13 @@ struct AdminDashboardView: View {
                 }
                 .padding()
             }
-            .navigationTitle("管理メニュー")
-            
+            .navigationTitle(resolvedOrganizationName)
         }
     }
 
     private var headerSection: some View {
         VStack(spacing: 8) {
-            Text("管理アプリ")
+            Text(resolvedOrganizationName)
                 .font(.largeTitle.bold())
 
             Text("organizationId: \(resolvedOrganizationId)")

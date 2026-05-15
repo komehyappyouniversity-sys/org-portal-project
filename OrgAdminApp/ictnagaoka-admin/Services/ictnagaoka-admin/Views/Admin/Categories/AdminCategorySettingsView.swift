@@ -4,6 +4,11 @@ struct AdminCategorySettingsView: View {
     @EnvironmentObject private var organizationStore: AdminOrganizationStore
     @StateObject private var store = AdminCategoryStore()
 
+    private var organizationId: String {
+        organizationStore.currentOrganizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var body: some View {
         VStack(spacing: 16) {
             inputSection
@@ -23,15 +28,7 @@ struct AdminCategorySettingsView: View {
                     Text(category.name)
                 }
                 .onDelete { indexSet in
-                    for index in indexSet {
-                        let category = store.categories[index]
-                        Task {
-                            await store.deleteCategory(
-                                organizationId: organizationStore.organization.id,
-                                categoryId: category.id
-                            )
-                        }
-                    }
+                    deleteCategories(indexSet)
                 }
             }
         }
@@ -40,7 +37,7 @@ struct AdminCategorySettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             store.startListening(
-                organizationId: organizationStore.organization.id
+                organizationId: organizationId
             )
         }
     }
@@ -57,7 +54,7 @@ struct AdminCategorySettingsView: View {
                 Button {
                     Task {
                         await store.addCategory(
-                            organizationId: organizationStore.organization.id
+                            organizationId: organizationId
                         )
                     }
                 } label: {
@@ -70,6 +67,19 @@ struct AdminCategorySettingsView: View {
             Text("削除する場合は、一覧の項目を左にスワイプしてください。")
                 .font(.caption)
                 .foregroundColor(.secondary)
+        }
+    }
+
+    private func deleteCategories(_ indexSet: IndexSet) {
+        for index in indexSet {
+            let category = store.categories[index]
+
+            Task {
+                await store.deleteCategory(
+                    organizationId: organizationId,
+                    categoryId: category.id
+                )
+            }
         }
     }
 }

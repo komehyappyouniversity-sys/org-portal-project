@@ -5,6 +5,7 @@ import FirebaseFirestore
 
 @MainActor
 final class AdminVideoManagementStore: ObservableObject {
+
     @Published var videos: [AdminManagedVideo] = []
     @Published var isLoading = false
     @Published var message = ""
@@ -13,7 +14,16 @@ final class AdminVideoManagementStore: ObservableObject {
     private let db = Firestore.firestore()
 
     func fetchFromVimeo(organizationId: String) {
-        guard !organizationId.isEmpty else {
+        Task {
+            await fetchFromVimeoAsync(organizationId: organizationId)
+        }
+    }
+
+    private func fetchFromVimeoAsync(organizationId: String) async {
+        let safeOrganizationId = organizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !safeOrganizationId.isEmpty else {
             showError("organizationId がありません")
             return
         }
@@ -25,114 +35,84 @@ final class AdminVideoManagementStore: ObservableObject {
 
         isLoading = true
         message = ""
+        isError = false
 
-        user.getIDToken { [weak self] token, error in
-            guard let self else { return }
+        do {
+            let token = try await user.getIDToken()
 
-            if let error {
-                Task { @MainActor in
-                    self.showError("IDトークン取得失敗: \(error.localizedDescription)")
-                }
-                return
-            }
-
-            guard let token else {
-                Task { @MainActor in
-                    self.showError("IDトークンが取得できません")
-                }
-                return
-            }
-
-            guard let url = URL(string: "https://asia-northeast1-ictnagaoka-member.cloudfunctions.net/fetchVimeoVideosHttp") else {
-                Task { @MainActor in
-                    self.showError("URLが不正です")
-                }
+            guard let url = URL(
+                string: "https://asia-northeast1-ictnagaoka-member.cloudfunctions.net/fetchVimeoVideosHttp"
+            ) else {
+                showError("URLが不正です")
                 return
             }
 
             let body: [String: Any] = [
-                "organizationId": organizationId
+                "organizationId": safeOrganizationId
             ]
 
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-            URLSession.shared.dataTask(with: request) { data, response, error in
-                Task { @MainActor in
-                    self.isLoading = false
-                }
+            let (data, response) = try await URLSession.shared.data(for: request)
 
-                if let error {
-                    Task { @MainActor in
-                        self.showError("通信エラー: \(error.localizedDescription)")
-                    }
-                    return
-                }
+            guard let http = response as? HTTPURLResponse else {
+                showError("レスポンス取得失敗")
+                return
+            }
 
-                guard let http = response as? HTTPURLResponse else {
-                    Task { @MainActor in
-                        self.showError("レスポンス取得失敗")
-                    }
-                    return
-                }
+            print("🎥 fetchVimeoVideosHttp status:", http.statusCode)
+            print("🎥 fetchVimeoVideosHttp response:", String(data: data, encoding: .utf8) ?? "")
 
-                guard let data else {
-                    Task { @MainActor in
-                        self.showError("データがありません")
-                    }
-                    return
-                }
+            guard http.statusCode == 200 else {
+                showError("Vimeo動画取得失敗（\(http.statusCode)）")
+                return
+            }
 
-                print("🎥 fetchVimeoVideosHttp status:", http.statusCode)
-                print("🎥 fetchVimeoVideosHttp response:", String(data: data, encoding: .utf8) ?? "")
+            let decoded = try JSONDecoder().decode(VimeoFetchResponse.self, from: data)
 
-                guard http.statusCode == 200 else {
-                    Task { @MainActor in
-                        self.showError("Vimeo動画取得失敗（\(http.statusCode)）")
-                    }
-                    return
-                }
+            let managedVideos = decoded.videos.map { item in
+                AdminManagedVideo(
+                    id: item.id,
+                    title: item.title,
+                    description: item.description,
+                    vimeoVideoId: item.id,
+                    thumbnailUrl: item.thumbnailUrl,
+                    videoUrl: item.link,
+                    isPublished: false,
+                    isMembersOnly: true,
+                    isPremium: false,
+                    price: 0,
+                    priceText: "",
+                    billingType: "monthly",
+                    sortOrder: 0
+                )
+            }
 
-                do {
-                    let decoded = try JSONDecoder().decode(VimeoFetchResponse.self, from: data)
+            self.videos = managedVideos
+            self.message = "Vimeoから \(managedVideos.count) 件読み込みました"
+            self.isError = false
+            self.isLoading = false
 
-                    let managedVideos = decoded.videos.map { item in
-                        AdminManagedVideo(
-                            id: item.id,
-                            title: item.title,
-                            description: item.description,
-                            vimeoVideoId: item.id,
-                            thumbnailUrl: item.thumbnailUrl,
-                            videoUrl: item.link,
-                            isPublished: false,
-                            isMembersOnly: true,
-                            isPremium: false,
-                            price: 0,
-                            priceText: "",
-                            billingType: "monthly",
-                            sortOrder: 0
-                        )
-                    }
-
-                    Task { @MainActor in
-                        self.videos = managedVideos
-                        self.message = "Vimeoから \(managedVideos.count) 件読み込みました"
-                        self.isError = false
-                    }
-                } catch {
-                    Task { @MainActor in
-                        self.showError("JSON解析エラー: \(error.localizedDescription)")
-                    }
-                }
-            }.resume()
+        } catch {
+            showError("Vimeo動画取得失敗: \(error.localizedDescription)")
         }
     }
 
     func saveVideo(_ video: AdminManagedVideo, organizationId: String) {
-        guard !organizationId.isEmpty else {
+        Task {
+            await saveVideoAsync(video, organizationId: organizationId)
+        }
+    }
+
+    private func saveVideoAsync(_ video: AdminManagedVideo, organizationId: String) async {
+        let safeOrganizationId = organizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !safeOrganizationId.isEmpty else {
             showError("organizationId がありません")
             return
         }
@@ -155,20 +135,19 @@ final class AdminVideoManagementStore: ObservableObject {
             "updatedAt": FieldValue.serverTimestamp()
         ]
 
-        db.collection("organizations")
-            .document(organizationId)
-            .collection("videos")
-            .document(docId)
-            .setData(data, merge: true) { [weak self] error in
-                Task { @MainActor in
-                    if let error {
-                        self?.showError("保存失敗: \(error.localizedDescription)")
-                    } else {
-                        self?.message = "保存しました"
-                        self?.isError = false
-                    }
-                }
-            }
+        do {
+            try await db.collection("organizations")
+                .document(safeOrganizationId)
+                .collection("videos")
+                .document(docId)
+                .setData(data, merge: true)
+
+            message = "保存しました"
+            isError = false
+
+        } catch {
+            showError("保存失敗: \(error.localizedDescription)")
+        }
     }
 
     func saveAll(organizationId: String) {

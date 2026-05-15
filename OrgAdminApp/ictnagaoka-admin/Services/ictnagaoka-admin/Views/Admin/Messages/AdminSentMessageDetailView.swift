@@ -91,6 +91,7 @@ struct AdminSentMessageDetailView: View {
                         .cornerRadius(12)
                     }
                     .disabled(isResending)
+
                 } else if !targetMembers.isEmpty {
                     Text("未読会員はいません。")
                         .foregroundColor(.secondary)
@@ -136,11 +137,11 @@ struct AdminSentMessageDetailView: View {
                 .collection("members")
                 .getDocuments()
 
-            let allMembers: [AdminMessageMember] = snapshot.documents.compactMap { doc in
+            let approvedMembers: [AdminMessageMember] = snapshot.documents.compactMap { doc in
                 let data = doc.data()
 
                 let status = data["status"] as? String ?? ""
-                guard status == "approved" else {
+                guard status == "approved" || status == "active" else {
                     return nil
                 }
 
@@ -154,26 +155,38 @@ struct AdminSentMessageDetailView: View {
                 )
             }
 
-            if message.isBroadcast {
-                targetMembers = allMembers
-
-            } else if !message.categoryTargets.isEmpty {
-                targetMembers = allMembers.filter { member in
-                    member.categories.contains { category in
-                        message.categoryTargets.contains(category)
-                    }
-                }
-
-            } else {
-                let targetSet = Set(message.targetMemberUids + message.toUids)
-                targetMembers = allMembers.filter { targetSet.contains($0.uid) }
-            }
+            targetMembers = resolveTargetMembers(from: approvedMembers)
 
         } catch {
             errorMessage = "会員情報の読み込みに失敗しました: \(error.localizedDescription)"
         }
 
         isLoading = false
+    }
+
+    private func resolveTargetMembers(
+        from approvedMembers: [AdminMessageMember]
+    ) -> [AdminMessageMember] {
+
+        if message.isBroadcast {
+            return approvedMembers
+        }
+
+        if !message.categoryTargets.isEmpty {
+            let categoryTargetSet = Set(message.categoryTargets)
+
+            return approvedMembers.filter { member in
+                member.categories.contains { category in
+                    categoryTargetSet.contains(category)
+                }
+            }
+        }
+
+        let targetSet = Set(message.targetMemberUids + message.toUids)
+
+        return approvedMembers.filter { member in
+            targetSet.contains(member.uid)
+        }
     }
 
     private func resendToUnreadMembers() async {

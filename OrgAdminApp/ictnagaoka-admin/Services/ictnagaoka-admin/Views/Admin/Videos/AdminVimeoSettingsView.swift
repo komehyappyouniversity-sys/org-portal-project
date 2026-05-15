@@ -17,7 +17,9 @@ struct AdminVimeoSettingsView: View {
     @State private var isSaveCompleted = false
 
     private var organizationId: String {
-        let current = organizationStore.organization.id.trimmingCharacters(in: .whitespacesAndNewlines)
+        let current = organizationStore.currentOrganizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
         return current.isEmpty ? OrganizationConfig.organizationId : current
     }
 
@@ -27,7 +29,7 @@ struct AdminVimeoSettingsView: View {
                 SecureField("Vimeoアクセストークン", text: $accessToken)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                    .onChange(of: accessToken) { _ in
+                    .onChange(of: accessToken) {
                         isConnectionTestCompleted = false
                         isSaveCompleted = false
                     }
@@ -36,7 +38,7 @@ struct AdminVimeoSettingsView: View {
                     .keyboardType(.asciiCapable)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                    .onChange(of: userId) { _ in
+                    .onChange(of: userId) {
                         isConnectionTestCompleted = false
                         isSaveCompleted = false
                     }
@@ -44,7 +46,7 @@ struct AdminVimeoSettingsView: View {
                 TextField("動画取得条件（任意）", text: $query)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                    .onChange(of: query) { _ in
+                    .onChange(of: query) {
                         isSaveCompleted = false
                     }
             }
@@ -55,7 +57,9 @@ struct AdminVimeoSettingsView: View {
                 } label: {
                     Label(
                         isConnectionTestCompleted ? "接続テスト完了" : "接続テスト",
-                        systemImage: isConnectionTestCompleted ? "checkmark.circle.fill" : "network"
+                        systemImage: isConnectionTestCompleted
+                            ? "checkmark.circle.fill"
+                            : "network"
                     )
                 }
                 .foregroundColor(isConnectionTestCompleted ? .green : .blue)
@@ -66,7 +70,9 @@ struct AdminVimeoSettingsView: View {
                 } label: {
                     Label(
                         isSaveCompleted ? "保存完了" : "保存",
-                        systemImage: isSaveCompleted ? "checkmark.circle.fill" : "tray.and.arrow.down"
+                        systemImage: isSaveCompleted
+                            ? "checkmark.circle.fill"
+                            : "tray.and.arrow.down"
                     )
                 }
                 .foregroundColor(isSaveCompleted ? .green : .blue)
@@ -79,12 +85,10 @@ struct AdminVimeoSettingsView: View {
                         .environmentObject(organizationStore)
                 }
             }
-
-            
         }
         .navigationTitle("Vimeo連携設定")
         .onAppear {
-            if organizationStore.organization.id.isEmpty {
+            if organizationId.isEmpty {
                 organizationStore.startListening(
                     organizationId: OrganizationConfig.organizationId
                 )
@@ -161,7 +165,9 @@ struct AdminVimeoSettingsView: View {
                 return
             }
 
-            guard let url = URL(string: "https://asia-northeast1-ictnagaoka-member.cloudfunctions.net/saveVimeoConfigHttp") else {
+            guard let url = URL(
+                string: "https://asia-northeast1-ictnagaoka-member.cloudfunctions.net/saveVimeoConfigHttp"
+            ) else {
                 DispatchQueue.main.async {
                     isLoading = false
                     isError = true
@@ -193,8 +199,13 @@ struct AdminVimeoSettingsView: View {
                         return
                     }
 
-                    let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-                    let responseText = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+                    let statusCode =
+                        (response as? HTTPURLResponse)?.statusCode ?? 0
+
+                    let responseText =
+                        data.flatMap {
+                            String(data: $0, encoding: .utf8)
+                        } ?? ""
 
                     guard (200...299).contains(statusCode) else {
                         isError = true
@@ -207,7 +218,8 @@ struct AdminVimeoSettingsView: View {
                     isSaveCompleted = true
                     message = "保存完了"
                 }
-            }.resume()
+            }
+            .resume()
         }
     }
 

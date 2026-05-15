@@ -12,6 +12,7 @@ final class AdminRequestsStore: ObservableObject {
     private let db = Firestore.firestore()
     private var listener: ListenerRegistration?
 
+
     func stopListening() {
         listener?.remove()
         listener = nil
@@ -21,6 +22,8 @@ final class AdminRequestsStore: ObservableObject {
         let safeOrganizationId = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !safeOrganizationId.isEmpty else {
+            requests = []
+            isLoading = false
             errorMessage = "organizationId が空です。"
             return
         }
@@ -35,41 +38,47 @@ final class AdminRequestsStore: ObservableObject {
             .whereField("status", isEqualTo: "pending")
             .order(by: "createdAt", descending: true)
             .addSnapshotListener { [weak self] snapshot, error in
+
+                if let error {
+                    let message = error.localizedDescription
+
+                    Task { @MainActor in
+                        self?.isLoading = false
+                        self?.errorMessage = message
+                    }
+                    return
+                }
+
+                let rawItems: [AdminRequestItem] = snapshot?.documents.compactMap { doc in
+                    AdminRequestItem(
+                        document: doc,
+                        organizationId: safeOrganizationId
+                    )
+                } ?? []
+
+                var seen = Set<String>()
+
+                let filteredItems = rawItems.filter { item in
+                    let key: String
+
+                    if !item.uid.isEmpty {
+                        key = "uid:\(item.uid)"
+                    } else {
+                        key = "email:\(item.email.lowercased())"
+                    }
+
+                    if seen.contains(key) {
+                        return false
+                    }
+
+                    seen.insert(key)
+                    return true
+                }
+
                 Task { @MainActor in
-                    guard let self else { return }
-
-                    self.isLoading = false
-
-                    if let error {
-                        self.errorMessage = error.localizedDescription
-                        return
-                    }
-
-                    let rawItems: [AdminRequestItem] = snapshot?.documents.compactMap { doc in
-                        AdminRequestItem(
-                            document: doc,
-                            organizationId: safeOrganizationId
-                        )
-                    } ?? []
-
-                    var seen = Set<String>()
-
-                    self.requests = rawItems.filter { item in
-                        let key: String
-
-                        if !item.uid.isEmpty {
-                            key = "uid:\(item.uid)"
-                        } else {
-                            key = "email:\(item.email.lowercased())"
-                        }
-
-                        if seen.contains(key) {
-                            return false
-                        }
-
-                        seen.insert(key)
-                        return true
-                    }
+                    self?.isLoading = false
+                    self?.errorMessage = nil
+                    self?.requests = filteredItems
                 }
             }
     }
@@ -93,6 +102,7 @@ final class AdminRequestsStore: ObservableObject {
             )
         }
 
+        let reviewedByUid = Auth.auth().currentUser?.uid ?? ""
         let batch = db.batch()
 
         let registrationRef = db.collection("organizations")
@@ -120,7 +130,7 @@ final class AdminRequestsStore: ObservableObject {
 
         batch.updateData([
             "status": "approved",
-            "reviewedByUid": Auth.auth().currentUser?.uid ?? "",
+            "reviewedByUid": reviewedByUid,
             "reviewedAt": FieldValue.serverTimestamp(),
             "updatedAt": FieldValue.serverTimestamp()
         ], forDocument: registrationRef)
@@ -139,6 +149,8 @@ final class AdminRequestsStore: ObservableObject {
             )
         }
 
+        let reviewedByUid = Auth.auth().currentUser?.uid ?? ""
+
         try await db.collection("organizations")
             .document(organizationId)
             .collection("memberRegistrations")
@@ -146,7 +158,7 @@ final class AdminRequestsStore: ObservableObject {
             .updateData([
                 "status": "rejected",
                 "rejectReason": reason,
-                "reviewedByUid": Auth.auth().currentUser?.uid ?? "",
+                "reviewedByUid": reviewedByUid,
                 "reviewedAt": FieldValue.serverTimestamp(),
                 "updatedAt": FieldValue.serverTimestamp()
             ])

@@ -4,6 +4,11 @@ struct AdminCategoryListView: View {
     @EnvironmentObject private var organizationStore: AdminOrganizationStore
     @StateObject private var store = AdminCategoryStore()
 
+    private var currentOrganizationId: String {
+        organizationStore.currentOrganizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var body: some View {
         VStack(spacing: 16) {
             inputSection
@@ -30,7 +35,7 @@ struct AdminCategoryListView: View {
                         let category = store.categories[index]
                         Task {
                             await store.deleteCategory(
-                                organizationId: organizationStore.organization.id,
+                                organizationId: currentOrganizationId,
                                 categoryId: category.id
                             )
                         }
@@ -42,7 +47,7 @@ struct AdminCategoryListView: View {
         .navigationTitle("カテゴリ管理")
         .onAppear {
             store.startListening(
-                organizationId: organizationStore.organization.id
+                organizationId: currentOrganizationId
             )
         }
     }
@@ -59,7 +64,7 @@ struct AdminCategoryListView: View {
                 Button {
                     Task {
                         await store.addCategory(
-                            organizationId: organizationStore.organization.id
+                            organizationId: currentOrganizationId
                         )
                     }
                 } label: {

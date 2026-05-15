@@ -14,9 +14,13 @@ struct AdminOrganization: Identifiable, Equatable {
         let displayName = data["displayName"] as? String
         let name = data["name"] as? String
 
-        self.name = displayName?.isEmpty == false
-            ? displayName!
-            : (name?.isEmpty == false ? name! : id)
+        if let displayName, !displayName.isEmpty {
+            self.name = displayName
+        } else if let name, !name.isEmpty {
+            self.name = name
+        } else {
+            self.name = id
+        }
 
         self.isActive = data["isActive"] as? Bool ?? true
     }
@@ -26,17 +30,16 @@ struct AdminOrganization: Identifiable, Equatable {
 final class AdminOrganizationStore: ObservableObject {
 
     @Published var isLoading = false
-    @Published var organizations: [AdminOrganization] = []
-    @Published var selectedOrganization: AdminOrganization?
+    @Published var availableOrganizations: [AdminOrganization] = []
+    @Published var currentOrganization: AdminOrganization?
+    @Published var currentOrganizationId = ""
+    @Published var currentOrganizationName = ""
     @Published var errorMessage = ""
-
-    @Published var organizationId: String = ""
-    @Published var organizationName: String = ""
 
     private let db = Firestore.firestore()
     private var authHandle: AuthStateDidChangeListenerHandle?
 
-    private let selectedOrganizationIdKey = "admin_selected_organization_id"
+    private let currentOrganizationIdKey = "admin_current_organization_id"
 
     deinit {
         if let authHandle {
@@ -73,31 +76,33 @@ final class AdminOrganizationStore: ObservableObject {
     }
 
     func selectOrganization(_ organization: AdminOrganization) {
-        selectedOrganization = organization
-        organizationId = organization.id
-        organizationName = organization.name
+        currentOrganization = organization
+        currentOrganizationId = organization.id
+        currentOrganizationName = organization.name
         errorMessage = ""
 
         UserDefaults.standard.set(
             organization.id,
-            forKey: selectedOrganizationIdKey
+            forKey: currentOrganizationIdKey
         )
 
-        print("✅ 管理アプリ 組織切替: \(organization.id) / \(organization.name)")
+        print("✅ 管理アプリ 現在の組織: \(organization.id) / \(organization.name)")
     }
+
     func startListening(organizationId newOrganizationId: String) {
-        if let organization = organizations.first(where: { $0.id == newOrganizationId }) {
+        if let organization = availableOrganizations.first(where: { $0.id == newOrganizationId }) {
             selectOrganization(organization)
             return
         }
 
-        organizationId = newOrganizationId
-        organizationName = newOrganizationId
+        currentOrganization = nil
+        currentOrganizationId = newOrganizationId
+        currentOrganizationName = newOrganizationId
         errorMessage = ""
 
         UserDefaults.standard.set(
             newOrganizationId,
-            forKey: selectedOrganizationIdKey
+            forKey: currentOrganizationIdKey
         )
 
         print("✅ 管理アプリ 組織ID指定: \(newOrganizationId)")
@@ -112,7 +117,7 @@ final class AdminOrganizationStore: ObservableObject {
                 .whereField("isActive", isEqualTo: true)
                 .getDocuments()
 
-            var availableOrganizations: [AdminOrganization] = []
+            var results: [AdminOrganization] = []
 
             for document in snapshot.documents {
                 let orgId = document.documentID
@@ -134,27 +139,24 @@ final class AdminOrganizationStore: ObservableObject {
                     continue
                 }
 
-                let organization = AdminOrganization(
-                    id: orgId,
-                    data: document.data()
+                results.append(
+                    AdminOrganization(
+                        id: orgId,
+                        data: document.data()
+                    )
                 )
-
-                availableOrganizations.append(organization)
             }
 
-            availableOrganizations.sort {
+            results.sort {
                 $0.name.localizedStandardCompare($1.name) == .orderedAscending
             }
 
-            organizations = availableOrganizations
+            availableOrganizations = results
+            restoreCurrentOrganization()
 
-            restoreSelectedOrganization()
-
-            if organizations.isEmpty {
+            if availableOrganizations.isEmpty {
                 errorMessage = "管理できる組織がありません。"
-                organizationId = ""
-                organizationName = ""
-                selectedOrganization = nil
+                clearCurrentOrganizationOnly()
             }
 
         } catch {
@@ -165,33 +167,35 @@ final class AdminOrganizationStore: ObservableObject {
         isLoading = false
     }
 
-    private func restoreSelectedOrganization() {
+    private func restoreCurrentOrganization() {
         let savedId = UserDefaults.standard.string(
-            forKey: selectedOrganizationIdKey
+            forKey: currentOrganizationIdKey
         )
 
         if let savedId,
-           let savedOrganization = organizations.first(where: { $0.id == savedId }) {
+           let savedOrganization = availableOrganizations.first(where: { $0.id == savedId }) {
             selectOrganization(savedOrganization)
             return
         }
 
-        if let firstOrganization = organizations.first {
+        if let firstOrganization = availableOrganizations.first {
             selectOrganization(firstOrganization)
             return
         }
 
-        selectedOrganization = nil
-        organizationId = ""
-        organizationName = ""
+        clearCurrentOrganizationOnly()
+    }
+
+    private func clearCurrentOrganizationOnly() {
+        currentOrganization = nil
+        currentOrganizationId = ""
+        currentOrganizationName = ""
     }
 
     private func clear() {
         isLoading = false
-        organizations = []
-        selectedOrganization = nil
+        availableOrganizations = []
         errorMessage = ""
-        organizationId = ""
-        organizationName = ""
+        clearCurrentOrganizationOnly()
     }
 }

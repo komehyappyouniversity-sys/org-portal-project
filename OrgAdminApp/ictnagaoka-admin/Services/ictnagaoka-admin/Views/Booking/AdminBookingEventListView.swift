@@ -1,8 +1,3 @@
-//
-//  AdminBookingEventListView.swift
-//  ictnagaoka-admin
-//
-
 import SwiftUI
 
 struct AdminBookingEventListView: View {
@@ -11,6 +6,11 @@ struct AdminBookingEventListView: View {
 
     @State private var showEditor = false
     @State private var selectedEvent: AdminBookingEvent?
+
+    private var organizationId: String {
+        organizationStore.currentOrganizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     var body: some View {
         List {
@@ -50,14 +50,21 @@ struct AdminBookingEventListView: View {
                             .buttonStyle(.plain)
                         }
 
-                        Text(event.eventDate.formatted(date: .abbreviated, time: .omitted))
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                        Text(
+                            event.eventDate.formatted(
+                                date: .abbreviated,
+                                time: .omitted
+                            )
+                        )
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
 
                         HStack {
                             Text(event.isPublished ? "公開中" : "非公開")
                                 .font(.caption)
-                                .foregroundColor(event.isPublished ? .green : .gray)
+                                .foregroundColor(
+                                    event.isPublished ? .green : .gray
+                                )
 
                             Spacer()
 
@@ -84,7 +91,7 @@ struct AdminBookingEventListView: View {
         }
         .onAppear {
             store.startListening(
-                organizationId: organizationStore.organization.id
+                organizationId: organizationId
             )
         }
         .sheet(isPresented: $showEditor) {
@@ -98,11 +105,14 @@ struct AdminBookingEventListView: View {
     private func delete(at offsets: IndexSet) {
         for index in offsets {
             let event = store.events[index]
-            guard let eventId = event.id else { continue }
+
+            guard let eventId = event.id else {
+                continue
+            }
 
             Task {
                 await store.deleteEvent(
-                    organizationId: organizationStore.organization.id,
+                    organizationId: organizationId,
                     eventId: eventId
                 )
             }

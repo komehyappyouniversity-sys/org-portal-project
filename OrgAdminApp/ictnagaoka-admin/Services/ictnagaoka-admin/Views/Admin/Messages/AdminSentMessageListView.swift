@@ -11,7 +11,8 @@ struct AdminSentMessageListView: View {
     @State private var errorMessage = ""
 
     private var organizationId: String {
-        organizationStore.organization.id.trimmingCharacters(in: .whitespacesAndNewlines)
+        organizationStore.currentOrganizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var body: some View {

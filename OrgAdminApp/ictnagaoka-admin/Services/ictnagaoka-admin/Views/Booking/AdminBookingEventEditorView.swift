@@ -25,15 +25,26 @@ struct AdminBookingEventEditorView: View {
     @State private var isSaving = false
     @State private var errorMessage = ""
 
+    private var organizationId: String {
+        organizationStore.currentOrganizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     init(event: AdminBookingEvent?) {
         self.event = event
 
         _title = State(initialValue: event?.title ?? "")
         _description = State(initialValue: event?.description ?? "")
         _eventDate = State(initialValue: event?.eventDate ?? Date())
-        _feeAmountText = State(initialValue: event.map { String($0.feeAmount) } ?? "")
-        _appStoreProductId = State(initialValue: event?.appStoreProductId ?? "")
-        _paymentRequired = State(initialValue: event?.paymentRequired ?? true)
+        _feeAmountText = State(
+            initialValue: event.map { String($0.feeAmount) } ?? ""
+        )
+        _appStoreProductId = State(
+            initialValue: event?.appStoreProductId ?? ""
+        )
+        _paymentRequired = State(
+            initialValue: event?.paymentRequired ?? true
+        )
         _zoomURL = State(initialValue: event?.zoomURL ?? "")
         _isPublished = State(initialValue: event?.isPublished ?? false)
     }
@@ -57,11 +68,17 @@ struct AdminBookingEventEditorView: View {
                 TextField("参加費 例：3000", text: $feeAmountText)
                     .keyboardType(.numberPad)
 
-                TextField("App Store Product ID", text: $appStoreProductId)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+                TextField(
+                    "App Store Product ID",
+                    text: $appStoreProductId
+                )
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
 
-                Toggle("参加費の決済を必要にする", isOn: $paymentRequired)
+                Toggle(
+                    "参加費の決済を必要にする",
+                    isOn: $paymentRequired
+                )
 
                 Text("例：zoom_lesson_3000")
                     .font(.caption)
@@ -106,7 +123,11 @@ struct AdminBookingEventEditorView: View {
                 .disabled(isSaving)
             }
         }
-        .navigationTitle(event == nil ? "予約イベント作成" : "予約イベント編集")
+        .navigationTitle(
+            event == nil
+                ? "予約イベント作成"
+                : "予約イベント編集"
+        )
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button("閉じる") {
@@ -119,16 +140,22 @@ struct AdminBookingEventEditorView: View {
     private func save() async {
         errorMessage = ""
 
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedProductId = appStoreProductId.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedZoomURL = zoomURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedTitle = title
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let trimmedProductId = appStoreProductId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let trimmedZoomURL = zoomURL
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !trimmedTitle.isEmpty else {
             errorMessage = "イベント名を入力してください。"
             return
         }
 
-        guard let feeAmount = Int(feeAmountText), feeAmount >= 0 else {
+        guard let feeAmount = Int(feeAmountText),
+              feeAmount >= 0 else {
             errorMessage = "参加費は数字で入力してください。"
             return
         }
@@ -149,7 +176,8 @@ struct AdminBookingEventEditorView: View {
         let newEvent = AdminBookingEvent(
             id: event?.id,
             title: trimmedTitle,
-            description: description.trimmingCharacters(in: .whitespacesAndNewlines),
+            description: description
+                .trimmingCharacters(in: .whitespacesAndNewlines),
             eventDate: eventDate,
             feeAmount: feeAmount,
             appStoreProductId: trimmedProductId,
@@ -161,7 +189,7 @@ struct AdminBookingEventEditorView: View {
         )
 
         await store.saveEvent(
-            organizationId: organizationStore.organization.id,
+            organizationId: organizationId,
             event: newEvent
         )
 

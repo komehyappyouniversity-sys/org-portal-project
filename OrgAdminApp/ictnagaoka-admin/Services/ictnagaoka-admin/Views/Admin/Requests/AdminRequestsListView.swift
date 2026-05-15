@@ -5,7 +5,7 @@ struct AdminRequestsListView: View {
     @StateObject private var store = AdminRequestsStore()
 
     private var safeOrganizationId: String {
-        (organizationStore.organization.id ?? "")
+        organizationStore.currentOrganizationId
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -38,14 +38,18 @@ struct AdminRequestsListView: View {
                 ProgressView("読み込み中...")
                     .padding()
 
-            } else if let errorMessage = store.errorMessage, !errorMessage.isEmpty {
+            } else if let errorMessage = store.errorMessage,
+                      !errorMessage.isEmpty {
+
                 VStack(spacing: 12) {
                     Text(errorMessage)
                         .foregroundColor(.red)
                         .multilineTextAlignment(.center)
 
                     Button("再読み込み") {
-                        store.startListening(organizationId: safeOrganizationId)
+                        store.startListening(
+                            organizationId: safeOrganizationId
+                        )
                     }
                     .buttonStyle(.bordered)
                 }
@@ -93,15 +97,22 @@ struct AdminRequestsListView: View {
                     organizationId: OrganizationConfig.organizationId
                 )
             } else {
-                store.startListening(organizationId: safeOrganizationId)
+                store.startListening(
+                    organizationId: safeOrganizationId
+                )
             }
         }
-        .onChange(of: organizationStore.organization.id) { _, newValue in
-            let newOrganizationId = (newValue ?? "")
+        .onChange(of: safeOrganizationId) { _, newValue in
+            let newOrganizationId = newValue
                 .trimmingCharacters(in: .whitespacesAndNewlines)
 
-            guard !newOrganizationId.isEmpty else { return }
-            store.startListening(organizationId: newOrganizationId)
+            guard !newOrganizationId.isEmpty else {
+                return
+            }
+
+            store.startListening(
+                organizationId: newOrganizationId
+            )
         }
         .onDisappear {
             store.stopListening()

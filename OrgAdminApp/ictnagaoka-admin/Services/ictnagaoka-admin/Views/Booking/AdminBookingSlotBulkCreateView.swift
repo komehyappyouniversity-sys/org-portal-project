@@ -146,6 +146,14 @@ struct AdminBookingSlotBulkCreateView: View {
             return
         }
 
+        let organizationId = organizationStore.currentOrganizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !organizationId.isEmpty else {
+            errorMessage = "組織IDが取得できません。組織を選択してください。"
+            return
+        }
+
         let interval = TimeInterval(slotMinutes * 60)
 
         var currentStart = startAt
@@ -179,7 +187,7 @@ struct AdminBookingSlotBulkCreateView: View {
 
         for slot in slotsToCreate {
             await store.saveSlot(
-                organizationId: organizationStore.organization.id,
+                organizationId: organizationId,
                 eventId: eventId,
                 slot: slot
             )

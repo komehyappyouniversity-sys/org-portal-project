@@ -8,6 +8,13 @@ struct AdminVideoManagementView: View {
 
     @State private var saveAllSignal = 0
 
+    private var resolvedOrganizationId: String {
+        let current = organizationStore.currentOrganizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return current.isEmpty ? OrganizationConfig.organizationId : current
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             headerSection
@@ -61,11 +68,6 @@ struct AdminVideoManagementView: View {
                 .disabled(store.videos.isEmpty)
             }
         }
-    }
-
-    private var resolvedOrganizationId: String {
-        let current = organizationStore.organization.id.trimmingCharacters(in: .whitespacesAndNewlines)
-        return current.isEmpty ? OrganizationConfig.organizationId : current
     }
 
     private var headerSection: some View {
@@ -184,32 +186,32 @@ private struct VideoSettingRow: View {
             }
         }
         .padding(.vertical, 8)
-        .onChange(of: saveAllSignal) { _ in
+        .onChange(of: saveAllSignal) {
             isSaved = true
             isEditingAfterSave = false
         }
-        .onChange(of: editedVideo.isPublished) { _ in
+        .onChange(of: editedVideo.isPublished) {
             markChanged()
             onChange(editedVideo)
         }
-        .onChange(of: editedVideo.isMembersOnly) { _ in
+        .onChange(of: editedVideo.isMembersOnly) {
             markChanged()
             onChange(editedVideo)
         }
-        .onChange(of: editedVideo.isPremium) { _ in
+        .onChange(of: editedVideo.isPremium) {
             updatePriceText()
             markChanged()
             onChange(editedVideo)
         }
-        .onChange(of: editedVideo.billingType) { _ in
+        .onChange(of: editedVideo.billingType) {
             updatePriceText()
             markChanged()
             onChange(editedVideo)
         }
-        .onChange(of: priceInput) { newValue in
-            let filtered = newValue.filter { $0.isNumber }
+        .onChange(of: priceInput) {
+            let filtered = priceInput.filter { $0.isNumber }
 
-            if filtered != newValue {
+            if filtered != priceInput {
                 priceInput = filtered
                 return
             }
@@ -219,7 +221,7 @@ private struct VideoSettingRow: View {
             markChanged()
             onChange(editedVideo)
         }
-        .onChange(of: editedVideo.sortOrder) { _ in
+        .onChange(of: editedVideo.sortOrder) {
             markChanged()
             onChange(editedVideo)
         }

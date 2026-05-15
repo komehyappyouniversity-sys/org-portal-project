@@ -89,7 +89,7 @@ struct AdminVimeoVideoListView: View {
         message = ""
 
         let data: [String: Any] = [
-            "organizationId": organizationStore.organization.id
+            "organizationId": organizationStore.currentOrganizationId
         ]
 
         functions.httpsCallable("fetchVimeoVideos").call(data) { result, error in
@@ -133,7 +133,7 @@ struct AdminVimeoVideoListView: View {
 
     private func loadRegisteredVideos() {
 
-        let orgId = organizationStore.organization.id
+        let orgId = organizationStore.currentOrganizationId
 
         guard !orgId.isEmpty else {
             return
@@ -154,7 +154,7 @@ struct AdminVimeoVideoListView: View {
 
     private func registerVideo(_ video: AdminVimeoVideoItem) {
 
-        let orgId = organizationStore.organization.id
+        let orgId = organizationStore.currentOrganizationId
 
         guard !orgId.isEmpty else {
             message = "organizationId がありません"
@@ -195,7 +195,7 @@ struct AdminVimeoVideoListView: View {
 
     private func unregisterVideo(_ video: AdminVimeoVideoItem) {
 
-        let orgId = organizationStore.organization.id
+        let orgId = organizationStore.currentOrganizationId
 
         guard !orgId.isEmpty else {
             message = "organizationId がありません"

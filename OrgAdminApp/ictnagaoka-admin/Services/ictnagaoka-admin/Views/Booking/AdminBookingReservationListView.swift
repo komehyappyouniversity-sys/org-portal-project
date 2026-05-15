@@ -20,6 +20,7 @@ struct AdminBookingReservationListView: View {
 
             } else if !store.errorMessage.isEmpty {
                 Spacer()
+
                 VStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.largeTitle)
@@ -31,10 +32,12 @@ struct AdminBookingReservationListView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                 }
+
                 Spacer()
 
             } else if store.reservations.isEmpty {
                 Spacer()
+
                 VStack(spacing: 12) {
                     Image(systemName: "person.crop.circle.badge.questionmark")
                         .font(.largeTitle)
@@ -49,6 +52,7 @@ struct AdminBookingReservationListView: View {
                         .multilineTextAlignment(.center)
                 }
                 .padding()
+
                 Spacer()
 
             } else {
@@ -63,11 +67,7 @@ struct AdminBookingReservationListView: View {
         .navigationTitle("予約者一覧")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            store.startListening(
-                organizationId: organizationStore.organization.id,
-                eventId: eventId,
-                slotId: slotId
-            )
+            startListening()
         }
         .onDisappear {
             store.stopListening()
@@ -114,5 +114,16 @@ struct AdminBookingReservationListView: View {
             }
         }
         .padding(.vertical, 6)
+    }
+
+    private func startListening() {
+        let organizationId = organizationStore.currentOrganizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        store.startListening(
+            organizationId: organizationId,
+            eventId: eventId,
+            slotId: slotId
+        )
     }
 }

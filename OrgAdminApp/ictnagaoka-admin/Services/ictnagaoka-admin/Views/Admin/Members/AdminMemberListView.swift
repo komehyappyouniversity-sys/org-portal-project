@@ -19,12 +19,17 @@ struct AdminMemberListView: View {
 
     private let db = Firestore.firestore()
 
+    private var organizationId: String {
+        organizationStore.currentOrganizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var body: some View {
         List {
             ForEach(members) { member in
                 NavigationLink {
                     AdminMemberCategoryEditView(
-                        organizationId: organizationStore.organization.id,
+                        organizationId: organizationId,
                         member: member
                     )
                 } label: {
@@ -73,7 +78,7 @@ struct AdminMemberListView: View {
     }
 
     private func fetch() {
-        let orgId = organizationStore.organization.id.trimmingCharacters(in: .whitespacesAndNewlines)
+        let orgId = organizationId
 
         guard !orgId.isEmpty else {
             errorMessage = "organizationId がありません"

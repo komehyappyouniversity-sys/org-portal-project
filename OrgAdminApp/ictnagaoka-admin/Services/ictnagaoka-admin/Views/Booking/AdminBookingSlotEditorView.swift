@@ -1,204 +1,166 @@
-import Foundation
-import Combine
-import FirebaseAuth
-import FirebaseFirestore
+//
+//  AdminBookingSlotEditorView.swift
+//  ictnagaoka-admin
+//
 
-struct AdminOrganization: Identifiable, Equatable {
-    let id: String
-    let name: String
-    let isActive: Bool
+import SwiftUI
 
-    init(id: String, data: [String: Any]) {
-        self.id = id
+struct AdminBookingSlotEditorView: View {
+    @EnvironmentObject var organizationStore: AdminOrganizationStore
+    @Environment(\.dismiss) private var dismiss
 
-        let displayName = data["displayName"] as? String
-        let name = data["name"] as? String
+    @StateObject private var store = AdminBookingSlotStore()
 
-        if let displayName, !displayName.isEmpty {
-            self.name = displayName
-        } else if let name, !name.isEmpty {
-            self.name = name
-        } else {
-            self.name = id
-        }
+    let event: AdminBookingEvent
+    let slot: AdminBookingSlot?
 
-        self.isActive = data["isActive"] as? Bool ?? true
-    }
-}
+    @State private var startAt: Date
+    @State private var endAt: Date
+    @State private var capacityText: String
+    @State private var isOpen: Bool
 
-@MainActor
-final class AdminOrganizationStore: ObservableObject {
+    @State private var isSaving = false
+    @State private var errorMessage = ""
 
-    @Published var isLoading = false
+    init(
+        event: AdminBookingEvent,
+        slot: AdminBookingSlot?
+    ) {
+        self.event = event
+        self.slot = slot
 
-    @Published var availableOrganizations: [AdminOrganization] = []
-    @Published var currentOrganization: AdminOrganization?
+        let defaultStart = Calendar.current.date(
+            bySettingHour: 10,
+            minute: 0,
+            second: 0,
+            of: event.eventDate
+        ) ?? event.eventDate
 
-    @Published var currentOrganizationId = ""
-    @Published var currentOrganizationName = ""
-
-    @Published var errorMessage = ""
-
-    private let db = Firestore.firestore()
-    private var authHandle: AuthStateDidChangeListenerHandle?
-
-    private let currentOrganizationIdKey = "admin_current_organization_id"
-
-    deinit {
-        if let authHandle {
-            Auth.auth().removeStateDidChangeListener(authHandle)
-        }
+        _startAt = State(initialValue: slot?.startAt ?? defaultStart)
+        _endAt = State(initialValue: slot?.endAt ?? defaultStart.addingTimeInterval(60 * 60))
+        _capacityText = State(initialValue: slot.map { String($0.capacity) } ?? "1")
+        _isOpen = State(initialValue: slot?.isOpen ?? true)
     }
 
-    func start() {
-        if authHandle != nil {
-            return
-        }
+    var body: some View {
+        Form {
+            Section("時間枠") {
+                DatePicker(
+                    "開始時間",
+                    selection: $startAt,
+                    displayedComponents: [.date, .hourAndMinute]
+                )
 
-        authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
-            Task { @MainActor in
-                guard let self else { return }
-
-                guard let user else {
-                    self.clear()
-                    return
-                }
-
-                await self.loadAvailableOrganizations(uid: user.uid)
-            }
-        }
-    }
-
-    func reload() async {
-        guard let uid = Auth.auth().currentUser?.uid else {
-            clear()
-            return
-        }
-
-        await loadAvailableOrganizations(uid: uid)
-    }
-
-    func selectOrganization(_ organization: AdminOrganization) {
-        currentOrganization = organization
-        currentOrganizationId = organization.id
-        currentOrganizationName = organization.name
-        errorMessage = ""
-
-        UserDefaults.standard.set(
-            organization.id,
-            forKey: currentOrganizationIdKey
-        )
-
-        print("✅ 管理アプリ 現在の組織: \(organization.id) / \(organization.name)")
-    }
-
-    func startListening(organizationId newOrganizationId: String) {
-        if let organization = availableOrganizations.first(where: { $0.id == newOrganizationId }) {
-            selectOrganization(organization)
-            return
-        }
-
-        currentOrganization = nil
-        currentOrganizationId = newOrganizationId
-        currentOrganizationName = newOrganizationId
-        errorMessage = ""
-
-        UserDefaults.standard.set(
-            newOrganizationId,
-            forKey: currentOrganizationIdKey
-        )
-
-        print("✅ 管理アプリ 組織ID指定: \(newOrganizationId)")
-    }
-
-    private func loadAvailableOrganizations(uid: String) async {
-        isLoading = true
-        errorMessage = ""
-
-        do {
-            let snapshot = try await db.collection("organizations")
-                .whereField("isActive", isEqualTo: true)
-                .getDocuments()
-
-            var results: [AdminOrganization] = []
-
-            for document in snapshot.documents {
-                let orgId = document.documentID
-
-                let adminDoc = try await db.collection("organizations")
-                    .document(orgId)
-                    .collection("admins")
-                    .document(uid)
-                    .getDocument()
-
-                guard adminDoc.exists else {
-                    continue
-                }
-
-                let adminData = adminDoc.data() ?? [:]
-                let isAdminActive = adminData["isActive"] as? Bool ?? false
-
-                guard isAdminActive else {
-                    continue
-                }
-
-                results.append(
-                    AdminOrganization(
-                        id: orgId,
-                        data: document.data()
-                    )
+                DatePicker(
+                    "終了時間",
+                    selection: $endAt,
+                    displayedComponents: [.date, .hourAndMinute]
                 )
             }
 
-            results.sort {
-                $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            Section("定員") {
+                TextField("定員 例：1", text: $capacityText)
+                    .keyboardType(.numberPad)
+
+                if let slot {
+                    Text("現在の予約数：\(slot.reservedCount)")
+                    Text("決済済み：\(slot.paidCount)")
+                }
             }
 
-            availableOrganizations = results
-            restoreCurrentOrganization()
-
-            if availableOrganizations.isEmpty {
-                errorMessage = "管理できる組織がありません。"
-                clearCurrentOrganizationOnly()
+            Section("受付設定") {
+                Toggle("この時間枠を受付中にする", isOn: $isOpen)
             }
 
-        } catch {
-            errorMessage = "組織の取得に失敗しました: \(error.localizedDescription)"
-            print("❌ 管理アプリ 組織取得エラー:", error.localizedDescription)
+            if !errorMessage.isEmpty {
+                Section {
+                    Text(errorMessage)
+                        .foregroundColor(.red)
+                }
+            }
+
+            Section {
+                Button {
+                    Task {
+                        await save()
+                    }
+                } label: {
+                    if isSaving {
+                        ProgressView()
+                    } else {
+                        Text("保存")
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .disabled(isSaving)
+            }
         }
-
-        isLoading = false
+        .navigationTitle(slot == nil ? "時間枠追加" : "時間枠編集")
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("閉じる") {
+                    dismiss()
+                }
+            }
+        }
     }
 
-    private func restoreCurrentOrganization() {
-        let savedId = UserDefaults.standard.string(
-            forKey: currentOrganizationIdKey
+    private func save() async {
+        errorMessage = ""
+
+        guard let eventId = event.id else {
+            errorMessage = "eventId がありません。イベントを保存してから時間枠を追加してください。"
+            return
+        }
+
+        guard let capacity = Int(capacityText), capacity > 0 else {
+            errorMessage = "定員は1以上の数字で入力してください。"
+            return
+        }
+
+        guard endAt > startAt else {
+            errorMessage = "終了時間は開始時間より後にしてください。"
+            return
+        }
+
+        if let slot, capacity < slot.reservedCount {
+            errorMessage = "定員は現在の予約数より少なくできません。"
+            return
+        }
+
+        let organizationId = organizationStore.currentOrganizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !organizationId.isEmpty else {
+            errorMessage = "組織IDが取得できません。組織を選択してください。"
+            return
+        }
+
+        isSaving = true
+        defer { isSaving = false }
+
+        let newSlot = AdminBookingSlot(
+            id: slot?.id,
+            startAt: startAt,
+            endAt: endAt,
+            capacity: capacity,
+            reservedCount: slot?.reservedCount ?? 0,
+            paidCount: slot?.paidCount ?? 0,
+            isOpen: isOpen,
+            createdAt: slot?.createdAt,
+            updatedAt: slot?.updatedAt
         )
 
-        if let savedId,
-           let savedOrganization = availableOrganizations.first(where: { $0.id == savedId }) {
-            selectOrganization(savedOrganization)
-            return
+        await store.saveSlot(
+            organizationId: organizationId,
+            eventId: eventId,
+            slot: newSlot
+        )
+
+        if store.errorMessage.isEmpty {
+            dismiss()
+        } else {
+            errorMessage = store.errorMessage
         }
-
-        if let firstOrganization = availableOrganizations.first {
-            selectOrganization(firstOrganization)
-            return
-        }
-
-        clearCurrentOrganizationOnly()
-    }
-
-    private func clearCurrentOrganizationOnly() {
-        currentOrganization = nil
-        currentOrganizationId = ""
-        currentOrganizationName = ""
-    }
-
-    private func clear() {
-        isLoading = false
-        availableOrganizations = []
-        errorMessage = ""
-        clearCurrentOrganizationOnly()
     }
 }

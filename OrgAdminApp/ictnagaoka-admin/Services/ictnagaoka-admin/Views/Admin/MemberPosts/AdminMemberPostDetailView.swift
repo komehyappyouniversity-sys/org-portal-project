@@ -1,10 +1,3 @@
-//
-//  AdminMemberPostDetailView.swift
-//  ictnagaoka-admin
-//
-//  Created by OpenAI on 2026/04/20.
-//
-
 import SwiftUI
 
 struct AdminMemberPostDetailView: View {
@@ -19,6 +12,11 @@ struct AdminMemberPostDetailView: View {
     @State private var showSuccessAlert = false
     @State private var showErrorAlert = false
     @State private var localErrorMessage = ""
+
+    private var organizationId: String {
+        organizationStore.currentOrganizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     init(item: AdminMemberPostItem, store: AdminMemberPostStore) {
         self.item = item
@@ -63,8 +61,6 @@ struct AdminMemberPostDetailView: View {
         }
     }
 
-    // MARK: - 投稿情報
-
     private var postSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(currentItem.title)
@@ -100,8 +96,19 @@ struct AdminMemberPostDetailView: View {
                 }
             }
 
-            infoRow(title: "会員名", value: currentItem.memberName.isEmpty ? "未設定" : currentItem.memberName)
-            infoRow(title: "UID", value: currentItem.memberUid.isEmpty ? "未設定" : currentItem.memberUid)
+            infoRow(
+                title: "会員名",
+                value: currentItem.memberName.isEmpty
+                    ? "未設定"
+                    : currentItem.memberName
+            )
+
+            infoRow(
+                title: "UID",
+                value: currentItem.memberUid.isEmpty
+                    ? "未設定"
+                    : currentItem.memberUid
+            )
 
             if let createdAt = currentItem.createdAt {
                 infoRow(title: "投稿日", value: dateTimeText(createdAt))
@@ -116,8 +123,6 @@ struct AdminMemberPostDetailView: View {
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
-
-    // MARK: - ステータス変更
 
     private var statusSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -137,9 +142,6 @@ struct AdminMemberPostDetailView: View {
         Button {
             Task {
                 do {
-                    let organizationId = organizationStore.organization.id
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
-
                     try await store.updateStatus(
                         organizationId: organizationId,
                         postId: currentItem.id,
@@ -157,12 +159,14 @@ struct AdminMemberPostDetailView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
                 .frame(maxWidth: .infinity)
-                .background(currentItem.status == value ? Color.blue : Color.blue.opacity(0.12))
+                .background(
+                    currentItem.status == value
+                        ? Color.blue
+                        : Color.blue.opacity(0.12)
+                )
                 .clipShape(RoundedRectangle(cornerRadius: 12))
         }
     }
-
-    // MARK: - 返信履歴
 
     private var repliesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -172,6 +176,7 @@ struct AdminMemberPostDetailView: View {
             if store.isRepliesLoading && store.replies.isEmpty {
                 HStack(spacing: 12) {
                     ProgressView()
+
                     Text("返信履歴を読み込んでいます...")
                         .foregroundColor(.secondary)
                 }
@@ -188,10 +193,13 @@ struct AdminMemberPostDetailView: View {
                 ContentUnavailableView(
                     "返信はまだありません",
                     systemImage: "bubble.left",
-                    description: Text("下の入力欄から返信を追加すると、ここに履歴表示されます。")
+                    description: Text(
+                        "下の入力欄から返信を追加すると、ここに履歴表示されます。"
+                    )
                 )
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
+
             } else {
                 ForEach(currentItem.replies) { reply in
                     replyCard(reply)
@@ -203,8 +211,11 @@ struct AdminMemberPostDetailView: View {
     private func replyCard(_ reply: AdminMemberPostReplyItem) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(reply.createdByName ?? (reply.isFromAdmin ? "管理者" : "返信"))
-                    .font(.subheadline.bold())
+                Text(
+                    reply.createdByName ??
+                    (reply.isFromAdmin ? "管理者" : "返信")
+                )
+                .font(.subheadline.bold())
 
                 Spacer()
 
@@ -224,8 +235,6 @@ struct AdminMemberPostDetailView: View {
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
-
-    // MARK: - 返信入力
 
     private var replyInputSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -247,20 +256,21 @@ struct AdminMemberPostDetailView: View {
                         Text("保存中...")
                     }
                     .frame(maxWidth: .infinity)
+
                 } else {
                     Text("返信を保存")
                         .frame(maxWidth: .infinity)
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(store.isSendingReply || replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(
+                store.isSendingReply ||
+                replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            )
         }
     }
 
     private func sendReply() {
-        let organizationId = organizationStore.organization.id
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
         Task {
             do {
                 try await store.sendReply(
@@ -272,6 +282,7 @@ struct AdminMemberPostDetailView: View {
 
                 replyText = ""
                 showSuccessAlert = true
+
             } catch {
                 localErrorMessage = error.localizedDescription
                 showErrorAlert = true
@@ -279,13 +290,10 @@ struct AdminMemberPostDetailView: View {
         }
     }
 
-    // MARK: - Helpers
-
     private func startRepliesListening() {
-        let organizationId = organizationStore.organization.id
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !organizationId.isEmpty else { return }
+        guard !organizationId.isEmpty else {
+            return
+        }
 
         store.startListeningReplies(
             organizationId: organizationId,
@@ -330,31 +338,58 @@ struct AdminMemberPostDetailView: View {
 
     private func statusText(_ status: String) -> String {
         switch status {
-        case "new": return "新着"
-        case "in_progress": return "対応中"
-        case "resolved": return "解決"
-        case "closed": return "終了"
-        default: return status
+        case "new":
+            return "新着"
+
+        case "in_progress":
+            return "対応中"
+
+        case "resolved":
+            return "解決"
+
+        case "closed":
+            return "終了"
+
+        default:
+            return status
         }
     }
 
     private func statusTextColor(_ status: String) -> Color {
         switch status {
-        case "new": return .orange
-        case "in_progress": return .blue
-        case "resolved": return .green
-        case "closed": return .secondary
-        default: return .secondary
+        case "new":
+            return .orange
+
+        case "in_progress":
+            return .blue
+
+        case "resolved":
+            return .green
+
+        case "closed":
+            return .secondary
+
+        default:
+            return .secondary
         }
     }
 
     private func statusBackgroundColor(_ status: String) -> Color {
         switch status {
-        case "new": return Color.orange.opacity(0.15)
-        case "in_progress": return Color.blue.opacity(0.15)
-        case "resolved": return Color.green.opacity(0.15)
-        case "closed": return Color.gray.opacity(0.15)
-        default: return Color.gray.opacity(0.12)
+        case "new":
+            return Color.orange.opacity(0.15)
+
+        case "in_progress":
+            return Color.blue.opacity(0.15)
+
+        case "resolved":
+            return Color.green.opacity(0.15)
+
+        case "closed":
+            return Color.gray.opacity(0.15)
+
+        default:
+            return Color.gray.opacity(0.12)
         }
     }
 
@@ -362,6 +397,7 @@ struct AdminMemberPostDetailView: View {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ja_JP")
         formatter.dateFormat = "yyyy/MM/dd HH:mm"
+
         return formatter.string(from: date)
     }
 }

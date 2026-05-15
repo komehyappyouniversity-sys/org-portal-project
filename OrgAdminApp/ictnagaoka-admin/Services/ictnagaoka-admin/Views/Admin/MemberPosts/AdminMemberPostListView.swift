@@ -1,13 +1,13 @@
-//
-//  AdminMemberPostListView.swift
-//  ictnagaoka-admin
-//
-
 import SwiftUI
 
 struct AdminMemberPostListView: View {
     @EnvironmentObject private var organizationStore: AdminOrganizationStore
     @StateObject private var store = AdminMemberPostStore()
+
+    private var organizationId: String {
+        organizationStore.currentOrganizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     var body: some View {
         List {
@@ -59,15 +59,12 @@ struct AdminMemberPostListView: View {
         .onAppear {
             startListening()
         }
-        .onChange(of: organizationStore.organization.id) { _ in
+        .onChange(of: organizationId) {
             startListening()
         }
     }
 
     private func startListening() {
-        let organizationId = organizationStore.organization.id
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
         guard !organizationId.isEmpty else {
             store.errorMessage = "organizationId が空です。組織コードで接続してください。"
             return
