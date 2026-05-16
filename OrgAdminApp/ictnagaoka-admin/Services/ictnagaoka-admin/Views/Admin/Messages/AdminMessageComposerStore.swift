@@ -147,12 +147,21 @@ final class AdminMessageComposerStore: ObservableObject {
 
         var data: [String: Any] = [
             "organizationId": trimmedOrganizationId,
+
+            // 追加
+            "messageType": "memberMessage",
+            "targetType": "members",
+
             "title": trimmedTitle,
             "body": trimmedBody,
+
             "createdBy": createdBy,
+
             "createdAt": FieldValue.serverTimestamp(),
             "updatedAt": FieldValue.serverTimestamp(),
+
             "isReadBy": [],
+
             "notificationStatus": "pending",
             "notifiedCount": 0
         ]

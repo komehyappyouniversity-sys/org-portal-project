@@ -6,5 +6,9 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<key>CFBundleIdentifier</key>
+	<string></string>
+	<key>NSCameraUsageDescription</key>
+	<string>団体登録用QRコードを読み取るためにカメラを使用します。</string>
 </dict>
 </plist>

@@ -11,6 +11,8 @@ struct MemberAppRootView: View {
 
     @State private var didStart = false
 
+    private let selectedOrganizationIdKey = "selectedOrganizationId"
+
     var body: some View {
         NavigationStack {
             Group {
@@ -44,7 +46,7 @@ struct MemberAppRootView: View {
                     }
                     .padding()
 
-                } else if !organizationStore.hasSelection {
+                } else if organizationStore.organizationId.isEmpty {
                     MemberOrganizationSelectionView()
                         .environmentObject(organizationStore)
                         .environmentObject(featureStore)
@@ -71,6 +73,9 @@ struct MemberAppRootView: View {
             didStart = true
             startApp()
         }
+        .onChange(of: organizationStore.organizationId) { _, newOrganizationId in
+            handleOrganizationIdChanged(newOrganizationId)
+        }
         .onChange(of: scenePhase) { _, newPhase in
             securityStore.handleScenePhaseChange(to: newPhase)
         }
@@ -80,21 +85,57 @@ struct MemberAppRootView: View {
         print("📱 MemberAppRootView opened")
 
         memberStore.ensureSignedIn()
-        organizationStore.restoreFromLocal()
 
-        if !organizationStore.organizationId.isEmpty {
-            print("🏢 organizationId:", organizationStore.organizationId)
+        let savedOrganizationId = UserDefaults.standard
+            .string(forKey: selectedOrganizationIdKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-            featureStore.startListening(
-                organizationId: organizationStore.organizationId
-            )
+        guard !savedOrganizationId.isEmpty else {
+            print("🏢 saved organizationId なし")
+            organizationStore.reset()
+            return
         }
+
+        print("🏢 saved organizationId:", savedOrganizationId)
+
+        organizationStore.startListening(
+            organizationId: savedOrganizationId
+        )
+
+        featureStore.startListening(
+            organizationId: savedOrganizationId
+        )
+    }
+
+    private func handleOrganizationIdChanged(_ organizationId: String) {
+        let safeOrganizationId = organizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !safeOrganizationId.isEmpty else {
+            return
+        }
+
+        UserDefaults.standard.set(
+            safeOrganizationId,
+            forKey: selectedOrganizationIdKey
+        )
+
+        featureStore.startListening(
+            organizationId: safeOrganizationId
+        )
+
+        print("✅ organizationId saved:", safeOrganizationId)
     }
 
     private func resetOrganizationSelection() {
         print("♻️ reset organization selection")
 
         featureStore.stopListening()
-        organizationStore.clearSelection()
+
+        UserDefaults.standard.removeObject(
+            forKey: selectedOrganizationIdKey
+        )
+
+        organizationStore.reset()
     }
 }

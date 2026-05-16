@@ -7,7 +7,7 @@ struct MemberHomeView: View {
     @EnvironmentObject private var featureStore: MemberFeatureStore
 
     private var isAlreadyRegistered: Bool {
-        memberStore.profile != nil
+        memberStore.authUid != nil
     }
 
     private var organizationTitle: String {
@@ -32,6 +32,7 @@ struct MemberHomeView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
+
                     headerSection
 
                     VStack(spacing: 16) {
@@ -82,6 +83,7 @@ struct MemberHomeView: View {
                         }
 
                         if isAlreadyRegistered {
+
                             NavigationLink {
                                 MemberAreaGateView()
                                     .environmentObject(memberStore)
@@ -90,13 +92,15 @@ struct MemberHomeView: View {
                                     .environmentObject(featureStore)
                             } label: {
                                 menuButton(
-                                    title: "会員ページを開く",
+                                    title: "会員ページ",
                                     subtitle: "Face IDで認証して会員メニューを開きます",
                                     systemImage: "faceid",
                                     color: .blue
                                 )
                             }
+
                         } else {
+
                             NavigationLink {
                                 MemberRegistrationView()
                                     .environmentObject(memberStore)
@@ -139,21 +143,28 @@ struct MemberHomeView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .onAppear {
-            memberStore.setOrganizationId(organizationStore.organizationId)
+            memberStore.setOrganizationId(
+                organizationStore.organizationId
+            )
         }
     }
 
     private var headerSection: some View {
         VStack(spacing: 12) {
+
             Text(organizationTitle)
                 .font(.largeTitle.bold())
                 .multilineTextAlignment(.center)
 
-            Text("お知らせの確認、動画の閲覧、会員登録、登録済み会員のログインができます。")
-                .font(.body)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.top, 8)
+            Text(
+                isAlreadyRegistered
+                ? "お知らせの確認、動画の閲覧、会員ページを利用できます。"
+                : "お知らせの確認、動画の閲覧、会員登録、登録済み会員のログインができます。"
+            )
+            .font(.body)
+            .foregroundColor(.secondary)
+            .multilineTextAlignment(.center)
+            .padding(.top, 8)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 32)
@@ -166,7 +177,9 @@ struct MemberHomeView: View {
         color: Color,
         showsChevron: Bool = true
     ) -> some View {
+
         HStack(spacing: 16) {
+
             Image(systemName: systemImage)
                 .font(.title2)
                 .foregroundColor(.white)
@@ -175,6 +188,7 @@ struct MemberHomeView: View {
                 .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 6) {
+
                 Text(title)
                     .font(.headline)
                     .foregroundColor(.primary)
@@ -186,8 +200,12 @@ struct MemberHomeView: View {
 
             Spacer()
 
-            Image(systemName: showsChevron ? "chevron.right" : "arrow.up.right.square")
-                .foregroundColor(.secondary)
+            Image(
+                systemName: showsChevron
+                ? "chevron.right"
+                : "arrow.up.right.square"
+            )
+            .foregroundColor(.secondary)
         }
         .padding(18)
         .frame(maxWidth: .infinity)

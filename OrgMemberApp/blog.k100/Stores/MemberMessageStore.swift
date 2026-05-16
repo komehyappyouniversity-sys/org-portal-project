@@ -23,54 +23,66 @@ final class MemberMessageStore: ObservableObject {
         messageReadBaselineAt: Date? = nil,
         mode: String = "public"
     ) {
+        let safeOrganizationId = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
         let uid = Auth.auth().currentUser?.uid ?? ""
 
         print("========== MemberMessageStore startListening ==========")
+        print("organizationId:", safeOrganizationId)
+        print("uid:", uid)
         print("mode:", mode)
+        print("path: organizations/\(safeOrganizationId)/messages")
 
         listener?.remove()
+
+        guard !safeOrganizationId.isEmpty else {
+            items = []
+            unreadCount = 0
+            isLoading = false
+            errorMessage = "organizationId がありません"
+            updateBadge()
+            return
+        }
+
         isLoading = true
         errorMessage = nil
 
-        db.collection("organizations")
-            .document(organizationId)
+        listener = db.collection("organizations")
+            .document(safeOrganizationId)
             .collection("messages")
             .order(by: "createdAt", descending: true)
             .addSnapshotListener { [weak self] snapshot, error in
+
+                if let error {
+                    Task { @MainActor in
+                        self?.isLoading = false
+                        self?.errorMessage = error.localizedDescription
+                        self?.items = []
+                        self?.unreadCount = 0
+                        self?.updateBadge()
+                        print("❌ MemberMessageStore error:", error.localizedDescription)
+                    }
+                    return
+                }
+
+                let documents = snapshot?.documents ?? []
+
+                let loadedItems = documents.compactMap { doc in
+                    Self.makeItem(
+                        from: doc,
+                        uid: uid,
+                        mode: mode,
+                        baseline: messageReadBaselineAt
+                    )
+                }
+
                 Task { @MainActor in
-                    guard let self else { return }
+                    self?.isLoading = false
+                    self?.items = loadedItems
+                    self?.unreadCount = loadedItems.filter { !$0.isRead }.count
+                    self?.updateBadge()
 
-                    self.isLoading = false
-
-                    if let error {
-                        self.errorMessage = error.localizedDescription
-                        print("❌ error:", error.localizedDescription)
-                        return
-                    }
-
-                    guard let documents = snapshot?.documents else {
-                        self.items = []
-                        self.unreadCount = 0
-                        self.updateBadge()
-                        return
-                    }
-
-                    let loadedItems = documents.compactMap { doc in
-                        self.makeItem(
-                            from: doc,
-                            uid: uid,
-                            mode: mode,
-                            baseline: messageReadBaselineAt
-                        )
-                    }
-
-                    self.items = loadedItems
-                    self.unreadCount = loadedItems.filter { !$0.isRead }.count
-
-                    self.updateBadge()
-
-                    print("✅ 件数:", loadedItems.count)
-                    print("🔴 未読:", self.unreadCount)
+                    print("✅ MemberMessageStore 件数:", loadedItems.count)
+                    print("🔴 MemberMessageStore 未読:", self?.unreadCount ?? 0)
                 }
             }
     }
@@ -83,9 +95,13 @@ final class MemberMessageStore: ObservableObject {
     func markAsRead(messageId: String, organizationId: String) async {
         guard let uid = Auth.auth().currentUser?.uid else { return }
 
+        let safeOrganizationId = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !safeOrganizationId.isEmpty else { return }
+
         do {
             try await db.collection("organizations")
-                .document(organizationId)
+                .document(safeOrganizationId)
                 .collection("messages")
                 .document(messageId)
                 .updateData([
@@ -96,7 +112,7 @@ final class MemberMessageStore: ObservableObject {
         }
     }
 
-    private func makeItem(
+    private static func makeItem(
         from document: QueryDocumentSnapshot,
         uid: String,
         mode: String,
@@ -104,24 +120,39 @@ final class MemberMessageStore: ObservableObject {
     ) -> MemberMessageItem? {
 
         let data = document.data()
-        let messageType = data["messageType"] as? String ?? ""
 
-        // 🔵 未会員
+        let messageType = data["messageType"] as? String ?? ""
+        let targetType = data["targetType"] as? String ?? ""
+        let isBroadcast = data["isBroadcast"] as? Bool ?? false
+
         if mode == "public" {
-            guard messageType == "publicAnnouncement" else { return nil }
+            let isPublic =
+                messageType == "publicAnnouncement" ||
+                messageType == "announcement" ||
+                targetType == "public"
+
+            guard isPublic else { return nil }
         }
 
-        // 🟢 会員
         if mode == "member" {
-            guard messageType == "publicAnnouncement" || messageType == "memberMessage" else {
-                return nil
-            }
+            let isPublic =
+                messageType == "publicAnnouncement" ||
+                messageType == "announcement" ||
+                targetType == "public"
+
+            let isMemberMessage =
+                messageType == "memberMessage" ||
+                targetType == "members" ||
+                isBroadcast
+
+            guard isPublic || isMemberMessage else { return nil }
         }
 
         let title = data["title"] as? String ?? ""
         let body = data["body"] as? String ?? ""
 
-        let createdAt: Date = (data["createdAt"] as? Timestamp)?.dateValue() ?? Date()
+        let createdAt: Date =
+            (data["createdAt"] as? Timestamp)?.dateValue() ?? Date()
 
         let isReadBy = data["isReadBy"] as? [String] ?? []
 
@@ -138,11 +169,8 @@ final class MemberMessageStore: ObservableObject {
         )
     }
 
-    // 🔴 ここが今回のポイント
     private func updateBadge() {
-        DispatchQueue.main.async {
-            UIApplication.shared.applicationIconBadgeNumber = self.unreadCount
-            print("🔴 バッジ更新:", self.unreadCount)
-        }
+        UIApplication.shared.applicationIconBadgeNumber = unreadCount
+        print("🔴 バッジ更新:", unreadCount)
     }
 }

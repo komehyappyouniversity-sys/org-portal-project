@@ -18,27 +18,70 @@ struct AdminSentMessageListView: View {
     var body: some View {
         List {
             if organizationId.isEmpty {
+
                 Text("organizationId がありません")
                     .foregroundColor(.red)
 
             } else if isLoading {
+
                 ProgressView("読み込み中...")
 
             } else if !errorMessage.isEmpty {
+
                 Text(errorMessage)
                     .foregroundColor(.red)
 
             } else if messages.isEmpty {
+
                 Text("送信済みメッセージはありません")
                     .foregroundColor(.secondary)
 
             } else {
+
                 ForEach(messages) { message in
                     NavigationLink {
                         AdminSentMessageDetailView(message: message)
+                            .environmentObject(organizationStore)
+
                     } label: {
+
                         HStack(alignment: .center, spacing: 12) {
+
                             VStack(alignment: .leading, spacing: 6) {
+
+                                HStack(spacing: 6) {
+
+                                    if message.messageType == "announcement" ||
+                                        message.messageType == "publicAnnouncement" {
+
+                                        Label(
+                                            "公開",
+                                            systemImage: "globe"
+                                        )
+                                        .font(.caption2.bold())
+                                        .foregroundColor(.blue)
+
+                                    } else {
+
+                                        Label(
+                                            "送信",
+                                            systemImage: "paperplane.fill"
+                                        )
+                                        .font(.caption2.bold())
+                                        .foregroundColor(.green)
+                                    }
+
+                                    if message.title.hasPrefix("【再送】") {
+
+                                        Label(
+                                            "再送",
+                                            systemImage: "arrow.clockwise"
+                                        )
+                                        .font(.caption2.bold())
+                                        .foregroundColor(.orange)
+                                    }
+                                }
+
                                 Text(message.title)
                                     .font(.headline)
 
@@ -55,12 +98,32 @@ struct AdminSentMessageListView: View {
                             Spacer()
 
                             VStack(alignment: .trailing, spacing: 4) {
-                                countText(label: "対象", count: message.targetCount, color: .blue)
-                                countText(label: "既読", count: message.readCount, color: .green)
-                                countText(label: "未読", count: message.unreadCount, color: .red)
+
+                                countText(
+                                    label: "対象",
+                                    count: message.targetCount,
+                                    color: .blue
+                                )
+
+                                countText(
+                                    label: "既読",
+                                    count: message.readCount,
+                                    color: .green
+                                )
+
+                                countText(
+                                    label: "未読",
+                                    count: message.unreadCount,
+                                    color: .red
+                                )
                             }
                         }
                         .padding(.vertical, 6)
+                    }
+                }
+                .onDelete { indexSet in
+                    Task {
+                        await deleteMessages(indexSet)
                     }
                 }
             }
@@ -70,10 +133,19 @@ struct AdminSentMessageListView: View {
         .task(id: organizationId) {
             await loadMessages()
         }
+        .refreshable {
+            await loadMessages()
+        }
     }
 
-    private func countText(label: String, count: Int, color: Color) -> some View {
+    private func countText(
+        label: String,
+        count: Int,
+        color: Color
+    ) -> some View {
+
         HStack(spacing: 4) {
+
             Text(label)
                 .font(.caption2)
                 .foregroundColor(.secondary)
@@ -85,6 +157,7 @@ struct AdminSentMessageListView: View {
     }
 
     private func loadMessages() async {
+
         guard !organizationId.isEmpty else {
             errorMessage = "organizationId がありません"
             messages = []
@@ -97,17 +170,22 @@ struct AdminSentMessageListView: View {
         errorMessage = ""
 
         do {
+
             let membersSnapshot = try await db
                 .collection("organizations")
                 .document(organizationId)
                 .collection("members")
                 .getDocuments()
 
-            let members = membersSnapshot.documents.compactMap { doc -> AdminMessageMember? in
+            let members = membersSnapshot.documents.compactMap {
+                doc -> AdminMessageMember? in
+
                 let data = doc.data()
+
                 let status = data["status"] as? String ?? ""
 
-                guard status == "approved" else {
+                guard status == "approved" ||
+                        status == "active" else {
                     return nil
                 }
 
@@ -117,7 +195,9 @@ struct AdminSentMessageListView: View {
                 return AdminMessageMember(
                     uid: doc.documentID,
                     name: data["name"] as? String ?? "",
-                    categories: categories + (legacyCategory.isEmpty ? [] : [legacyCategory])
+                    categories: categories + (
+                        legacyCategory.isEmpty ? [] : [legacyCategory]
+                    )
                 )
             }
 
@@ -129,18 +209,35 @@ struct AdminSentMessageListView: View {
                 .getDocuments()
 
             messages = snapshot.documents.compactMap { doc in
+
                 let data = doc.data()
 
                 let messageType = data["messageType"] as? String ?? ""
-                guard messageType == "memberMessage" else {
+
+                let allowedTypes: Set<String> = [
+                    "memberMessage",
+                    "announcement",
+                    "publicAnnouncement"
+                ]
+
+                guard allowedTypes.contains(messageType) else {
                     return nil
                 }
 
-                let isBroadcast = data["isBroadcast"] as? Bool ?? false
-                let categoryTargets = data["categoryTargets"] as? [String] ?? []
-                let targetMemberUids = data["targetMemberUids"] as? [String] ?? []
-                let toUids = data["toUids"] as? [String] ?? []
-                let isReadBy = data["isReadBy"] as? [String] ?? []
+                let isBroadcast =
+                    data["isBroadcast"] as? Bool ?? true
+
+                let categoryTargets =
+                    data["categoryTargets"] as? [String] ?? []
+
+                let targetMemberUids =
+                    data["targetMemberUids"] as? [String] ?? []
+
+                let toUids =
+                    data["toUids"] as? [String] ?? []
+
+                let isReadBy =
+                    data["isReadBy"] as? [String] ?? []
 
                 let targetMembers = resolveTargetMembers(
                     members: members,
@@ -152,14 +249,20 @@ struct AdminSentMessageListView: View {
 
                 let targetUids = Set(targetMembers.map { $0.uid })
                 let readUids = Set(isReadBy)
-                let readCount = targetUids.intersection(readUids).count
-                let unreadCount = max(targetMembers.count - readCount, 0)
+
+                let readCount =
+                    targetUids.intersection(readUids).count
+
+                let unreadCount =
+                    max(targetMembers.count - readCount, 0)
 
                 return AdminSentMessage(
                     id: doc.documentID,
                     title: data["title"] as? String ?? "",
                     body: data["body"] as? String ?? "",
-                    createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? Date(),
+                    createdAt: (
+                        data["createdAt"] as? Timestamp
+                    )?.dateValue() ?? Date(),
                     isBroadcast: isBroadcast,
                     categoryTargets: categoryTargets,
                     targetMemberUids: targetMemberUids,
@@ -170,12 +273,15 @@ struct AdminSentMessageListView: View {
                     videoURL: data["videoURL"] as? String ?? "",
                     targetCount: targetMembers.count,
                     readCount: readCount,
-                    unreadCount: unreadCount
+                    unreadCount: unreadCount,
+                    messageType: messageType
                 )
             }
 
         } catch {
-            errorMessage = "読み込みに失敗しました: \(error.localizedDescription)"
+
+            errorMessage =
+                "読み込みに失敗しました: \(error.localizedDescription)"
         }
 
         isLoading = false
@@ -188,11 +294,13 @@ struct AdminSentMessageListView: View {
         targetMemberUids: [String],
         toUids: [String]
     ) -> [AdminMessageMember] {
+
         if isBroadcast {
             return members
         }
 
         if !categoryTargets.isEmpty {
+
             return members.filter { member in
                 member.categories.contains { category in
                     categoryTargets.contains(category)
@@ -201,32 +309,77 @@ struct AdminSentMessageListView: View {
         }
 
         let targetSet = Set(targetMemberUids + toUids)
-        return members.filter { targetSet.contains($0.uid) }
+
+        return members.filter {
+            targetSet.contains($0.uid)
+        }
+    }
+
+    private func deleteMessages(
+        _ indexSet: IndexSet
+    ) async {
+
+        for index in indexSet {
+
+            let message = messages[index]
+
+            do {
+                try await db
+                    .collection("organizations")
+                    .document(organizationId)
+                    .collection("messages")
+                    .document(message.id)
+                    .delete()
+
+                print("🗑️ メッセージ削除:", message.id)
+
+            } catch {
+
+                print(
+                    "❌ メッセージ削除失敗:",
+                    error.localizedDescription
+                )
+
+                errorMessage =
+                    "削除に失敗しました: \(error.localizedDescription)"
+            }
+        }
+
+        await loadMessages()
     }
 
     private func formatDate(_ date: Date) -> String {
+
         let formatter = DateFormatter()
+
         formatter.locale = Locale(identifier: "ja_JP")
         formatter.dateFormat = "yyyy/MM/dd HH:mm"
+
         return formatter.string(from: date)
     }
 }
 
 struct AdminSentMessage: Identifiable {
+
     let id: String
     let title: String
     let body: String
     let createdAt: Date
+
     let isBroadcast: Bool
     let categoryTargets: [String]
     let targetMemberUids: [String]
     let toUids: [String]
     let isReadBy: [String]
+
     let attachments: [[String: Any]]
+
     let zoomURL: String
     let videoURL: String
 
     let targetCount: Int
     let readCount: Int
     let unreadCount: Int
+
+    let messageType: String
 }

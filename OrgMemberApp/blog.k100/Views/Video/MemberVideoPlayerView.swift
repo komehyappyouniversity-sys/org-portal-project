@@ -7,31 +7,37 @@ import SwiftUI
 import WebKit
 
 struct MemberVideoPlayerView: View {
+
     @EnvironmentObject private var organizationStore: OrganizationStore
 
     let video: MemberVideoItem
 
-    @StateObject private var watchLogStore = MemberVideoWatchLogStore()
+    @StateObject private var watchLogStore =
+        MemberVideoWatchLogStore()
 
     private var organizationId: String {
-        let fromStore = organizationStore.organizationId
-            .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if !fromStore.isEmpty {
-            return fromStore
-        }
-
-        return organizationStore.organization.id
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        organizationStore.organizationId
+            .trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
     }
 
     var body: some View {
+
         VStack(spacing: 0) {
+
             if !video.embedURL.isEmpty {
+
                 VimeoPlayerWebView(
+
                     embedURL: video.embedURL,
+
                     onPlayStarted: {
-                        guard !organizationId.isEmpty else { return }
+
+                        guard !organizationId.isEmpty else {
+                            return
+                        }
 
                         watchLogStore.recordVideoPlayStarted(
                             organizationId: organizationId,
@@ -39,8 +45,12 @@ struct MemberVideoPlayerView: View {
                             videoTitle: video.title
                         )
                     },
+
                     onProgress: { current, duration in
-                        guard !organizationId.isEmpty else { return }
+
+                        guard !organizationId.isEmpty else {
+                            return
+                        }
 
                         watchLogStore.updatePlaybackProgress(
                             organizationId: organizationId,
@@ -50,8 +60,12 @@ struct MemberVideoPlayerView: View {
                             durationSeconds: duration
                         )
                     },
+
                     onCompleted: { duration in
-                        guard !organizationId.isEmpty else { return }
+
+                        guard !organizationId.isEmpty else {
+                            return
+                        }
 
                         watchLogStore.recordCompleted(
                             organizationId: organizationId,
@@ -64,7 +78,9 @@ struct MemberVideoPlayerView: View {
                 .ignoresSafeArea(edges: .bottom)
 
             } else {
+
                 VStack(spacing: 16) {
+
                     Image(systemName: "exclamationmark.triangle")
                         .font(.system(size: 44))
                         .foregroundColor(.orange)
@@ -82,7 +98,10 @@ struct MemberVideoPlayerView: View {
         .navigationTitle(video.title)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            guard !organizationId.isEmpty else { return }
+
+            guard !organizationId.isEmpty else {
+                return
+            }
 
             watchLogStore.recordVideoOpened(
                 organizationId: organizationId,
@@ -94,31 +113,59 @@ struct MemberVideoPlayerView: View {
 }
 
 private struct VimeoPlayerWebView: UIViewRepresentable {
+
     let embedURL: String
+
     let onPlayStarted: () -> Void
-    let onProgress: (_ currentSeconds: Double, _ durationSeconds: Double) -> Void
-    let onCompleted: (_ durationSeconds: Double) -> Void
+
+    let onProgress:
+    (_ currentSeconds: Double,
+     _ durationSeconds: Double) -> Void
+
+    let onCompleted:
+    (_ durationSeconds: Double) -> Void
 
     func makeUIView(context: Context) -> WKWebView {
+
         let contentController = WKUserContentController()
-        contentController.add(context.coordinator, name: "vimeoEvent")
+
+        contentController.add(
+            context.coordinator,
+            name: "vimeoEvent"
+        )
 
         let configuration = WKWebViewConfiguration()
-        configuration.userContentController = contentController
+
+        configuration.userContentController =
+            contentController
+
         configuration.allowsInlineMediaPlayback = true
+
         configuration.mediaTypesRequiringUserActionForPlayback = []
 
-        let webView = WKWebView(frame: .zero, configuration: configuration)
+        let webView = WKWebView(
+            frame: .zero,
+            configuration: configuration
+        )
+
         webView.allowsBackForwardNavigationGestures = true
         webView.scrollView.isScrollEnabled = true
 
-        webView.loadHTMLString(makeHTML(embedURL: embedURL), baseURL: nil)
+        webView.loadHTMLString(
+            makeHTML(embedURL: embedURL),
+            baseURL: nil
+        )
+
         return webView
     }
 
-    func updateUIView(_ webView: WKWebView, context: Context) {}
+    func updateUIView(
+        _ webView: WKWebView,
+        context: Context
+    ) { }
 
     func makeCoordinator() -> Coordinator {
+
         Coordinator(
             onPlayStarted: onPlayStarted,
             onProgress: onProgress,
@@ -127,6 +174,7 @@ private struct VimeoPlayerWebView: UIViewRepresentable {
     }
 
     private func makeHTML(embedURL: String) -> String {
+
         """
         <!doctype html>
         <html>
@@ -175,10 +223,13 @@ private struct VimeoPlayerWebView: UIViewRepresentable {
             });
 
             player.on('timeupdate', function(data) {
+
               const now = Date.now();
 
               if (now - lastProgressSentAt > 10000) {
+
                 lastProgressSentAt = now;
+
                 send('progress', {
                   seconds: data.seconds || 0,
                   duration: data.duration || 0
@@ -187,6 +238,7 @@ private struct VimeoPlayerWebView: UIViewRepresentable {
             });
 
             player.on('ended', function(data) {
+
               send('ended', {
                 duration: data.duration || 0
               });
@@ -197,18 +249,32 @@ private struct VimeoPlayerWebView: UIViewRepresentable {
         """
     }
 
-    final class Coordinator: NSObject, WKScriptMessageHandler {
+    final class Coordinator:
+        NSObject,
+        WKScriptMessageHandler {
+
         let onPlayStarted: () -> Void
-        let onProgress: (_ currentSeconds: Double, _ durationSeconds: Double) -> Void
-        let onCompleted: (_ durationSeconds: Double) -> Void
+
+        let onProgress:
+        (_ currentSeconds: Double,
+         _ durationSeconds: Double) -> Void
+
+        let onCompleted:
+        (_ durationSeconds: Double) -> Void
 
         private var didRecordPlayStarted = false
 
         init(
             onPlayStarted: @escaping () -> Void,
-            onProgress: @escaping (_ currentSeconds: Double, _ durationSeconds: Double) -> Void,
-            onCompleted: @escaping (_ durationSeconds: Double) -> Void
+            onProgress: @escaping (
+                _ currentSeconds: Double,
+                _ durationSeconds: Double
+            ) -> Void,
+            onCompleted: @escaping (
+                _ durationSeconds: Double
+            ) -> Void
         ) {
+
             self.onPlayStarted = onPlayStarted
             self.onProgress = onProgress
             self.onCompleted = onCompleted
@@ -218,6 +284,7 @@ private struct VimeoPlayerWebView: UIViewRepresentable {
             _ userContentController: WKUserContentController,
             didReceive message: WKScriptMessage
         ) {
+
             guard
                 let body = message.body as? [String: Any],
                 let type = body["type"] as? String
@@ -225,22 +292,35 @@ private struct VimeoPlayerWebView: UIViewRepresentable {
                 return
             }
 
-            let payload = body["payload"] as? [String: Any] ?? [:]
+            let payload =
+                body["payload"] as? [String: Any]
+                ?? [:]
 
             switch type {
+
             case "play":
+
                 if !didRecordPlayStarted {
+
                     didRecordPlayStarted = true
                     onPlayStarted()
                 }
 
             case "progress":
-                let seconds = payload["seconds"] as? Double ?? 0
-                let duration = payload["duration"] as? Double ?? 0
+
+                let seconds =
+                    payload["seconds"] as? Double ?? 0
+
+                let duration =
+                    payload["duration"] as? Double ?? 0
+
                 onProgress(seconds, duration)
 
             case "ended":
-                let duration = payload["duration"] as? Double ?? 0
+
+                let duration =
+                    payload["duration"] as? Double ?? 0
+
                 onCompleted(duration)
 
             default:

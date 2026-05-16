@@ -14,7 +14,7 @@ struct AdminSentMessageItem: Identifiable {
         max(targetCount - readCount, 0)
     }
 
-    init(id: String, data: [String: Any], approvedMemberCount: Int) {
+    init(id: String, data: [String: Any], targetMemberUids: [String]) {
         self.id = id
         self.title = data["title"] as? String ?? ""
         self.body = data["body"] as? String ?? ""
@@ -27,13 +27,22 @@ struct AdminSentMessageItem: Identifiable {
             self.createdAt = nil
         }
 
+        let targetSet = Set(targetMemberUids)
         let isReadBy = data["isReadBy"] as? [String] ?? []
-        self.readCount = isReadBy.count
+        let readSet = Set(isReadBy)
 
-        // 重要：
-        // 保存済みの targetMemberUids が4件あっても使わず、
-        // 現在の承認済み members 数を正とする
-        self.targetCount = approvedMemberCount
+        self.targetCount = targetSet.count
+        self.readCount = targetSet.intersection(readSet).count
+    }
+}
+
+private struct AdminSentMessageMember {
+    let uid: String
+    let status: String
+    let categories: [String]
+
+    var isApproved: Bool {
+        status == "approved" || status == "active"
     }
 }
 
@@ -44,11 +53,12 @@ final class AdminSentMessageStore: ObservableObject {
     @Published var errorMessage: String?
 
     private let db = Firestore.firestore()
+
     private var messageListener: ListenerRegistration?
     private var memberListener: ListenerRegistration?
 
     private var latestMessageDocs: [QueryDocumentSnapshot] = []
-    private var approvedMemberCount: Int = 0
+    private var latestMembers: [AdminSentMessageMember] = []
 
     deinit {
         messageListener?.remove()
@@ -56,31 +66,74 @@ final class AdminSentMessageStore: ObservableObject {
     }
 
     func startListening(organizationId: String) {
+        let trimmedOrganizationId = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedOrganizationId.isEmpty else {
+            items = []
+            isLoading = false
+            errorMessage = "organizationId が空です。"
+            return
+        }
+
         isLoading = true
         errorMessage = nil
 
         messageListener?.remove()
         memberListener?.remove()
 
-        listenApprovedMemberCount(organizationId: organizationId)
-        listenMessages(organizationId: organizationId)
+        latestMessageDocs = []
+        latestMembers = []
+
+        listenMembers(organizationId: trimmedOrganizationId)
+        listenMessages(organizationId: trimmedOrganizationId)
     }
 
-    private func listenApprovedMemberCount(organizationId: String) {
+    func stopListening() {
+        messageListener?.remove()
+        memberListener?.remove()
+
+        messageListener = nil
+        memberListener = nil
+
+        latestMessageDocs = []
+        latestMembers = []
+        items = []
+        isLoading = false
+    }
+
+    private func listenMembers(organizationId: String) {
         memberListener = db.collection("organizations")
             .document(organizationId)
             .collection("members")
-            .whereField("status", in: ["approved", "active"])
             .addSnapshotListener { [weak self] snapshot, error in
                 Task { @MainActor in
                     guard let self else { return }
 
                     if let error {
-                        self.errorMessage = error.localizedDescription
+                        self.errorMessage = "会員情報の取得に失敗しました: \(error.localizedDescription)"
+                        self.rebuildItems()
                         return
                     }
 
-                    self.approvedMemberCount = snapshot?.documents.count ?? 0
+                    self.latestMembers = snapshot?.documents.compactMap { doc in
+                        let data = doc.data()
+
+                        let status = data["status"] as? String ?? ""
+
+                        let categories = data["categories"] as? [String] ?? []
+                        let legacyCategory = data["category"] as? String ?? ""
+
+                        let mergedCategories = categories + (
+                            legacyCategory.isEmpty ? [] : [legacyCategory]
+                        )
+
+                        return AdminSentMessageMember(
+                            uid: doc.documentID,
+                            status: status,
+                            categories: mergedCategories
+                        )
+                    } ?? []
+
                     self.rebuildItems()
                 }
             }
@@ -94,10 +147,12 @@ final class AdminSentMessageStore: ObservableObject {
             .addSnapshotListener { [weak self] snapshot, error in
                 Task { @MainActor in
                     guard let self else { return }
+
                     self.isLoading = false
 
                     if let error {
-                        self.errorMessage = error.localizedDescription
+                        self.errorMessage = "送信済みメッセージの取得に失敗しました: \(error.localizedDescription)"
+                        self.rebuildItems()
                         return
                     }
 
@@ -108,12 +163,53 @@ final class AdminSentMessageStore: ObservableObject {
     }
 
     private func rebuildItems() {
+        let approvedMembers = latestMembers.filter { $0.isApproved }
+
         items = latestMessageDocs.map { doc in
-            AdminSentMessageItem(
+            let data = doc.data()
+            let targetUids = resolveTargetUids(
+                data: data,
+                approvedMembers: approvedMembers
+            )
+
+            return AdminSentMessageItem(
                 id: doc.documentID,
-                data: doc.data(),
-                approvedMemberCount: approvedMemberCount
+                data: data,
+                targetMemberUids: targetUids
             )
         }
+    }
+
+    private func resolveTargetUids(
+        data: [String: Any],
+        approvedMembers: [AdminSentMessageMember]
+    ) -> [String] {
+        let isBroadcast = data["isBroadcast"] as? Bool ?? false
+        let categoryTargets = data["categoryTargets"] as? [String] ?? []
+
+        let targetMemberUids = data["targetMemberUids"] as? [String] ?? []
+        let toUids = data["toUids"] as? [String] ?? []
+
+        if isBroadcast {
+            return approvedMembers.map { $0.uid }
+        }
+
+        if !categoryTargets.isEmpty {
+            let categoryTargetSet = Set(categoryTargets)
+
+            return approvedMembers
+                .filter { member in
+                    member.categories.contains { category in
+                        categoryTargetSet.contains(category)
+                    }
+                }
+                .map { $0.uid }
+        }
+
+        let directTargetSet = Set(targetMemberUids + toUids)
+
+        return approvedMembers
+            .filter { directTargetSet.contains($0.uid) }
+            .map { $0.uid }
     }
 }

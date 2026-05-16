@@ -3,6 +3,44 @@ import Combine
 import FirebaseFirestore
 import FirebaseAuth
 
+struct MemberPostAttachment: Identifiable, Equatable {
+    let id: String
+    let type: String
+    let fileName: String
+    let url: String
+
+    init(id: String = UUID().uuidString, type: String, fileName: String, url: String) {
+        self.id = id
+        self.type = type
+        self.fileName = fileName
+        self.url = url
+    }
+
+    init(data: [String: Any]) {
+        self.id = data["id"] as? String ?? UUID().uuidString
+        self.type = data["type"] as? String ?? ""
+        self.fileName = data["fileName"] as? String ?? ""
+        self.url = data["url"] as? String ?? ""
+    }
+
+    var dictionary: [String: Any] {
+        [
+            "id": id,
+            "type": type,
+            "fileName": fileName,
+            "url": url
+        ]
+    }
+
+    var isImage: Bool {
+        type == "image"
+    }
+
+    var isPDF: Bool {
+        type == "pdf"
+    }
+}
+
 struct MemberPostItem: Identifiable, Equatable {
     let id: String
     let title: String
@@ -11,6 +49,7 @@ struct MemberPostItem: Identifiable, Equatable {
     let replyBody: String?
     let replyCount: Int
     var hasUnreadReply: Bool
+    let attachments: [MemberPostAttachment]
 }
 
 struct MemberPostReplyItem: Identifiable, Equatable {
@@ -80,6 +119,11 @@ final class MemberPostStore: ObservableObject {
                 self.posts = documents.map { document in
                     let data = document.data()
 
+                    let attachmentData = data["attachments"] as? [[String: Any]] ?? []
+                    let attachments = attachmentData.map {
+                        MemberPostAttachment(data: $0)
+                    }
+
                     return MemberPostItem(
                         id: document.documentID,
                         title: data["title"] as? String ?? "",
@@ -87,7 +131,8 @@ final class MemberPostStore: ObservableObject {
                         createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? Date(),
                         replyBody: data["replyBody"] as? String,
                         replyCount: data["replyCount"] as? Int ?? 0,
-                        hasUnreadReply: data["memberHasReadReply"] as? Bool == false
+                        hasUnreadReply: data["memberHasReadReply"] as? Bool == false,
+                        attachments: attachments
                     )
                 }
             }
@@ -134,8 +179,6 @@ final class MemberPostStore: ObservableObject {
                         createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? Date()
                     )
                 }
-
-                print("✅ 返信取得:", self.replies.count)
             }
     }
 

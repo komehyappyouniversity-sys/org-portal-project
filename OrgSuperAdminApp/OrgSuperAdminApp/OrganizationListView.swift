@@ -68,9 +68,13 @@ struct SuperAdminLoginView: View {
 
 // MARK: - Model
 
+// MARK: - Model
+
 struct OrganizationItem: Identifiable {
+
     let id: String
     let name: String
+    let organizationCode: String
     let isActive: Bool
 }
 
@@ -117,8 +121,19 @@ final class OrganizationListStore: ObservableObject {
 
                         return OrganizationItem(
                             id: doc.documentID,
-                            name: data["name"] as? String ?? doc.documentID,
-                            isActive: data["isActive"] as? Bool ?? false
+
+                            name:
+                                data["displayName"] as? String
+                                ?? data["name"] as? String
+                                ?? doc.documentID,
+
+                            organizationCode:
+                                data["organizationCode"] as? String
+                                ?? doc.documentID,
+
+                            isActive:
+                                data["isActive"] as? Bool
+                                ?? false
                         )
                     } ?? []
 

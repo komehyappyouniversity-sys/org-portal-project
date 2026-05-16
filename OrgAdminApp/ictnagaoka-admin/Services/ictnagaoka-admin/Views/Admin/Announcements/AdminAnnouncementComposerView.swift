@@ -5,6 +5,9 @@ import PhotosUI
 import UniformTypeIdentifiers
 
 struct AdminAnnouncementComposerView: View {
+
+    @EnvironmentObject var organizationStore: AdminOrganizationStore
+
     @State private var title = ""
     @State private var bodyText = ""
     @State private var zoomURL = ""
@@ -27,7 +30,12 @@ struct AdminAnnouncementComposerView: View {
     private let storage = Storage.storage()
 
     private var organizationId: String {
-        OrganizationConfig.organizationId
+        let current = organizationStore.currentOrganizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return current.isEmpty
+            ? OrganizationConfig.organizationId
+            : current
     }
 
     var body: some View {
@@ -278,6 +286,7 @@ struct AdminAnnouncementComposerView: View {
             try await messageRef.setData(data)
 
             print("✅ 公開お知らせ送信成功")
+            print("organizationId:", organizationId)
             print("attachments:", attachments)
 
             showSuccess = true

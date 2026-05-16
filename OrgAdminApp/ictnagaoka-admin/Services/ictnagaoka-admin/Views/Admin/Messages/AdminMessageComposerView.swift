@@ -5,6 +5,9 @@ import PhotosUI
 import UniformTypeIdentifiers
 
 struct AdminMessageComposerView: View {
+
+    @EnvironmentObject var organizationStore: AdminOrganizationStore
+
     @State private var title = ""
     @State private var bodyText = ""
     @State private var zoomURL = ""
@@ -32,7 +35,12 @@ struct AdminMessageComposerView: View {
     private let storage = Storage.storage()
 
     private var organizationId: String {
-        OrganizationConfig.organizationId
+        let current = organizationStore.currentOrganizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return current.isEmpty
+            ? OrganizationConfig.organizationId
+            : current
     }
 
     enum SendMode: String, CaseIterable, Identifiable {

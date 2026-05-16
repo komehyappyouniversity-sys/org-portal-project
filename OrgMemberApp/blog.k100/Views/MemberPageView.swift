@@ -11,6 +11,8 @@ struct MemberPageView: View {
     @State private var showLogoutAlert = false
     @StateObject private var postStore = MemberPostStore()
 
+    private let logoDisplayHeight: CGFloat = 220
+
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
@@ -55,14 +57,14 @@ struct MemberPageView: View {
                     case .empty:
                         ProgressView()
                             .frame(maxWidth: .infinity)
-                            .frame(height: organizationStore.logoDisplayHeight)
+                            .frame(height: logoDisplayHeight)
 
                     case .success(let image):
                         image
                             .resizable()
                             .scaledToFit()
                             .frame(maxWidth: .infinity)
-                            .frame(height: organizationStore.logoDisplayHeight)
+                            .frame(height: logoDisplayHeight)
                             .clipShape(RoundedRectangle(cornerRadius: 20))
 
                     case .failure:
@@ -127,7 +129,7 @@ struct MemberPageView: View {
 
                 NavigationLink {
                     MemberBookingEventListView(
-                        organizationId: organizationStore.organization.id
+                        organizationId: organizationStore.organizationId
                     )
                     .environmentObject(memberStore)
                     .environmentObject(organizationStore)
@@ -312,7 +314,7 @@ struct MemberPageView: View {
 
     private func startPostListeningIfPossible() {
 
-        let organizationId = organizationStore.organization.id
+        let organizationId = organizationStore.organizationId
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         let memberUid = memberStore.authUid?

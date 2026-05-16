@@ -9,6 +9,7 @@ struct OrganizationSelectionView: View {
     @State private var isLoading = false
     @State private var errorMessage = ""
     @State private var successMessage = ""
+    @State private var showQRScanner = false
 
     private let organizationService = OrganizationService()
     private let db = Firestore.firestore()
@@ -26,7 +27,7 @@ struct OrganizationSelectionView: View {
                     Text("組織コードを入力")
                         .font(.title2.bold())
 
-                    Text("統括アプリで作成した組織コードを入力してください。")
+                    Text("統括アプリで作成した組織コードを入力、またはQRコードを読み取ってください。")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -38,6 +39,15 @@ struct OrganizationSelectionView: View {
                     .keyboardType(.asciiCapable)
                     .textFieldStyle(.roundedBorder)
                     .padding(.horizontal)
+
+                Button {
+                    showQRScanner = true
+                } label: {
+                    Label("QRコードを読み取る", systemImage: "qrcode.viewfinder")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .padding(.horizontal)
 
                 if !errorMessage.isEmpty {
                     Text(errorMessage)
@@ -71,7 +81,10 @@ struct OrganizationSelectionView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isLoading || organizationCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(
+                    isLoading ||
+                    organizationCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                )
                 .padding(.horizontal)
 
                 Spacer()
@@ -85,6 +98,17 @@ struct OrganizationSelectionView: View {
             }
             .navigationTitle("組織設定")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $showQRScanner) {
+                AdminQRScannerSheet { scannedCode in
+                    organizationCode = scannedCode
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .lowercased()
+
+                    Task {
+                        await connectOrganization()
+                    }
+                }
+            }
         }
     }
 

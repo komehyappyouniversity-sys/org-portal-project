@@ -120,14 +120,7 @@ struct MemberMessageListView: View {
     }
 
     private func resolvedOrganizationId() -> String {
-        let fromStore = organizationStore.organizationId
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if !fromStore.isEmpty {
-            return fromStore
-        }
-
-        return organizationStore.organization.id
+        organizationStore.organizationId
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 

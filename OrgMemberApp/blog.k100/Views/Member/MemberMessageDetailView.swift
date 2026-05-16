@@ -137,22 +137,45 @@ struct MemberMessageDetailView: View {
     }
 
     private func markAsRead() async {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
+        let safeOrganizationId = organizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !safeOrganizationId.isEmpty else {
+            print("❌ 既読更新エラー: organizationId が空です")
+            return
+        }
+
+        guard let uid = Auth.auth().currentUser?.uid else {
+            print("❌ 既読更新エラー: uid がありません")
+            return
+        }
 
         let id = currentItem.id
-        guard !id.isEmpty else { return }
+        guard !id.isEmpty else {
+            print("❌ 既読更新エラー: messageId が空です")
+            return
+        }
 
         do {
             try await db
                 .collection("organizations")
-                .document(organizationId)
+                .document(safeOrganizationId)
                 .collection("messages")
                 .document(id)
                 .updateData([
-                    "isReadBy": FieldValue.arrayUnion([uid])
+                    "isReadBy": FieldValue.arrayUnion([uid]),
+                    "updatedAt": FieldValue.serverTimestamp()
                 ])
 
-            print("✅ 既読更新:", id)
+            await store.markAsRead(
+                messageId: id,
+                organizationId: safeOrganizationId
+            )
+
+            print("✅ 既読更新成功")
+            print("organizationId:", safeOrganizationId)
+            print("messageId:", id)
+            print("uid:", uid)
 
         } catch {
             print("❌ 既読更新エラー:", error.localizedDescription)

@@ -7,6 +7,7 @@ struct MemberOrganizationSelectionView: View {
 
     @State private var organizationCode: String = ""
     @State private var isConnecting = false
+    @State private var showQRScanner = false
 
     var body: some View {
         VStack(spacing: 24) {
@@ -25,7 +26,7 @@ struct MemberOrganizationSelectionView: View {
                 Text("団体コードを入力")
                     .font(.title2.bold())
 
-                Text("管理者から案内された団体コードを入力してください。")
+                Text("管理者から案内された団体コードを入力、またはQRコードを読み取ってください。")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -36,6 +37,19 @@ struct MemberOrganizationSelectionView: View {
                 .autocorrectionDisabled()
                 .textFieldStyle(.roundedBorder)
                 .padding(.horizontal, 24)
+
+            Button {
+                showQRScanner = true
+            } label: {
+                Label("QRコードを読み取る", systemImage: "qrcode.viewfinder")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(Color.blue)
+                    .cornerRadius(14)
+            }
+            .padding(.horizontal, 24)
 
             if let errorMessage = organizationStore.errorMessage,
                !errorMessage.isEmpty {
@@ -49,7 +63,6 @@ struct MemberOrganizationSelectionView: View {
 
             Button {
                 connectOrganization()
-
             } label: {
 
                 HStack {
@@ -91,6 +104,14 @@ struct MemberOrganizationSelectionView: View {
             Spacer()
         }
         .padding(.vertical, 24)
+        .sheet(isPresented: $showQRScanner) {
+            MemberQRScannerSheet { scannedCode in
+                organizationCode = scannedCode
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                connectOrganization()
+            }
+        }
     }
 
     private func connectOrganization() {

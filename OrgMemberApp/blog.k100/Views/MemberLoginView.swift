@@ -15,69 +15,81 @@ struct MemberLoginView: View {
             Color(.systemGroupedBackground)
                 .ignoresSafeArea()
 
-            ScrollView {
-                VStack(spacing: 24) {
+            VStack(spacing: 28) {
 
-                    Text("ログイン")
-                        .font(.largeTitle.bold())
+                Spacer().frame(height: 40)
 
-                    VStack(spacing: 16) {
+                Text("ログイン")
+                    .font(.largeTitle.bold())
 
-                        Text("登録済みのメールアドレスとパスワードでログインしてください。")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
+                VStack(spacing: 16) {
 
-                        TextField("メールアドレス", text: $email)
-                            .textInputAutocapitalization(.never)
-                            .keyboardType(.emailAddress)
-                            .textFieldStyle(.roundedBorder)
+                    Text("登録済みのメールアドレスとパスワードでログインしてください。")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
 
-                        SecureField("パスワード", text: $password)
-                            .textFieldStyle(.roundedBorder)
+                    TextField("メールアドレス", text: $email)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.emailAddress)
+                        .textFieldStyle(.roundedBorder)
 
-                        if !errorMessage.isEmpty {
-                            Text(errorMessage)
-                                .foregroundColor(.red)
-                                .font(.caption)
-                        }
+                    SecureField("パスワード", text: $password)
+                        .textFieldStyle(.roundedBorder)
 
-                        if !successMessage.isEmpty {
-                            Text(successMessage)
-                                .foregroundColor(.green)
-                                .font(.caption)
-                        }
+                    Button {
+                        login()
+                    } label: {
+                        HStack {
+                            Spacer()
 
-                        Button {
-                            login()
-                        } label: {
                             if isLoading {
                                 ProgressView()
-                                    .frame(maxWidth: .infinity)
+                                    .tint(.white)
                             } else {
                                 Text("ログイン")
                                     .font(.headline)
-                                    .frame(maxWidth: .infinity)
+                                    .foregroundColor(.white)
                             }
-                        }
-                        .buttonStyle(.borderedProminent)
 
-                        Button {
-                            resetPassword()
-                        } label: {
-                            Text("パスワードを忘れた方はこちら")
-                                .font(.footnote)
-                                .foregroundColor(.blue)
+                            Spacer()
                         }
-
+                        .frame(height: 52)
+                        .background(Color.blue)
+                        .cornerRadius(12)
                     }
-                    .padding(20)
-                    .background(Color(.systemBackground))
-                    .cornerRadius(20)
-                    .shadow(radius: 4)
+                    .disabled(isLoading)
 
+                    Button {
+                        resetPassword()
+                    } label: {
+                        Text("パスワードを忘れた方はこちら")
+                            .font(.footnote)
+                            .foregroundColor(.blue)
+                    }
+
+                    if !errorMessage.isEmpty {
+                        Text(errorMessage)
+                            .foregroundColor(.red)
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
+                    }
+
+                    if !successMessage.isEmpty {
+                        Text(successMessage)
+                            .foregroundColor(.green)
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
+                    }
                 }
-                .padding(24)
+                .padding(20)
+                .background(Color(.systemBackground))
+                .cornerRadius(20)
+                .shadow(radius: 4)
+                .padding(.horizontal, 24)
+
+                Spacer()
             }
         }
         .navigationTitle("ログイン")
@@ -147,14 +159,19 @@ struct MemberLoginView: View {
         switch code {
         case .wrongPassword:
             return "パスワードが違います"
+
         case .userNotFound:
             return "このメールアドレスは登録されていません"
+
         case .invalidEmail:
             return "メールアドレスの形式が正しくありません"
+
         case .networkError:
             return "通信エラーが発生しました"
+
         case .invalidCredential:
             return "メールアドレスまたはパスワードが正しくありません"
+
         default:
             return error.localizedDescription
         }

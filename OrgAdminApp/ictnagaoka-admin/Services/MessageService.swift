@@ -18,7 +18,7 @@ protocol MessageServiceProtocol {
         organizationId: String,
         onChange: @escaping (Result<[MessageItem], Error>) -> Void
     ) -> ListenerRegistration
-    func markAsRead(messageId: String, uid: String) async throws
+    func markAsRead(messageId: String, uid: String, organizationId: String) async throws
     func sendMessage(_ payload: SendMessageRequest) async throws
     func fetchSentMessages(organizationId: String) async throws -> [MessageItem]
 }
@@ -26,14 +26,31 @@ protocol MessageServiceProtocol {
 final class MessageService: MessageServiceProtocol {
     private let db = Firestore.firestore()
 
+    private func messagesRef(organizationId: String) -> CollectionReference {
+        db.collection("organizations")
+            .document(organizationId)
+            .collection("messages")
+    }
+
     func fetchMessages(for uid: String, organizationId: String) async throws -> [MessageItem] {
-        let snapshot = try await db.collection("messages")
-            .whereField("organizationId", isEqualTo: organizationId)
-            .whereField("targetMemberUids", arrayContains: uid)
+        let safeOrganizationId = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let snapshot = try await messagesRef(organizationId: safeOrganizationId)
             .order(by: "createdAt", descending: true)
             .getDocuments()
 
-        return snapshot.documents.compactMap { Self.makeMessageItem(from: $0) }
+        return snapshot.documents.compactMap { doc in
+            let data = doc.data()
+            let isBroadcast = data["isBroadcast"] as? Bool ?? false
+            let targetMemberUids = data["targetMemberUids"] as? [String] ?? []
+            let toUids = data["toUids"] as? [String] ?? []
+
+            guard isBroadcast || targetMemberUids.contains(uid) || toUids.contains(uid) else {
+                return nil
+            }
+
+            return Self.makeMessageItem(from: doc)
+        }
     }
 
     func listenMessages(
@@ -41,9 +58,9 @@ final class MessageService: MessageServiceProtocol {
         organizationId: String,
         onChange: @escaping (Result<[MessageItem], Error>) -> Void
     ) -> ListenerRegistration {
-        db.collection("messages")
-            .whereField("organizationId", isEqualTo: organizationId)
-            .whereField("targetMemberUids", arrayContains: uid)
+        let safeOrganizationId = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return messagesRef(organizationId: safeOrganizationId)
             .order(by: "createdAt", descending: true)
             .addSnapshotListener { snapshot, error in
                 if let error {
@@ -51,31 +68,52 @@ final class MessageService: MessageServiceProtocol {
                     return
                 }
 
-                guard let snapshot else {
-                    onChange(.success([]))
-                    return
+                let documents = snapshot?.documents ?? []
+
+                let items = documents.compactMap { doc -> MessageItem? in
+                    let data = doc.data()
+                    let isBroadcast = data["isBroadcast"] as? Bool ?? false
+                    let targetMemberUids = data["targetMemberUids"] as? [String] ?? []
+                    let toUids = data["toUids"] as? [String] ?? []
+
+                    guard isBroadcast || targetMemberUids.contains(uid) || toUids.contains(uid) else {
+                        return nil
+                    }
+
+                    return Self.makeMessageItem(from: doc)
                 }
 
-                let items = snapshot.documents.compactMap { Self.makeMessageItem(from: $0) }
                 onChange(.success(items))
             }
     }
 
-    func markAsRead(messageId: String, uid: String) async throws {
-        try await db.collection("messages").document(messageId).updateData([
-            "isReadBy": FieldValue.arrayUnion([uid]),
-            "updatedAt": Timestamp(date: Date())
-        ])
+    func markAsRead(messageId: String, uid: String, organizationId: String) async throws {
+        let safeOrganizationId = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        try await messagesRef(organizationId: safeOrganizationId)
+            .document(messageId)
+            .updateData([
+                "isReadBy": FieldValue.arrayUnion([uid]),
+                "updatedAt": FieldValue.serverTimestamp()
+            ])
     }
 
     func sendMessage(_ payload: SendMessageRequest) async throws {
+        let safeOrganizationId = payload.organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
         let now = Timestamp(date: Date())
 
+        let isBroadcast =
+            payload.deliveryType == "broadcast" ||
+            payload.deliveryType == "all" ||
+            payload.targetMemberUids.isEmpty
+
         let data: [String: Any] = [
-            "organizationId": payload.organizationId,
+            "organizationId": safeOrganizationId,
+            "messageType": "memberMessage",
             "title": payload.title,
             "body": payload.body,
             "deliveryType": payload.deliveryType,
+            "isBroadcast": isBroadcast,
             "categoryTargets": payload.categoryTargets,
             "targetMemberUids": payload.targetMemberUids,
             "targetCount": payload.targetMemberUids.count,
@@ -85,12 +123,14 @@ final class MessageService: MessageServiceProtocol {
             "updatedAt": now
         ]
 
-        try await db.collection("messages").addDocument(data: data)
+        try await messagesRef(organizationId: safeOrganizationId)
+            .addDocument(data: data)
     }
 
     func fetchSentMessages(organizationId: String) async throws -> [MessageItem] {
-        let snapshot = try await db.collection("messages")
-            .whereField("organizationId", isEqualTo: organizationId)
+        let safeOrganizationId = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let snapshot = try await messagesRef(organizationId: safeOrganizationId)
             .order(by: "createdAt", descending: true)
             .getDocuments()
 

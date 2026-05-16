@@ -1,14 +1,20 @@
 import SwiftUI
 
 struct MemberPostHistoryView: View {
+
     @EnvironmentObject private var memberStore: MemberStore
     @EnvironmentObject private var organizationStore: OrganizationStore
+
     @StateObject private var store = MemberPostStore()
 
     var body: some View {
+
         List {
+
             if store.posts.isEmpty {
+
                 VStack(spacing: 12) {
+
                     Text("投稿履歴はまだありません")
                         .font(.headline)
                         .foregroundColor(.secondary)
@@ -23,14 +29,19 @@ struct MemberPostHistoryView: View {
                 .listRowSeparator(.hidden)
 
             } else {
+
                 ForEach(store.posts) { item in
+
                     NavigationLink {
+
                         MemberPostDetailView(
                             item: item,
-                            organizationId: organizationStore.organization.id
+                            organizationId: organizationStore.organizationId
                         )
                         .environmentObject(store)
+
                     } label: {
+
                         row(item)
                     }
                 }
@@ -39,14 +50,18 @@ struct MemberPostHistoryView: View {
         .listStyle(.plain)
         .navigationTitle("投稿履歴")
         .navigationBarTitleDisplayMode(.inline)
+
         .onAppear {
             startListening()
         }
     }
 
     private func row(_ item: MemberPostItem) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+
+        VStack(alignment: .leading, spacing: 10) {
+
             HStack(alignment: .top, spacing: 8) {
+
                 Text(item.title)
                     .font(.headline)
                     .foregroundColor(.primary)
@@ -55,6 +70,7 @@ struct MemberPostHistoryView: View {
                 Spacer()
 
                 if item.hasUnreadReply {
+
                     Text("未読返信")
                         .font(.caption.bold())
                         .foregroundColor(.white)
@@ -70,7 +86,39 @@ struct MemberPostHistoryView: View {
                 .foregroundColor(.secondary)
                 .lineLimit(2)
 
+            if !item.attachments.isEmpty {
+
+                HStack(spacing: 8) {
+
+                    Image(systemName: "paperclip")
+                        .foregroundColor(.blue)
+
+                    Text("添付 \(item.attachments.count)件")
+                        .font(.caption.bold())
+                        .foregroundColor(.blue)
+
+                    Spacer()
+
+                    ForEach(item.attachments.prefix(3)) { attachment in
+
+                        Image(
+                            systemName:
+                                attachment.isPDF
+                                ? "doc.richtext"
+                                : "photo"
+                        )
+                        .foregroundColor(
+                            attachment.isPDF
+                            ? .red
+                            : .blue
+                        )
+                    }
+                }
+                .padding(.top, 2)
+            }
+
             HStack {
+
                 Text(formatDate(item.createdAt))
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -78,10 +126,21 @@ struct MemberPostHistoryView: View {
                 Spacer()
 
                 if item.replyCount > 0 {
-                    Text(item.hasUnreadReply ? "返信 \(item.replyCount)件（未読）" : "返信 \(item.replyCount)件")
-                        .font(.caption)
-                        .foregroundColor(item.hasUnreadReply ? .red : .blue)
+
+                    Text(
+                        item.hasUnreadReply
+                        ? "返信 \(item.replyCount)件（未読）"
+                        : "返信 \(item.replyCount)件"
+                    )
+                    .font(.caption)
+                    .foregroundColor(
+                        item.hasUnreadReply
+                        ? .red
+                        : .blue
+                    )
+
                 } else {
+
                     Text("返信なし")
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -92,13 +151,16 @@ struct MemberPostHistoryView: View {
     }
 
     private func startListening() {
-        let organizationId = organizationStore.organization.id
+
+        let organizationId = organizationStore.organizationId
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         let memberUid = memberStore.authUid?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-        guard !organizationId.isEmpty, !memberUid.isEmpty else {
+        guard !organizationId.isEmpty,
+              !memberUid.isEmpty else {
+
             print("❌ MemberPostHistoryView organizationId/memberUid empty")
             return
         }
@@ -110,9 +172,12 @@ struct MemberPostHistoryView: View {
     }
 
     private func formatDate(_ date: Date) -> String {
+
         let formatter = DateFormatter()
+
         formatter.locale = Locale(identifier: "ja_JP")
         formatter.dateFormat = "yyyy/MM/dd HH:mm"
+
         return formatter.string(from: date)
     }
 }

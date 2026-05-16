@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		894C8B312FB7DF330035607A /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 894C8B302FB7DF330035607A /* GoogleService-Info.plist */; };
+		894C8B432FB81DF40035607A /* MemberQRCodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 894C8B422FB81DF40035607A /* MemberQRCodeScannerView.swift */; };
+		894C8B452FB81E780035607A /* MemberQRScannerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 894C8B442FB81E780035607A /* MemberQRScannerSheet.swift */; };
 		895DBF002FB592A1008B23B8 /* MemberAppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 895DBEFF2FB592A1008B23B8 /* MemberAppRootView.swift */; };
 		895DBF022FB5937B008B23B8 /* MemberOrganizationSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 895DBF012FB5937B008B23B8 /* MemberOrganizationSelectionView.swift */; };
 		896E0D052F9AFD950077F3B9 /* MemberVideoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896E0D042F9AFD950077F3B9 /* MemberVideoItem.swift */; };
@@ -59,7 +62,6 @@
 		89C1992B2F9059C500610C65 /* MemberReplyItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C1992A2F9059C500610C65 /* MemberReplyItem.swift */; };
 		89C1992F2F90BCED00610C65 /* MemberPost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C1992E2F90BCED00610C65 /* MemberPost.swift */; };
 		89C199332F90BD9700610C65 /* MemberRegistrationItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C199322F90BD9700610C65 /* MemberRegistrationItem.swift */; };
-		89C199542F92109A00610C65 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 89C199532F92109A00610C65 /* GoogleService-Info.plist */; };
 		89C1995C2F9302A100610C65 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 89C1995B2F9302A100610C65 /* FirebaseMessaging */; };
 		89C199622F93A2C200610C65 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C199612F93A2BD00610C65 /* AppDelegate.swift */; };
 		89C199642F93C38000610C65 /* AnnouncementService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C199632F93C36400610C65 /* AnnouncementService.swift */; };
@@ -76,6 +78,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		894C8B302FB7DF330035607A /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		894C8B422FB81DF40035607A /* MemberQRCodeScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberQRCodeScannerView.swift; sourceTree = "<group>"; };
+		894C8B442FB81E780035607A /* MemberQRScannerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberQRScannerSheet.swift; sourceTree = "<group>"; };
 		895DBEFF2FB592A1008B23B8 /* MemberAppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberAppRootView.swift; sourceTree = "<group>"; };
 		895DBF012FB5937B008B23B8 /* MemberOrganizationSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberOrganizationSelectionView.swift; sourceTree = "<group>"; };
 		896E0D042F9AFD950077F3B9 /* MemberVideoItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberVideoItem.swift; sourceTree = "<group>"; };
@@ -126,7 +131,6 @@
 		89C1992A2F9059C500610C65 /* MemberReplyItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberReplyItem.swift; sourceTree = "<group>"; };
 		89C1992E2F90BCED00610C65 /* MemberPost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberPost.swift; sourceTree = "<group>"; };
 		89C199322F90BD9700610C65 /* MemberRegistrationItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberRegistrationItem.swift; sourceTree = "<group>"; };
-		89C199532F92109A00610C65 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		89C1995D2F93038100610C65 /* blog.k100Release.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = blog.k100Release.entitlements; sourceTree = "<group>"; };
 		89C1995E2F9303A200610C65 /* blog-k100-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "blog-k100-Info.plist"; sourceTree = "<group>"; };
 		89C199612F93A2BD00610C65 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -170,8 +174,8 @@
 			isa = PBXGroup;
 			children = (
 				89C1995E2F9303A200610C65 /* blog-k100-Info.plist */,
+				894C8B302FB7DF330035607A /* GoogleService-Info.plist */,
 				89C1995D2F93038100610C65 /* blog.k100Release.entitlements */,
-				89C199532F92109A00610C65 /* GoogleService-Info.plist */,
 				89C4784C2FADEFC600C6D726 /* firebase.json */,
 				89C4784A2FADE7BA00C6D726 /* firestore.rules */,
 				89C1989D2F8EF2C000610C65 /* Services */,
@@ -261,6 +265,8 @@
 				89C1996D2F94ECDB00610C65 /* MemberAnnouncementListView.swift */,
 				896E0D712F9C6E4B0077F3B9 /* MemberLoginView.swift */,
 				895DBF012FB5937B008B23B8 /* MemberOrganizationSelectionView.swift */,
+				894C8B422FB81DF40035607A /* MemberQRCodeScannerView.swift */,
+				894C8B442FB81E780035607A /* MemberQRScannerSheet.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -423,9 +429,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				89C4784B2FADE7BA00C6D726 /* firestore.rules in Resources */,
+				894C8B312FB7DF330035607A /* GoogleService-Info.plist in Resources */,
 				89C1973D2F8B61EB00610C65 /* Assets.xcassets in Resources */,
 				89C4784D2FADEFC600C6D726 /* firebase.json in Resources */,
-				89C199542F92109A00610C65 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -441,6 +447,7 @@
 				89C198B22F8EF8B100610C65 /* MemberPostStore.swift in Sources */,
 				896E0D722F9C6E4B0077F3B9 /* MemberLoginView.swift in Sources */,
 				89C1992B2F9059C500610C65 /* MemberReplyItem.swift in Sources */,
+				894C8B452FB81E780035607A /* MemberQRScannerSheet.swift in Sources */,
 				89C198632F8D9D4800610C65 /* MemberAreaGateView.swift in Sources */,
 				89C478402FACDE6400C6D726 /* MemberBookingEventStore.swift in Sources */,
 				89C1974E2F8B725600610C65 /* MemberRegistrationView.swift in Sources */,
@@ -494,6 +501,7 @@
 				89C1996C2F94ECA700610C65 /* MemberAnnouncementStore.swift in Sources */,
 				89C198612F8D9CF900610C65 /* MemberSecurityStore.swift in Sources */,
 				89C197472F8B6A2000610C65 /* blog_k100App.swift in Sources */,
+				894C8B432FB81DF40035607A /* MemberQRCodeScannerView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -645,7 +653,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "org.nagaoka.blog-k100";
+				PRODUCT_BUNDLE_IDENTIFIER = org.nagaoka.k100member;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -686,7 +694,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "org.nagaoka.blog-k100";
+				PRODUCT_BUNDLE_IDENTIFIER = org.nagaoka.k100member;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

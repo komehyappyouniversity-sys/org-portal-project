@@ -35,6 +35,35 @@ struct OrganizationDetailView: View {
                 }
             }
 
+            Section("登録用QRコード") {
+
+                NavigationLink {
+                    OrganizationQRCodeView(
+                        title: "管理アプリ登録用QRコード",
+                        organizationName: organization.name,
+                        organizationCode: organization.organizationCode
+                    )
+                } label: {
+                    Label(
+                        "管理アプリ用QRコードを発行",
+                        systemImage: "qrcode"
+                    )
+                }
+
+                NavigationLink {
+                    OrganizationQRCodeView(
+                        title: "会員アプリ登録用QRコード",
+                        organizationName: organization.name,
+                        organizationCode: organization.organizationCode
+                    )
+                } label: {
+                    Label(
+                        "会員アプリ用QRコードを発行",
+                        systemImage: "person.crop.circle.badge.plus"
+                    )
+                }
+            }
+
             Section("組織表示設定") {
                 NavigationLink {
                     OrganizationLogoSettingsView(
@@ -44,6 +73,17 @@ struct OrganizationDetailView: View {
                     Label(
                         "組織ロゴ設定",
                         systemImage: "photo"
+                    )
+                }
+
+                NavigationLink {
+                    OrganizationHomepageSettingsView(
+                        organization: organization
+                    )
+                } label: {
+                    Label(
+                        "ホームページURL設定",
+                        systemImage: "globe"
                     )
                 }
             }
