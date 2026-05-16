@@ -200,9 +200,8 @@ service cloud.firestore {
       match /messages/{messageId} {
 
         allow read:
-          if isSignedIn()
-          && isOrgActive(organizationId);
-
+  if isOrgActive(organizationId);
+  
         allow create, delete:
           if isOrgStaff(organizationId);
 
