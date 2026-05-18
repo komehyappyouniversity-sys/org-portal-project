@@ -41,7 +41,7 @@ struct OrganizationDetailView: View {
                     OrganizationQRCodeView(
                         title: "管理アプリ登録用QRコード",
                         organizationName: organization.name,
-                        organizationCode: organization.organizationCode
+                        organizationId: organization.id
                     )
                 } label: {
                     Label(
@@ -54,7 +54,7 @@ struct OrganizationDetailView: View {
                     OrganizationQRCodeView(
                         title: "会員アプリ登録用QRコード",
                         organizationName: organization.name,
-                        organizationCode: organization.organizationCode
+                        organizationId: organization.id
                     )
                 } label: {
                     Label(

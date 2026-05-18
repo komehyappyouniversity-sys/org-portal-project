@@ -4,19 +4,16 @@ import UIKit
 struct OrganizationQRCodeView: View {
     let title: String
     let organizationName: String
-    let organizationCode: String
+    let organizationId: String
 
     private var qrImage: UIImage {
-        QRCodeGenerator.generate(from: organizationCode)
+        QRCodeGenerator.generate(from: organizationId)
     }
 
     var body: some View {
         VStack(spacing: 24) {
             Text(title)
                 .font(.title2.bold())
-
-            Text(organizationName)
-                .font(.headline)
 
             Image(uiImage: qrImage)
                 .interpolation(.none)
@@ -28,21 +25,15 @@ struct OrganizationQRCodeView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16))
 
             VStack(spacing: 8) {
-                Text("登録コード")
+                Text("組織名")
                     .font(.caption)
                     .foregroundColor(.secondary)
 
-                Text(organizationCode)
-                    .font(.title3.bold())
+                Text(organizationName)
+                    .font(.title2.bold())
+                    .multilineTextAlignment(.center)
                     .textSelection(.enabled)
             }
-
-            Button {
-                UIPasteboard.general.string = organizationCode
-            } label: {
-                Label("コードをコピー", systemImage: "doc.on.doc")
-            }
-            .buttonStyle(.borderedProminent)
 
             Spacer()
         }

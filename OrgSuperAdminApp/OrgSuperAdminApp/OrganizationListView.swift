@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import FirebaseFirestore
+import FirebaseAuth
 
 // MARK: - Login View
 
@@ -186,11 +187,17 @@ final class OrganizationListStore: ObservableObject {
             }
 
             try await ref.setData([
-                "name": trimmedName,
-                "isActive": true,
-                "createdAt": FieldValue.serverTimestamp(),
-                "updatedAt": FieldValue.serverTimestamp()
-            ])
+    "name": trimmedName,
+    "organizationCode": trimmedId,
+
+    "isActive": true,
+
+    "createdByUid": Auth.auth().currentUser?.uid ?? "",
+    "createdByEmail": Auth.auth().currentUser?.email ?? "",
+
+    "createdAt": FieldValue.serverTimestamp(),
+    "updatedAt": FieldValue.serverTimestamp()
+])
 
             errorMessage = ""
             successMessage = "組織を作成しました。"

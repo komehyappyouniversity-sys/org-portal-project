@@ -10,7 +10,10 @@ struct AdminMemberCategoryEditView: View {
     @State private var selectedCategories: Set<String> = []
     @State private var customCategory: String = ""
     @State private var isSaving = false
+    @State private var isPromoting = false
     @State private var errorMessage = ""
+    @State private var successMessage = ""
+    @State private var showPromoteConfirm = false
 
     private let db = Firestore.firestore()
 
@@ -77,6 +80,26 @@ struct AdminMemberCategoryEditView: View {
                 }
             }
 
+            Section("管理者登録") {
+                Button {
+                    showPromoteConfirm = true
+                } label: {
+                    if isPromoting {
+                        ProgressView()
+                    } else {
+                        Label("この会員を管理者へ昇格", systemImage: "person.badge.key")
+                    }
+                }
+                .disabled(isSaving || isPromoting)
+            }
+
+            if !successMessage.isEmpty {
+                Section {
+                    Text(successMessage)
+                        .foregroundColor(.green)
+                }
+            }
+
             if !errorMessage.isEmpty {
                 Section {
                     Text(errorMessage)
@@ -94,12 +117,25 @@ struct AdminMemberCategoryEditView: View {
                         Text("保存")
                     }
                 }
-                .disabled(isSaving)
+                .disabled(isSaving || isPromoting)
             }
         }
         .navigationTitle("カテゴリ編集")
         .onAppear {
             selectedCategories = Set(member.categories)
+        }
+        .confirmationDialog(
+            "この会員を管理者へ昇格しますか？",
+            isPresented: $showPromoteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("管理者へ昇格", role: .none) {
+                promoteToAdmin()
+            }
+
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("この会員は管理アプリにログインできる管理者になります。")
         }
     }
 
@@ -121,6 +157,7 @@ struct AdminMemberCategoryEditView: View {
 
         isSaving = true
         errorMessage = ""
+        successMessage = ""
 
         let categories = Array(selectedCategories).sorted()
 
@@ -137,7 +174,42 @@ struct AdminMemberCategoryEditView: View {
                 if let error {
                     errorMessage = error.localizedDescription
                 } else {
-                    dismiss()
+                    successMessage = "カテゴリを保存しました"
+                }
+            }
+    }
+
+    private func promoteToAdmin() {
+        let orgId = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !orgId.isEmpty else {
+            errorMessage = "organizationId がありません"
+            return
+        }
+
+        isPromoting = true
+        errorMessage = ""
+        successMessage = ""
+
+        db.collection("organizations")
+            .document(orgId)
+            .collection("admins")
+            .document(member.id)
+            .setData([
+                "uid": member.id,
+                "name": member.name,
+                "email": member.email,
+                "role": "admin",
+                "isActive": true,
+                "createdAt": FieldValue.serverTimestamp(),
+                "updatedAt": FieldValue.serverTimestamp()
+            ], merge: true) { error in
+                isPromoting = false
+
+                if let error {
+                    errorMessage = error.localizedDescription
+                } else {
+                    successMessage = "管理者として登録しました"
                 }
             }
     }

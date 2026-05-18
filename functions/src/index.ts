@@ -8,7 +8,6 @@ admin.initializeApp();
 const db = admin.firestore();
 const REGION = "asia-northeast1";
 
-// functions:config:get に入っている encryption_key を使用
 function getEncryptionKey(): Buffer {
   const key =
     process.env.VIMEO_ENCRYPTION_KEY ||
@@ -101,8 +100,6 @@ async function getUidFromRequest(req: functions.https.Request): Promise<string> 
   return decoded.uid;
 }
 
-// MARK: - Vimeo設定保存（callable版）
-
 async function getCallableUid(
   data: any,
   context: functions.https.CallableContext
@@ -181,7 +178,6 @@ export const saveVimeoConfig = functions
     return { ok: true };
   });
 
-
 // MARK: - Vimeo設定取得（callable版）
 
 export const getVimeoConfig = functions
@@ -224,7 +220,6 @@ export const getVimeoConfig = functions
       query: saved.query || "",
     };
   });
-
 
 // MARK: - Vimeo動画取得（callable版）
 
@@ -293,7 +288,7 @@ export const fetchVimeoVideos = functions
     };
   });
 
-// MARK: - Vimeo設定保存
+// MARK: - Vimeo設定保存（HTTP版）
 
 export const saveVimeoConfigHttp = functions
   .region(REGION)
@@ -324,7 +319,7 @@ export const saveVimeoConfigHttp = functions
         return;
       }
 
-      await assertAdmin(organizationId, uid);
+      await assertAdminOrSuperAdmin(organizationId, uid);
 
       const encryptedAccessToken = encryptText(accessToken);
 
@@ -348,10 +343,13 @@ export const saveVimeoConfigHttp = functions
     } catch (error: any) {
       console.error("saveVimeoConfigHttp error:", error);
 
-      if (error.message === "permission-denied") {
+      if (
+        error.message === "permission-denied" ||
+        error.message === "missing-auth-token"
+      ) {
         res.status(403).json({
           ok: false,
-          error: "permission-denied",
+          error: error.message,
         });
         return;
       }
@@ -364,7 +362,7 @@ export const saveVimeoConfigHttp = functions
     }
   });
 
-// MARK: - Vimeo設定取得テスト
+// MARK: - Vimeo設定取得（HTTP版）
 
 export const getVimeoConfigHttp = functions
   .region(REGION)
@@ -392,7 +390,7 @@ export const getVimeoConfigHttp = functions
         return;
       }
 
-      await assertAdmin(organizationId, uid);
+      await assertAdminOrSuperAdmin(organizationId, uid);
 
       const doc = await db
         .collection("organizations")
@@ -402,20 +400,25 @@ export const getVimeoConfigHttp = functions
         .get();
 
       if (!doc.exists) {
-        res.status(404).json({
-          ok: false,
-          error: "vimeo-config-not-found",
+        res.status(200).json({
+          ok: true,
+          accessToken: "",
+          userId: "",
+          query: "",
+          hasAccessToken: false,
         });
         return;
       }
 
       const data = doc.data() || {};
+      const encryptedAccessToken = data.encryptedAccessToken || "";
 
       res.status(200).json({
         ok: true,
+        accessToken: encryptedAccessToken ? decryptText(encryptedAccessToken) : "",
         userId: data.userId || "",
         query: data.query || "",
-        hasAccessToken: !!data.encryptedAccessToken,
+        hasAccessToken: !!encryptedAccessToken,
       });
       return;
     } catch (error: any) {
@@ -429,7 +432,7 @@ export const getVimeoConfigHttp = functions
     }
   });
 
-// MARK: - Vimeo動画取得
+// MARK: - Vimeo動画取得（HTTP版）
 
 export const fetchVimeoVideosHttp = functions
   .region(REGION)
@@ -457,7 +460,7 @@ export const fetchVimeoVideosHttp = functions
         return;
       }
 
-      await assertAdmin(organizationId, uid);
+      await assertAdminOrSuperAdmin(organizationId, uid);
 
       const configDoc = await db
         .collection("organizations")
@@ -541,13 +544,12 @@ export const onMessageCreated = functions
       ? message.categoryTargets
       : [];
 
-    let membersQuery: FirebaseFirestore.Query = db
+    const membersSnap = await db
       .collection("organizations")
       .doc(organizationId)
       .collection("members")
-      .where("status", "==", "approved");
-
-    const membersSnap = await membersQuery.get();
+      .where("status", "==", "approved")
+      .get();
 
     const tokens: string[] = [];
 
@@ -645,7 +647,7 @@ export const sendUnreadReminderHttp = functions
         return;
       }
 
-      await assertAdmin(organizationId, uid);
+      await assertAdminOrSuperAdmin(organizationId, uid);
 
       const messageDoc = await db
         .collection("organizations")
@@ -769,4 +771,95 @@ export const sendUnreadReminderHttp = functions
       return;
     }
   });
- 
+
+// MARK: - 組織作成時 初期データ自動生成
+
+export const onOrganizationCreated = functions
+  .region(REGION)
+  .firestore
+  .document("organizations/{organizationId}")
+  .onCreate(async (snap, context) => {
+    const organizationId = context.params.organizationId;
+    const organization = snap.data() || {};
+　　　const createdByUid = String(organization.createdByUid || "").trim();
+　　　const createdByEmail = String(organization.createdByEmail || "").trim();
+
+    console.log("onOrganizationCreated start", {
+      organizationId,
+    });
+
+    const organizationRef = db
+      .collection("organizations")
+      .doc(organizationId);
+
+    await organizationRef
+      .collection("settings")
+      .doc("adminFeatures")
+      .set({
+        announcementEnabled: true,
+        messageEnabled: true,
+        bookingEnabled: false,
+        videoEnabled: false,
+        paidVideoEnabled: false,
+        scheduleEnabled: false,
+        memberPostEnabled: true,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+    await organizationRef
+      .collection("settings")
+      .doc("memberFeatures")
+      .set({
+        announcementEnabled: true,
+        messageEnabled: true,
+        bookingEnabled: false,
+        videoEnabled: false,
+        paidVideoEnabled: false,
+        scheduleEnabled: false,
+        memberPostEnabled: true,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+    await organizationRef
+      .collection("settings")
+      .doc("default")
+      .set({
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+    await organizationRef
+      .collection("categories")
+      .doc("default")
+      .set({
+        name: "一般",
+        sortOrder: 0,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+    if (createdByUid) {
+  　　await organizationRef
+    .collection("admins")
+    .doc(createdByUid)
+    .set({
+      uid: createdByUid,
+      email: createdByEmail,
+      name: createdByEmail,
+
+      role: "owner",
+      isActive: true,
+
+      createdAt:
+        admin.firestore.FieldValue.serverTimestamp(),
+
+      updatedAt:
+        admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+　　}
+      console.log("onOrganizationCreated completed", {
+      organizationId,
+    });
+  });
