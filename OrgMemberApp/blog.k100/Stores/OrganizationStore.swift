@@ -127,7 +127,7 @@ final class OrganizationStore: ObservableObject {
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !trimmed.isEmpty else {
-            errorMessage = "団体コードを入力してください"
+            errorMessage = "コミュニティコードを入力してください"
             return
         }
 

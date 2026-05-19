@@ -119,6 +119,11 @@ struct AdminDashboardView: View {
                 .padding()
             }
             .navigationTitle(resolvedOrganizationName)
+            .onAppear {
+                featureStore.startListening(
+                    organizationId: resolvedOrganizationId
+                )
+            }
         }
     }
 

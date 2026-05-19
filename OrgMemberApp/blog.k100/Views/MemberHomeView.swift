@@ -7,7 +7,7 @@ struct MemberHomeView: View {
     @EnvironmentObject private var featureStore: MemberFeatureStore
 
     private var isAlreadyRegistered: Bool {
-        memberStore.authUid != nil
+        memberStore.profile?.isApproved == true
     }
 
     private var organizationTitle: String {
@@ -84,19 +84,42 @@ struct MemberHomeView: View {
 
                         if isAlreadyRegistered {
 
-                            NavigationLink {
-                                MemberAreaGateView()
-                                    .environmentObject(memberStore)
-                                    .environmentObject(organizationStore)
-                                    .environmentObject(securityStore)
-                                    .environmentObject(featureStore)
-                            } label: {
-                                menuButton(
-                                    title: "会員ページ",
-                                    subtitle: "Face IDで認証して会員メニューを開きます",
-                                    systemImage: "faceid",
-                                    color: .blue
-                                )
+                            if isAlreadyRegistered {
+
+                                NavigationLink {
+                                    MemberAreaGateView()
+                                        .environmentObject(memberStore)
+                                        .environmentObject(organizationStore)
+                                        .environmentObject(securityStore)
+                                        .environmentObject(featureStore)
+
+                                } label: {
+
+                                    menuButton(
+                                        title: "会員ページ",
+                                        subtitle: "Face IDで認証して会員メニューを開きます",
+                                        systemImage: "faceid",
+                                        color: .blue
+                                    )
+                                }
+
+                            } else {
+
+                                NavigationLink {
+                                    MemberRegistrationView()
+                                        .environmentObject(memberStore)
+                                        .environmentObject(organizationStore)
+                                        .environmentObject(securityStore)
+
+                                } label: {
+
+                                    menuButton(
+                                        title: "会員登録",
+                                        subtitle: "新規会員申請はこちら",
+                                        systemImage: "person.badge.plus",
+                                        color: .green
+                                    )
+                                }
                             }
 
                         } else {

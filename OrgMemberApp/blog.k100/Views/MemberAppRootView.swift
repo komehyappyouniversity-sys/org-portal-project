@@ -39,7 +39,7 @@ struct MemberAppRootView: View {
                         }
                         .buttonStyle(.borderedProminent)
 
-                        Button("団体コードを再設定") {
+                        Button("コミュニティコードを再設定") {
                             resetOrganizationSelection()
                         }
                         .buttonStyle(.bordered)

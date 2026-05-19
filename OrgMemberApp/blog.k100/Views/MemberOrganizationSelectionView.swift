@@ -8,7 +8,9 @@ struct MemberOrganizationSelectionView: View {
     @State private var organizationCode: String = ""
     @State private var isConnecting = false
     @State private var showQRScanner = false
-
+    
+    @FocusState private var isCodeFieldFocused: Bool
+    
     var body: some View {
         VStack(spacing: 24) {
 
@@ -20,22 +22,36 @@ struct MemberOrganizationSelectionView: View {
 
             VStack(spacing: 8) {
 
-                Text("団体設定")
+                Text("コミュニティ設定")
                     .font(.title.bold())
 
-                Text("団体コードを入力")
+                Text("コードを入力")
                     .font(.title2.bold())
 
-                Text("管理者から案内された団体コードを入力、またはQRコードを読み取ってください。")
+                Text("管理者から案内されたコミュニティコードを入力、またはQRコードを読み取ってください。")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
             }
 
             TextField("例：k100u", text: $organizationCode)
+                .tint(.blue)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
-                .textFieldStyle(.roundedBorder)
+                .focused($isCodeFieldFocused)
+                .padding()
+                .background(Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(
+                            isCodeFieldFocused ? Color.blue : Color.gray.opacity(0.3),
+                            lineWidth: isCodeFieldFocused ? 2 : 1
+                        )
+                )
+                .cornerRadius(12)
+                .onTapGesture {
+                    isCodeFieldFocused = true
+                }
                 .padding(.horizontal, 24)
 
             Button {
@@ -75,7 +91,7 @@ struct MemberOrganizationSelectionView: View {
                     Text(
                         isConnecting
                         ? "接続中..."
-                        : "この団体に接続"
+                        : "このコミュニティに接続"
                     )
                     .font(.headline)
                 }
@@ -95,7 +111,7 @@ struct MemberOrganizationSelectionView: View {
                     .isEmpty
             )
 
-            Text("一度接続すると、次回から自動でこの団体の会員アプリとして起動します。")
+            Text("一度接続すると、次回から自動でこのコミュニティの会員アプリとして起動します。")
                 .font(.footnote)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -110,6 +126,11 @@ struct MemberOrganizationSelectionView: View {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
 
                 connectOrganization()
+            }
+        }
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                isCodeFieldFocused = true
             }
         }
     }

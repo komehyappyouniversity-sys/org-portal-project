@@ -181,7 +181,7 @@ struct MemberRegistrationView: View {
         guard !organizationId.isEmpty else {
 
             errorMessage =
-            "団体情報が取得できません。団体コードを再設定してください。"
+            "コミュニティ情報が取得できません。コミュニティコードを再設定してください。"
 
             return
         }
