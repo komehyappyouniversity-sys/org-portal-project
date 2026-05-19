@@ -17,7 +17,16 @@ struct MemberRegistrationView: View {
     @State private var errorMessage = ""
     @State private var showCompleteAlert = false
 
+    @FocusState private var focusedField: Field?
+
     private let db = Firestore.firestore()
+
+    enum Field {
+        case name
+        case email
+        case phone
+        case password
+    }
 
     var body: some View {
 
@@ -39,6 +48,7 @@ struct MemberRegistrationView: View {
 
                 Button {
 
+                    focusedField = nil
                     register()
 
                 } label: {
@@ -47,16 +57,19 @@ struct MemberRegistrationView: View {
 
                         ProgressView()
                             .frame(maxWidth: .infinity)
+                            .padding()
 
                     } else {
 
                         Text("会員登録を申請する")
                             .font(.headline)
+                            .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
+                            .padding()
                     }
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                .background(Color.blue)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
                 .disabled(isLoading)
             }
             .padding(24)
@@ -86,6 +99,8 @@ struct MemberRegistrationView: View {
 
             TextField("例：根津孝誠", text: $name)
                 .textFieldStyle(.roundedBorder)
+                .focused($focusedField, equals: .name)
+                .tint(.blue)
 
             fieldTitle("生年月日")
 
@@ -106,6 +121,8 @@ struct MemberRegistrationView: View {
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .textFieldStyle(.roundedBorder)
+            .focused($focusedField, equals: .email)
+            .tint(.blue)
 
             fieldTitle("電話番号")
 
@@ -115,11 +132,15 @@ struct MemberRegistrationView: View {
             )
             .keyboardType(.phonePad)
             .textFieldStyle(.roundedBorder)
+            .focused($focusedField, equals: .phone)
+            .tint(.blue)
 
             fieldTitle("パスワード")
 
             SecureField("6文字以上", text: $password)
                 .textFieldStyle(.roundedBorder)
+                .focused($focusedField, equals: .password)
+                .tint(.blue)
         }
     }
 
@@ -181,15 +202,10 @@ struct MemberRegistrationView: View {
         guard !organizationId.isEmpty else {
 
             errorMessage =
-            "コミュニティ情報が取得できません。コミュニティコードを再設定してください。"
+            "コミュニティ情報が取得できません。"
 
             return
         }
-
-        print(
-            "📝 MemberRegistration organizationId:",
-            organizationId
-        )
 
         isLoading = true
 
@@ -198,13 +214,56 @@ struct MemberRegistrationView: View {
             password: password
         ) { result, error in
 
-            if let error {
+            if let nsError = error as NSError? {
+
+                if nsError.code == AuthErrorCode.emailAlreadyInUse.rawValue {
+
+                    Auth.auth().signIn(
+                        withEmail: trimmedEmail,
+                        password: password
+                    ) { result, error in
+
+                        if let error {
+
+                            DispatchQueue.main.async {
+
+                                self.isLoading = false
+                                self.errorMessage =
+                                "既存アカウントです。正しいパスワードでログインしてください。"
+                            }
+
+                            return
+                        }
+
+                        guard let uid = result?.user.uid else {
+
+                            DispatchQueue.main.async {
+
+                                self.isLoading = false
+                                self.errorMessage =
+                                "UID取得失敗"
+                            }
+
+                            return
+                        }
+
+                        saveRegistration(
+                            organizationId: organizationId,
+                            uid: uid,
+                            name: trimmedName,
+                            email: trimmedEmail,
+                            phone: trimmedPhone
+                        )
+                    }
+
+                    return
+                }
 
                 DispatchQueue.main.async {
 
                     self.isLoading = false
                     self.errorMessage =
-                        error.localizedDescription
+                    nsError.localizedDescription
                 }
 
                 return
@@ -216,7 +275,7 @@ struct MemberRegistrationView: View {
 
                     self.isLoading = false
                     self.errorMessage =
-                        "UIDが取得できません。"
+                    "UIDが取得できません。"
                 }
 
                 return
@@ -259,39 +318,21 @@ struct MemberRegistrationView: View {
             .collection("memberRegistrations")
             .document(uid)
 
-        let memberRef = db
-            .collection("organizations")
-            .document(organizationId)
-            .collection("members")
-            .document(uid)
-
-        let batch = db.batch()
-
-        batch.setData(
-            data,
-            forDocument: registrationRef
-        )
-
-        batch.setData(
-            data,
-            forDocument: memberRef
-        )
-
-        batch.commit { error in
+        registrationRef.setData(data, merge: true) { error in
 
             DispatchQueue.main.async {
 
                 self.isLoading = false
 
-                if let error {
+                if error != nil {
 
                     self.errorMessage =
-                        error.localizedDescription
+                    "登録保存に失敗しました"
 
-                    return
+                } else {
+
+                    self.showCompleteAlert = true
                 }
-
-                self.showCompleteAlert = true
             }
         }
     }
@@ -300,7 +341,7 @@ struct MemberRegistrationView: View {
 
         organizationStore.organizationId
             .trimmingCharacters(
-                in: .whitespacesAndNewlines
+                in: CharacterSet.whitespacesAndNewlines
             )
     }
 }

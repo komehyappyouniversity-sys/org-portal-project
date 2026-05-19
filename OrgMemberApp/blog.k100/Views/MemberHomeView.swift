@@ -138,19 +138,7 @@ struct MemberHomeView: View {
                                 )
                             }
 
-                            NavigationLink {
-                                MemberLoginView()
-                                    .environmentObject(memberStore)
-                                    .environmentObject(organizationStore)
-                                    .environmentObject(securityStore)
-                            } label: {
-                                menuButton(
-                                    title: "登録済みの方はこちら",
-                                    subtitle: "メールアドレスとパスワードでログイン",
-                                    systemImage: "lock.fill",
-                                    color: .blue
-                                )
-                            }
+                        
                         }
                     }
 
