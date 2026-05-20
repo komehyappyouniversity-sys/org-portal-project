@@ -324,12 +324,16 @@ struct MemberRegistrationView: View {
 
                 self.isLoading = false
 
-                if error != nil {
+                if let error {
+
+                    print("🔥 memberRegistrations 保存失敗:", error.localizedDescription)
 
                     self.errorMessage =
-                    "登録保存に失敗しました"
+                    "登録保存に失敗しました：\(error.localizedDescription)"
 
                 } else {
+
+                    print("✅ memberRegistrations 保存成功:", organizationId, uid)
 
                     self.showCompleteAlert = true
                 }

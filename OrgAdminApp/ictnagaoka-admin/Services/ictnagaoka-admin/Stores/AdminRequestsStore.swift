@@ -128,12 +128,7 @@ final class AdminRequestsStore: ObservableObject {
             "updatedAt": FieldValue.serverTimestamp()
         ], forDocument: memberRef, merge: true)
 
-        batch.updateData([
-            "status": "approved",
-            "reviewedByUid": reviewedByUid,
-            "reviewedAt": FieldValue.serverTimestamp(),
-            "updatedAt": FieldValue.serverTimestamp()
-        ], forDocument: registrationRef)
+        batch.deleteDocument(registrationRef)
 
         try await batch.commit()
     }
