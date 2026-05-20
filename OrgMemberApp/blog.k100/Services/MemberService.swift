@@ -127,25 +127,6 @@ final class MemberService: MemberServiceProtocol {
             .collection("memberRegistrations")
             .document(payload.uid)
             .setData(registrationData)
-
-        let memberData: [String: Any] = [
-            "uid": payload.uid,
-            "organizationId": payload.organizationId,
-            "name": payload.name,
-            "kana": payload.kana,
-            "phone": payload.phone,
-            "email": payload.email,
-            "status": "pending",
-            "categories": [],
-            "createdAt": now,
-            "updatedAt": now
-        ]
-
-        try await db.collection("organizations")
-            .document(payload.organizationId)
-            .collection("members")
-            .document(payload.uid)
-            .setData(memberData, merge: true)
     }
 
     func updateMemberProfile(
