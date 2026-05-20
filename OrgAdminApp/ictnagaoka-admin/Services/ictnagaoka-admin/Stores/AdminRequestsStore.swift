@@ -125,9 +125,10 @@ final class AdminRequestsStore: ObservableObject {
             "email": request.email,
             "status": "approved",
             "createdFromRegistrationId": request.id,
+            "createdAt": FieldValue.serverTimestamp(),
             "updatedAt": FieldValue.serverTimestamp()
         ], forDocument: memberRef, merge: true)
-
+        
         batch.deleteDocument(registrationRef)
 
         try await batch.commit()

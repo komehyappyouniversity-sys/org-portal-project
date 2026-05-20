@@ -110,6 +110,9 @@ struct AdminMemberListView: View {
             Text("\(selectedMember?.name.isEmpty == false ? selectedMember?.name ?? "" : "この会員") を管理者として登録します。")
         }
         .onAppear {
+
+            print("👀 管理アプリ 会員一覧 organizationId:", organizationId)
+
             fetch()
         }
     }
@@ -131,12 +134,18 @@ struct AdminMemberListView: View {
             .order(by: "createdAt", descending: true)
             .getDocuments { snapshot, error in
                 if let error {
+
+                    print("🔥 members 取得エラー:", error.localizedDescription)
+
                     self.errorMessage = error.localizedDescription
                     self.isLoading = false
+
                     return
                 }
 
                 let docs = snapshot?.documents ?? []
+                print("👥 members docs count:", docs.count)
+                print("👥 members docIDs:", docs.map { $0.documentID })
 
                 Task {
                     var loadedMembers: [AdminMemberItem] = []
