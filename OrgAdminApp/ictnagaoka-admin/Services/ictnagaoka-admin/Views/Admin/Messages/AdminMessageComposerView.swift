@@ -37,12 +37,9 @@ struct AdminMessageComposerView: View {
     private var organizationId: String {
         let current = organizationStore.currentOrganizationId
             .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        return current.isEmpty
-            ? OrganizationConfig.organizationId
-            : current
+        
+        return current
     }
-
     enum SendMode: String, CaseIterable, Identifiable {
         case allMembers = "全会員"
         case category = "カテゴリ別"

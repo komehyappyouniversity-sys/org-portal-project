@@ -25,10 +25,8 @@ struct AdminRequestsListView: View {
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)
 
-                    Button("再読み込み") {
-                        organizationStore.startListening(
-                            organizationId: OrganizationConfig.organizationId
-                        )
+                    Button("戻って組織を選択") {
+                        store.stopListening()
                     }
                     .buttonStyle(.borderedProminent)
                 }
@@ -92,21 +90,21 @@ struct AdminRequestsListView: View {
         }
         .navigationTitle("会員申請一覧")
         .onAppear {
-            if safeOrganizationId.isEmpty {
-                organizationStore.startListening(
-                    organizationId: OrganizationConfig.organizationId
-                )
-            } else {
-                store.startListening(
-                    organizationId: safeOrganizationId
-                )
+            guard !safeOrganizationId.isEmpty else {
+                store.stopListening()
+                return
             }
+
+            store.startListening(
+                organizationId: safeOrganizationId
+            )
         }
         .onChange(of: safeOrganizationId) { _, newValue in
             let newOrganizationId = newValue
                 .trimmingCharacters(in: .whitespacesAndNewlines)
 
             guard !newOrganizationId.isEmpty else {
+                store.stopListening()
                 return
             }
 

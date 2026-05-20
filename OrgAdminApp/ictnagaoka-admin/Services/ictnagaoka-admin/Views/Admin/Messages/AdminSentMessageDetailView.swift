@@ -15,14 +15,8 @@ struct AdminSentMessageDetailView: View {
     @State private var showSuccess = false
 
     private var organizationId: String {
-        let id = organizationStore.currentOrganizationId
+        organizationStore.currentOrganizationId
             .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if !id.isEmpty {
-            return id
-        }
-
-        return OrganizationConfig.organizationId
     }
 
     private var readMembers: [AdminMessageMember] {

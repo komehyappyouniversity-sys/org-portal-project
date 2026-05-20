@@ -73,9 +73,9 @@ final class MemberRegistrationStore: ObservableObject {
         do {
             let ref = db.collection("organizations")
                 .document(orgId)
-                .collection("members")
+                .collection("memberRegistrations")
                 .document(uid)
-
+            
             let data: [String: Any] = [
                 "uid": uid,
                 "organizationId": orgId,
@@ -89,7 +89,7 @@ final class MemberRegistrationStore: ObservableObject {
             ]
 
             print("=== 会員登録 保存開始 ===")
-            print("path: organizations/\(orgId)/members/\(uid)")
+            print("path: organizations/\(orgId)/memberRegistrations/\(uid)")
             print("status: pending")
 
             try await ref.setData(data, merge: true)

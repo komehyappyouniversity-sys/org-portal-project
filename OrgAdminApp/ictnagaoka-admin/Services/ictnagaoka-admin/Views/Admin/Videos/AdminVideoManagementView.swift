@@ -12,7 +12,7 @@ struct AdminVideoManagementView: View {
         let current = organizationStore.currentOrganizationId
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        return current.isEmpty ? OrganizationConfig.organizationId : current
+        return current
     }
 
     var body: some View {

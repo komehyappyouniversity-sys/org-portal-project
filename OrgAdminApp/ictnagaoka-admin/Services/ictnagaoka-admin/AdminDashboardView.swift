@@ -8,12 +8,10 @@ struct AdminDashboardView: View {
     @EnvironmentObject var featureStore: AdminFeatureStore
 
     private var resolvedOrganizationId: String {
-        let id = organizationStore.currentOrganizationId
+        organizationStore.currentOrganizationId
             .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        return id.isEmpty ? OrganizationConfig.organizationId : id
     }
-
+    
     private var resolvedOrganizationName: String {
         let name = organizationStore.currentOrganizationName
             .trimmingCharacters(in: .whitespacesAndNewlines)

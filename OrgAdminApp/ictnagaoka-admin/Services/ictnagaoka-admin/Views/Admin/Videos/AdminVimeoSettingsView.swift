@@ -20,7 +20,7 @@ struct AdminVimeoSettingsView: View {
         let current = organizationStore.currentOrganizationId
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        return current.isEmpty ? OrganizationConfig.organizationId : current
+        return current
     }
 
     var body: some View {
@@ -88,11 +88,6 @@ struct AdminVimeoSettingsView: View {
         }
         .navigationTitle("Vimeo連携設定")
         .onAppear {
-            if organizationId.isEmpty {
-                organizationStore.startListening(
-                    organizationId: OrganizationConfig.organizationId
-                )
-            }
         }
     }
 
