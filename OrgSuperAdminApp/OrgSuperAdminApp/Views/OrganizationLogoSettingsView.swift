@@ -97,18 +97,20 @@ final class OrganizationLogoSettingsStore: ObservableObject {
             ]
 
             // 🔥 新しい画像がある場合のみアップロード
-            if let selectedImageData {
+            if let selectedImageData,
+               let uiImage = UIImage(data: selectedImageData),
+               let pngData = uiImage.pngData() {
 
                 let path =
-                    "organizations/\(organizationId)/logo/logo.jpg"
+                    "organizations/\(organizationId)/logo/logo.png"
 
                 let ref = storage.reference().child(path)
 
                 let metadata = StorageMetadata()
-                metadata.contentType = "image/jpeg"
+                metadata.contentType = "image/png"
 
                 _ = try await ref.putDataAsync(
-                    selectedImageData,
+                    pngData,
                     metadata: metadata
                 )
 
@@ -137,8 +139,7 @@ final class OrganizationLogoSettingsStore: ObservableObject {
         } catch {
 
             errorMessage =
-                "組織ロゴの保存に失敗しました。"
-
+                "組織ロゴの保存に失敗しました: \(error.localizedDescription)"
             print(
                 "❌ logo save error:",
                 error.localizedDescription

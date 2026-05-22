@@ -8,118 +8,132 @@ struct MemberOrganizationSelectionView: View {
     @State private var organizationCode: String = ""
     @State private var isConnecting = false
     @State private var showQRScanner = false
-    
+
     @FocusState private var isCodeFieldFocused: Bool
-    
+
     var body: some View {
-        VStack(spacing: 24) {
+        ScrollView {
+            VStack(spacing: 24) {
 
-            Spacer()
+                Spacer(minLength: 40)
 
-            Image(systemName: "building.2.crop.circle.fill")
-                .font(.system(size: 72))
-                .foregroundColor(.blue)
+                Image("CommunityLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 120, height: 120)
 
-            VStack(spacing: 8) {
+                VStack(spacing: 8) {
 
-                Text("コミュニティ設定")
-                    .font(.title.bold())
+                    Text("コミュニティ設定")
+                        .font(.title.bold())
 
-                Text("コードを入力")
-                    .font(.title2.bold())
+                    Text("コードを入力")
+                        .font(.title2.bold())
 
-                Text("管理者から案内されたコミュニティコードを入力、またはQRコードを読み取ってください。")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-            }
+                    Text("""
+管理者から案内されたコミュニティコードを入力、
+またはQRコードを読み取ってください。
+""")
+                        .font(.subheadline)
+                        .foregroundColor(.red)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 24)
+                }
 
-            TextField("例：k100u", text: $organizationCode)
-                .tint(.blue)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .focused($isCodeFieldFocused)
-                .padding()
-                .background(Color.white)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(
-                            isCodeFieldFocused ? Color.blue : Color.gray.opacity(0.3),
-                            lineWidth: isCodeFieldFocused ? 2 : 1
-                        )
-                )
-                .cornerRadius(12)
-                .onTapGesture {
-                    isCodeFieldFocused = true
+                TextField("", text: $organizationCode)
+                    .tint(.blue)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .focused($isCodeFieldFocused)
+                    .padding()
+                    .background(Color.white)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(
+                                isCodeFieldFocused ? Color.blue : Color.gray.opacity(0.3),
+                                lineWidth: isCodeFieldFocused ? 2 : 1
+                            )
+                    )
+                    .cornerRadius(12)
+                    .onTapGesture {
+                        isCodeFieldFocused = true
+                    }
+                    .padding(.horizontal, 24)
+
+                Button {
+                    showQRScanner = true
+                } label: {
+                    Label("QRコードを読み取る", systemImage: "qrcode.viewfinder")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(Color.blue)
+                        .cornerRadius(14)
                 }
                 .padding(.horizontal, 24)
 
-            Button {
-                showQRScanner = true
-            } label: {
-                Label("QRコードを読み取る", systemImage: "qrcode.viewfinder")
-                    .font(.headline)
+                if let errorMessage = organizationStore.errorMessage,
+                   !errorMessage.isEmpty {
+
+                    Text(errorMessage)
+                        .font(.subheadline)
+                        .foregroundColor(.red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                }
+
+                Button {
+                    connectOrganization()
+                } label: {
+
+                    HStack {
+
+                        if isConnecting {
+                            ProgressView()
+                                .tint(.white)
+                        }
+
+                        Text(
+                            isConnecting
+                            ? "接続中..."
+                            : "このコミュニティに接続"
+                        )
+                        .font(.headline)
+                    }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 50)
+                    .frame(height: 54)
                     .background(Color.blue)
-                    .cornerRadius(14)
-            }
-            .padding(.horizontal, 24)
+                    .cornerRadius(16)
+                    .padding(.horizontal, 24)
+                }
+                .disabled(
+                    isConnecting
+                    || organizationCode
+                        .trimmingCharacters(
+                            in: .whitespacesAndNewlines
+                        )
+                        .isEmpty
+                )
 
-            if let errorMessage = organizationStore.errorMessage,
-               !errorMessage.isEmpty {
-
-                Text(errorMessage)
-                    .font(.subheadline)
+                Text("""
+一度接続すると、次回から自動でこのコミュニティの
+会員アプリとして起動します。
+""")
+                    .font(.footnote)
                     .foregroundColor(.red)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 32)
+
+                Spacer(minLength: 40)
             }
-
-            Button {
-                connectOrganization()
-            } label: {
-
-                HStack {
-
-                    if isConnecting {
-                        ProgressView()
-                            .tint(.white)
-                    }
-
-                    Text(
-                        isConnecting
-                        ? "接続中..."
-                        : "このコミュニティに接続"
-                    )
-                    .font(.headline)
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 54)
-                .background(Color.blue)
-                .cornerRadius(16)
-                .padding(.horizontal, 24)
-            }
-            .disabled(
-                isConnecting
-                || organizationCode
-                    .trimmingCharacters(
-                        in: .whitespacesAndNewlines
-                    )
-                    .isEmpty
-            )
-
-            Text("一度接続すると、次回から自動でこのコミュニティの会員アプリとして起動します。")
-                .font(.footnote)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-
-            Spacer()
+            .padding(.vertical, 24)
         }
-        .padding(.vertical, 24)
         .sheet(isPresented: $showQRScanner) {
             MemberQRScannerSheet { scannedCode in
                 organizationCode = scannedCode
