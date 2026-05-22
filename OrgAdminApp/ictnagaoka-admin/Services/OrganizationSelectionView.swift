@@ -33,7 +33,7 @@ struct OrganizationSelectionView: View {
                         .multilineTextAlignment(.center)
                 }
 
-                TextField("例：k100u", text: $organizationCode)
+                TextField("団体コードを入力", text: $organizationCode)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.asciiCapable)
