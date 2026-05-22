@@ -34,28 +34,49 @@ struct MemberPostView: View {
     }
 
     var body: some View {
+
         Form {
+
+            // MARK: - 件名
+
             Section("件名") {
+
                 TextField("件名を入力", text: $title)
                     .focused($focusedField, equals: .title)
+                    .tint(.blue)
                     .padding(10)
                     .background(Color(.secondarySystemBackground))
                     .cornerRadius(10)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(focusedField == .title ? Color.blue : Color.gray.opacity(0.3), lineWidth: 1)
+                            .stroke(
+                                focusedField == .title
+                                ? Color.blue
+                                : Color.gray.opacity(0.3),
+                                lineWidth: 1
+                            )
                     )
             }
 
+            // MARK: - 内容
+
             Section("内容") {
+
                 ZStack(alignment: .topLeading) {
+
                     RoundedRectangle(cornerRadius: 12)
                         .fill(Color(.secondarySystemBackground))
 
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(focusedField == .body ? Color.blue : Color.gray.opacity(0.3), lineWidth: 1)
+                        .stroke(
+                            focusedField == .body
+                            ? Color.blue
+                            : Color.gray.opacity(0.3),
+                            lineWidth: 1
+                        )
 
                     if messageBody.isEmpty {
+
                         Text("内容を入力")
                             .foregroundColor(.secondary)
                             .padding(.top, 18)
@@ -64,6 +85,7 @@ struct MemberPostView: View {
 
                     TextEditor(text: $messageBody)
                         .focused($focusedField, equals: .body)
+                        .tint(.blue)
                         .scrollContentBackground(.hidden)
                         .background(Color.clear)
                         .padding(10)
@@ -71,98 +93,210 @@ struct MemberPostView: View {
                 }
             }
 
+            // MARK: - 添付
+
             Section("添付ファイル") {
-                PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                    Label("画像を添付", systemImage: "photo")
+
+                PhotosPicker(
+                    selection: $selectedPhotoItem,
+                    matching: .images
+                ) {
+
+                    Label(
+                        "画像を添付",
+                        systemImage: "photo"
+                    )
                 }
 
                 Button {
+
                     showPDFPicker = true
+
                 } label: {
-                    Label("PDFを添付", systemImage: "doc")
+
+                    Label(
+                        "PDFを添付",
+                        systemImage: "doc"
+                    )
                 }
 
-                if selectedImageDataList.isEmpty && selectedPDFUrls.isEmpty {
+                if selectedImageDataList.isEmpty
+                    && selectedPDFUrls.isEmpty {
+
                     Text("添付ファイルはありません")
                         .foregroundColor(.secondary)
+
                 } else {
-                    ForEach(selectedImageDataList.indices, id: \.self) { index in
-                        Label(selectedImageDataList[index].fileName, systemImage: "photo")
+
+                    ForEach(
+                        selectedImageDataList.indices,
+                        id: \.self
+                    ) { index in
+
+                        VStack(alignment: .leading, spacing: 8) {
+
+                            if let uiImage = UIImage(
+                                data: selectedImageDataList[index].data
+                            ) {
+
+                                Image(uiImage: uiImage)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(maxWidth: .infinity)
+                                    .frame(maxHeight: 220)
+                                    .cornerRadius(12)
+                            }
+
+                            HStack {
+
+                                Image(systemName: "photo")
+                                    .foregroundColor(.blue)
+
+                                Text(selectedImageDataList[index].fileName)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+
+                                Spacer()
+                            }
+                        }
+                        .padding(.vertical, 8)
                     }
                     .onDelete {
                         selectedImageDataList.remove(atOffsets: $0)
                     }
 
-                    ForEach(selectedPDFUrls.indices, id: \.self) { index in
-                        Label(selectedPDFUrls[index].lastPathComponent, systemImage: "doc.richtext")
+                    ForEach(
+                        selectedPDFUrls.indices,
+                        id: \.self
+                    ) { index in
+
+                        Label(
+                            selectedPDFUrls[index]
+                                .lastPathComponent,
+                            systemImage: "doc.richtext"
+                        )
                     }
                     .onDelete {
-                        selectedPDFUrls.remove(atOffsets: $0)
+
+                        selectedPDFUrls.remove(
+                            atOffsets: $0
+                        )
                     }
                 }
             }
 
+            // MARK: - 投稿ボタン
+
             Section {
+
                 Button {
+
                     Task {
+
                         await submit()
                     }
+
                 } label: {
+
                     if isSubmitting {
-                        HStack {
+
+                        HStack(spacing: 12) {
+
                             ProgressView()
+                                .tint(.white)
+
                             Text("送信中...")
+                                .foregroundColor(.white)
+                                .fontWeight(.bold)
                         }
                         .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.blue)
+                        .cornerRadius(16)
+
                     } else {
-                        Text("送信する")
+
+                        Text("投稿")
+                            .font(.headline.bold())
+                            .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(
+                                isSubmitEnabled
+                                ? Color.blue
+                                : Color.gray.opacity(0.5)
+                            )
+                            .cornerRadius(16)
                     }
                 }
-                .disabled(
-                    isSubmitting ||
-                    title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                    messageBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                )
+                .buttonStyle(.plain)
+                .disabled(!isSubmitEnabled)
+                .listRowBackground(Color.clear)
             }
 
+            // MARK: - 投稿履歴
+
             Section {
+
                 NavigationLink {
+
                     MemberPostHistoryView()
                         .environmentObject(memberStore)
                         .environmentObject(organizationStore)
+
                 } label: {
-                    Label("投稿履歴を見る", systemImage: "clock.arrow.circlepath")
+
+                    Label(
+                        "投稿履歴を見る",
+                        systemImage: "clock.arrow.circlepath"
+                    )
                 }
             }
         }
         .navigationTitle("管理者へ投稿")
         .navigationBarTitleDisplayMode(.inline)
+
         .fileImporter(
             isPresented: $showPDFPicker,
             allowedContentTypes: [.pdf],
             allowsMultipleSelection: true
         ) { result in
+
             switch result {
+
             case .success(let urls):
+
                 selectedPDFUrls.append(contentsOf: urls)
+
             case .failure(let error):
+
                 errorMessage = error.localizedDescription
                 showErrorAlert = true
             }
         }
+
         .onChange(of: selectedPhotoItem) { _, newValue in
-            guard let newValue else { return }
+
+            guard let newValue else {
+                return
+            }
 
             Task {
+
                 do {
-                    guard let data = try await newValue.loadTransferable(type: Data.self) else {
+
+                    guard let data =
+                        try await newValue.loadTransferable(
+                            type: Data.self
+                        ) else {
+
                         return
                     }
 
                     selectedImageDataList.append(
                         (
-                            fileName: "image_\(UUID().uuidString).jpg",
+                            fileName:
+                                "image_\(UUID().uuidString).jpg",
                             data: data
                         )
                     )
@@ -170,54 +304,114 @@ struct MemberPostView: View {
                     selectedPhotoItem = nil
 
                 } catch {
-                    errorMessage = "画像の読み込みに失敗しました: \(error.localizedDescription)"
+
+                    errorMessage =
+                        "画像の読み込みに失敗しました: \(error.localizedDescription)"
+
                     showErrorAlert = true
                 }
             }
         }
-        .alert("送信しました", isPresented: $showCompleteAlert) {
+
+        .alert(
+            "送信しました",
+            isPresented: $showCompleteAlert
+        ) {
+
             Button("OK") {
+
                 dismiss()
             }
+
         } message: {
+
             Text("管理者へ投稿を送信しました。")
         }
-        .alert("エラー", isPresented: $showErrorAlert) {
+
+        .alert(
+            "エラー",
+            isPresented: $showErrorAlert
+        ) {
+
             Button("OK", role: .cancel) {}
+
         } message: {
+
             Text(errorMessage)
         }
     }
 
+    // MARK: - 投稿可能判定
+
+    private var isSubmitEnabled: Bool {
+
+        !isSubmitting
+        &&
+        !title
+            .trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+            .isEmpty
+        &&
+        !messageBody
+            .trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+            .isEmpty
+    }
+
+    // MARK: - 送信
+
     private func submit() async {
-        let organizationId = organizationStore.organizationId
-            .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        let memberUid = memberStore.authUid?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let organizationId =
+            organizationStore.organizationId
+                .trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                )
 
-        let memberName = memberStore.profile?.name
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let memberUid =
+            memberStore.authUid?
+                .trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                ) ?? ""
 
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedBody = messageBody.trimmingCharacters(in: .whitespacesAndNewlines)
+        let memberName =
+            memberStore.profile?.name
+                .trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                ) ?? ""
+
+        let trimmedTitle =
+            title.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+
+        let trimmedBody =
+            messageBody.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
 
         guard !organizationId.isEmpty else {
+
             showError("organizationId が取得できません。")
             return
         }
 
         guard !memberUid.isEmpty else {
+
             showError("会員UIDが取得できません。")
             return
         }
 
         guard !trimmedTitle.isEmpty else {
+
             showError("件名を入力してください。")
             return
         }
 
         guard !trimmedBody.isEmpty else {
+
             showError("内容を入力してください。")
             return
         }
@@ -225,6 +419,7 @@ struct MemberPostView: View {
         isSubmitting = true
 
         do {
+
             let postRef = db.collection("organizations")
                 .document(organizationId)
                 .collection("memberPosts")
@@ -232,39 +427,58 @@ struct MemberPostView: View {
 
             let postId = postRef.documentID
 
-            let uploadedAttachments = try await uploadAttachments(
-                organizationId: organizationId,
-                postId: postId
-            )
+            let uploadedAttachments =
+                try await uploadAttachments(
+                    organizationId: organizationId,
+                    postId: postId
+                )
 
             let data: [String: Any] = [
+
                 "memberUid": memberUid,
                 "memberName": memberName,
                 "title": trimmedTitle,
                 "body": trimmedBody,
-                "attachments": uploadedAttachments.map { $0.dictionary },
+
+                "attachments":
+                    uploadedAttachments.map {
+                        $0.dictionary
+                    },
+
                 "status": "new",
+
                 "memberHasReadReply": true,
+
                 "replyCount": 0,
-                "createdAt": FieldValue.serverTimestamp(),
-                "updatedAt": FieldValue.serverTimestamp()
+
+                "createdAt":
+                    FieldValue.serverTimestamp(),
+
+                "updatedAt":
+                    FieldValue.serverTimestamp()
             ]
 
             try await postRef.setData(data)
 
             title = ""
             messageBody = ""
+
             selectedImageDataList = []
             selectedPDFUrls = []
 
             showCompleteAlert = true
 
         } catch {
-            showError("送信に失敗しました: \(error.localizedDescription)")
+
+            showError(
+                "送信に失敗しました: \(error.localizedDescription)"
+            )
         }
 
         isSubmitting = false
     }
+
+    // MARK: - 添付アップロード
 
     private func uploadAttachments(
         organizationId: String,
@@ -274,13 +488,20 @@ struct MemberPostView: View {
         var results: [MemberPostAttachment] = []
 
         for image in selectedImageDataList {
-            let path = "organizations/\(organizationId)/memberPosts/\(postId)/\(image.fileName)"
+
+            let path =
+                "organizations/\(organizationId)/memberPosts/\(postId)/\(image.fileName)"
+
             let ref = storage.reference().child(path)
 
             let metadata = StorageMetadata()
             metadata.contentType = "image/jpeg"
 
-            _ = try await ref.putDataAsync(image.data, metadata: metadata)
+            _ = try await ref.putDataAsync(
+                image.data,
+                metadata: metadata
+            )
+
             let url = try await ref.downloadURL()
 
             results.append(
@@ -293,26 +514,38 @@ struct MemberPostView: View {
         }
 
         for pdfUrl in selectedPDFUrls {
-            let didAccess = pdfUrl.startAccessingSecurityScopedResource()
+
+            let didAccess =
+                pdfUrl.startAccessingSecurityScopedResource()
+
             defer {
+
                 if didAccess {
+
                     pdfUrl.stopAccessingSecurityScopedResource()
                 }
             }
 
-            let fileName = pdfUrl.lastPathComponent.isEmpty
+            let fileName =
+                pdfUrl.lastPathComponent.isEmpty
                 ? "file_\(UUID().uuidString).pdf"
                 : pdfUrl.lastPathComponent
 
             let data = try Data(contentsOf: pdfUrl)
 
-            let path = "organizations/\(organizationId)/memberPosts/\(postId)/\(fileName)"
+            let path =
+                "organizations/\(organizationId)/memberPosts/\(postId)/\(fileName)"
+
             let ref = storage.reference().child(path)
 
             let metadata = StorageMetadata()
             metadata.contentType = "application/pdf"
 
-            _ = try await ref.putDataAsync(data, metadata: metadata)
+            _ = try await ref.putDataAsync(
+                data,
+                metadata: metadata
+            )
+
             let url = try await ref.downloadURL()
 
             results.append(
@@ -327,9 +560,14 @@ struct MemberPostView: View {
         return results
     }
 
+    // MARK: - エラー表示
+
     private func showError(_ message: String) {
+
         errorMessage = message
+
         showErrorAlert = true
+
         isSubmitting = false
     }
 }

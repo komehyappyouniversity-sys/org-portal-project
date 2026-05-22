@@ -2,6 +2,8 @@ import SwiftUI
 
 struct AdminMemberPostDetailView: View {
     @EnvironmentObject private var organizationStore: AdminOrganizationStore
+    @Environment(\.openURL) private var openURL
+
     @ObservedObject var store: AdminMemberPostStore
 
     let item: AdminMemberPostItem
@@ -28,6 +30,7 @@ struct AdminMemberPostDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 postSection
+                attachmentSection
                 statusSection
                 repliesSection
                 replyInputSection
@@ -122,6 +125,94 @@ struct AdminMemberPostDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var attachmentSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("添付ファイル")
+                .font(.headline)
+
+            if currentItem.attachments.isEmpty {
+                Text("添付ファイルはありません")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+            } else {
+                ForEach(currentItem.attachments) { attachment in
+                    attachmentCard(attachment)
+                }
+            }
+        }
+    }
+
+    private func attachmentCard(_ attachment: AdminMemberPostAttachment) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if attachment.isImage,
+               let url = URL(string: attachment.url) {
+
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .empty:
+                        ProgressView("画像を読み込み中...")
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 180)
+
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity)
+                            .frame(maxHeight: 260)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                    case .failure:
+                        Text("画像を表示できませんでした")
+                            .font(.subheadline)
+                            .foregroundColor(.red)
+
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
+            }
+
+            HStack(spacing: 10) {
+                Image(systemName: attachment.isPDF ? "doc.richtext" : "photo")
+                    .foregroundColor(.blue)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(attachment.fileName)
+                        .font(.subheadline.bold())
+
+                    Text(attachment.isPDF ? "PDFファイル" : "画像ファイル")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+            }
+
+            if let url = URL(string: attachment.url) {
+                Button {
+                    openURL(url)
+                } label: {
+                    HStack {
+                        Image(systemName: "arrow.up.right.square")
+                        Text(attachment.isPDF ? "PDFを開く" : "画像を開く")
+                    }
+                    .font(.subheadline.bold())
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
     private var statusSection: some View {
@@ -307,7 +398,9 @@ struct AdminMemberPostDetailView: View {
             merged.replies = store.replies
             currentItem = merged
         } else {
-            currentItem = item
+            var merged = item
+            merged.replies = store.replies
+            currentItem = merged
         }
     }
 
@@ -340,16 +433,12 @@ struct AdminMemberPostDetailView: View {
         switch status {
         case "new":
             return "新着"
-
         case "in_progress":
             return "対応中"
-
         case "resolved":
             return "解決"
-
         case "closed":
             return "終了"
-
         default:
             return status
         }
@@ -359,16 +448,12 @@ struct AdminMemberPostDetailView: View {
         switch status {
         case "new":
             return .orange
-
         case "in_progress":
             return .blue
-
         case "resolved":
             return .green
-
         case "closed":
             return .secondary
-
         default:
             return .secondary
         }
@@ -378,16 +463,12 @@ struct AdminMemberPostDetailView: View {
         switch status {
         case "new":
             return Color.orange.opacity(0.15)
-
         case "in_progress":
             return Color.blue.opacity(0.15)
-
         case "resolved":
             return Color.green.opacity(0.15)
-
         case "closed":
             return Color.gray.opacity(0.15)
-
         default:
             return Color.gray.opacity(0.12)
         }

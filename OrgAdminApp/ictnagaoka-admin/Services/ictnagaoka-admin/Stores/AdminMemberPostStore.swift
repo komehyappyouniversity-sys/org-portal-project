@@ -2,12 +2,25 @@
 //  AdminMemberPostStore.swift
 //  ictnagaoka-admin
 //
-//  Created by OpenAI on 2026/04/20.
-//
 
 import Foundation
 import Combine
 import FirebaseFirestore
+
+struct AdminMemberPostAttachment: Identifiable, Equatable {
+    let id: String
+    let type: String
+    let fileName: String
+    let url: String
+
+    var isImage: Bool {
+        type == "image"
+    }
+
+    var isPDF: Bool {
+        type == "pdf"
+    }
+}
 
 struct AdminMemberPostReplyItem: Identifiable, Equatable {
     let id: String
@@ -36,6 +49,7 @@ struct AdminMemberPostItem: Identifiable, Equatable {
     var memberHasReadReply: Bool
     var replyCount: Int
 
+    var attachments: [AdminMemberPostAttachment] = []
     var replies: [AdminMemberPostReplyItem] = []
 
     var hasReply: Bool {
@@ -62,8 +76,6 @@ final class AdminMemberPostStore: ObservableObject {
         postsListener?.remove()
         repliesListener?.remove()
     }
-
-    // MARK: - 投稿一覧監視
 
     func startListeningPosts(organizationId: String) {
         let orgId = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -105,8 +117,6 @@ final class AdminMemberPostStore: ObservableObject {
                 }
             }
     }
-
-    // MARK: - 返信一覧監視
 
     func startListeningReplies(
         organizationId: String,
@@ -165,8 +175,6 @@ final class AdminMemberPostStore: ObservableObject {
         isRepliesLoading = false
     }
 
-    // MARK: - 返信送信（履歴保存）
-
     func sendReply(
         organizationId: String,
         postId: String,
@@ -224,11 +232,6 @@ final class AdminMemberPostStore: ObservableObject {
 
         do {
             try await batch.commit()
-
-            print("✅ 管理者返信保存成功")
-            print("postId:", trimmedPostId)
-            print("replyId:", replyRef.documentID)
-
         } catch {
             errorMessage = "返信の保存に失敗しました: \(error.localizedDescription)"
             isSendingReply = false
@@ -237,8 +240,6 @@ final class AdminMemberPostStore: ObservableObject {
 
         isSendingReply = false
     }
-
-    // MARK: - 状態変更
 
     func updateStatus(
         organizationId: String,
@@ -265,8 +266,6 @@ final class AdminMemberPostStore: ObservableObject {
         }
     }
 
-    // MARK: - ローカル反映
-
     private func reflectRepliesLocally(
         postId: String,
         replies: [AdminMemberPostReplyItem]
@@ -277,10 +276,27 @@ final class AdminMemberPostStore: ObservableObject {
         posts[index].replyCount = replies.count
     }
 
-    // MARK: - Firestore -> Model
-
     private func makePostItem(from document: DocumentSnapshot) -> AdminMemberPostItem {
         let data = document.data() ?? [:]
+
+        let rawAttachments = data["attachments"] as? [[String: Any]] ?? []
+
+        let attachments = rawAttachments.compactMap { raw -> AdminMemberPostAttachment? in
+            let type = raw["type"] as? String ?? ""
+            let fileName = raw["fileName"] as? String ?? ""
+            let url = raw["url"] as? String ?? ""
+
+            guard !url.isEmpty else {
+                return nil
+            }
+
+            return AdminMemberPostAttachment(
+                id: UUID().uuidString,
+                type: type,
+                fileName: fileName.isEmpty ? "添付ファイル" : fileName,
+                url: url
+            )
+        }
 
         return AdminMemberPostItem(
             id: document.documentID,
@@ -293,6 +309,7 @@ final class AdminMemberPostStore: ObservableObject {
             updatedAt: (data["updatedAt"] as? Timestamp)?.dateValue(),
             memberHasReadReply: data["memberHasReadReply"] as? Bool ?? true,
             replyCount: data["replyCount"] as? Int ?? 0,
+            attachments: attachments,
             replies: []
         )
     }
