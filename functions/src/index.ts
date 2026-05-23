@@ -619,18 +619,63 @@ export const onMessageCreated = functions
         },
       });
 
+      const deleteInvalidTokenPromises: Promise<FirebaseFirestore.WriteResult>[] = [];
+
       result.responses.forEach((response, index) => {
-        if (!response.success) {
-          console.error("FCM send failure", {
+        if (response.success) {
+          return;
+        }
+
+        const uid = tokenOwners[index];
+        const token = tokens[index];
+        const errorCode = response.error?.code || "";
+        const errorMessage = response.error?.message || "";
+
+        console.error("FCM send failure", {
+          organizationId,
+          messageId,
+          uid,
+          tokenPrefix: token?.slice(0, 16),
+          code: errorCode,
+          message: errorMessage,
+        });
+
+        if (
+          errorCode === "messaging/registration-token-not-registered" ||
+          errorCode === "messaging/invalid-registration-token"
+        ) {
+          const memberRef = db
+            .collection("organizations")
+            .doc(organizationId)
+            .collection("members")
+            .doc(uid);
+
+          deleteInvalidTokenPromises.push(
+            memberRef.update({
+              fcmToken: admin.firestore.FieldValue.delete(),
+              fcmTokenUpdatedAt: admin.firestore.FieldValue.delete(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            })
+          );
+
+          console.log("Invalid fcmToken delete scheduled", {
             organizationId,
             messageId,
-            uid: tokenOwners[index],
-            tokenPrefix: tokens[index]?.slice(0, 16),
-            code: response.error?.code,
-            message: response.error?.message,
+            uid,
+            code: errorCode,
           });
         }
       });
+
+      if (deleteInvalidTokenPromises.length > 0) {
+        await Promise.all(deleteInvalidTokenPromises);
+
+        console.log("Invalid fcmToken deleted", {
+          organizationId,
+          messageId,
+          deletedCount: deleteInvalidTokenPromises.length,
+        });
+      }
 
       console.log("onMessageCreated result", {
         organizationId,
