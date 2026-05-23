@@ -529,93 +529,123 @@ export const onMessageCreated = functions
   .firestore
   .document("organizations/{organizationId}/messages/{messageId}")
   .onCreate(async (snap, context) => {
-    const organizationId = context.params.organizationId;
-    const messageId = context.params.messageId;
-    const message = snap.data();
+    try {
+      const organizationId = context.params.organizationId;
+      const messageId = context.params.messageId;
+      const message = snap.data();
 
-    const title = message.title || "新しいお知らせ";
-    const body = message.body || "";
+      const title = String(message.title || "新しいお知らせ");
+      const body = String(message.body || "");
 
-    const targetMemberUids: string[] = Array.isArray(message.targetMemberUids)
-      ? message.targetMemberUids
-      : [];
+      const targetMemberUids: string[] = Array.isArray(message.targetMemberUids)
+        ? message.targetMemberUids
+        : [];
 
-    const categoryTargets: string[] = Array.isArray(message.categoryTargets)
-      ? message.categoryTargets
-      : [];
+      const categoryTargets: string[] = Array.isArray(message.categoryTargets)
+        ? message.categoryTargets
+        : [];
 
-    const membersSnap = await db
-      .collection("organizations")
-      .doc(organizationId)
-      .collection("members")
-      .where("status", "==", "approved")
-      .get();
+      const membersSnap = await db
+        .collection("organizations")
+        .doc(organizationId)
+        .collection("members")
+        .where("status", "in", ["approved", "active"])
+        .get();
 
-    const tokens: string[] = [];
+      const tokens: string[] = [];
+      const tokenOwners: string[] = [];
 
-    membersSnap.docs.forEach((doc) => {
-      const member = doc.data();
-      const uid = doc.id;
+      membersSnap.docs.forEach((doc) => {
+        const member = doc.data();
+        const uid = doc.id;
 
-      if (targetMemberUids.length > 0 && !targetMemberUids.includes(uid)) {
+        if (targetMemberUids.length > 0 && !targetMemberUids.includes(uid)) {
+          return;
+        }
+
+        if (categoryTargets.length > 0) {
+          const memberCategories: string[] = Array.isArray(member.categoryIds)
+            ? member.categoryIds
+            : [];
+
+          const matched = memberCategories.some((categoryId) =>
+            categoryTargets.includes(categoryId)
+          );
+
+          if (!matched) {
+            return;
+          }
+        }
+
+        if (member.fcmToken) {
+          tokens.push(String(member.fcmToken));
+          tokenOwners.push(uid);
+        }
+      });
+
+      if (tokens.length === 0) {
+        console.log("No FCM tokens", {
+          organizationId,
+          messageId,
+        });
         return;
       }
 
-      if (categoryTargets.length > 0) {
-        const memberCategories: string[] = Array.isArray(member.categoryIds)
-          ? member.categoryIds
-          : [];
-
-        const matched = memberCategories.some((categoryId) =>
-          categoryTargets.includes(categoryId)
-        );
-
-        if (!matched) {
-          return;
-        }
-      }
-
-      if (member.fcmToken) {
-        tokens.push(member.fcmToken);
-      }
-    });
-
-    if (tokens.length === 0) {
-      console.log("No FCM tokens", {
-        organizationId,
-        messageId,
-      });
-      return;
-    }
-
-    const result = await admin.messaging().sendEachForMulticast({
-      tokens,
-      notification: {
-        title,
-        body,
-      },
-      data: {
-        organizationId,
-        messageId,
-        type: "message",
-      },
-      apns: {
-        payload: {
-          aps: {
-            sound: "default",
-            badge: 1,
+      const result = await admin.messaging().sendEachForMulticast({
+        tokens,
+        notification: {
+          title,
+          body,
+        },
+        data: {
+          organizationId,
+          messageId,
+          type: "message",
+        },
+        apns: {
+          headers: {
+            "apns-priority": "10",
+          },
+          payload: {
+            aps: {
+              alert: {
+                title,
+                body,
+              },
+              sound: "default",
+              badge: 1,
+            },
           },
         },
-      },
-    });
+      });
 
-    console.log("onMessageCreated result", {
-      organizationId,
-      messageId,
-      targetCount: tokens.length,
-      successCount: result.successCount,
-      failureCount: result.failureCount,
-    });
+      result.responses.forEach((response, index) => {
+        if (!response.success) {
+          console.error("FCM send failure", {
+            organizationId,
+            messageId,
+            uid: tokenOwners[index],
+            tokenPrefix: tokens[index]?.slice(0, 16),
+            code: response.error?.code,
+            message: response.error?.message,
+          });
+        }
+      });
+
+      console.log("onMessageCreated result", {
+        organizationId,
+        messageId,
+        targetCount: tokens.length,
+        successCount: result.successCount,
+        failureCount: result.failureCount,
+      });
+    } catch (error: any) {
+      console.error("onMessageCreated error", {
+        message: error?.message,
+        code: error?.code,
+        stack: error?.stack,
+      });
+    }
   });
 
 // MARK: - 未読者への手動/時間指定リマインド
@@ -665,6 +695,9 @@ export const sendUnreadReminderHttp = functions
       }
 
       const message = messageDoc.data() || {};
+      const title = "未読のお知らせがあります";
+      const body = String(message.title || "お知らせをご確認ください");
+
       const isReadBy: string[] = Array.isArray(message.isReadBy)
         ? message.isReadBy
         : [];
@@ -681,7 +714,7 @@ export const sendUnreadReminderHttp = functions
         .collection("organizations")
         .doc(organizationId)
         .collection("members")
-        .where("status", "==", "approved")
+        .where("status", "in", ["approved", "active"])
         .get();
 
       const tokens: string[] = [];
@@ -714,7 +747,7 @@ export const sendUnreadReminderHttp = functions
         }
 
         if (member.fcmToken) {
-          tokens.push(member.fcmToken);
+          tokens.push(String(member.fcmToken));
           unreadUids.push(memberUid);
         }
       });
@@ -731,8 +764,8 @@ export const sendUnreadReminderHttp = functions
       const result = await admin.messaging().sendEachForMulticast({
         tokens,
         notification: {
-          title: "未読のお知らせがあります",
-          body: message.title || "お知らせをご確認ください",
+          title,
+          body,
         },
         data: {
           organizationId,
@@ -740,13 +773,33 @@ export const sendUnreadReminderHttp = functions
           type: "unreadReminder",
         },
         apns: {
+          headers: {
+            "apns-priority": "10",
+          },
           payload: {
             aps: {
+              alert: {
+                title,
+                body,
+              },
               sound: "default",
               badge: 1,
             },
           },
         },
+      });
+
+      result.responses.forEach((response, index) => {
+        if (!response.success) {
+          console.error("Unread reminder FCM failure", {
+            organizationId,
+            messageId,
+            uid: unreadUids[index],
+            tokenPrefix: tokens[index]?.slice(0, 16),
+            code: response.error?.code,
+            message: response.error?.message,
+          });
+        }
       });
 
       await messageDoc.ref.set({
@@ -781,8 +834,8 @@ export const onOrganizationCreated = functions
   .onCreate(async (snap, context) => {
     const organizationId = context.params.organizationId;
     const organization = snap.data() || {};
-　　　const createdByUid = String(organization.createdByUid || "").trim();
-　　　const createdByEmail = String(organization.createdByEmail || "").trim();
+    const createdByUid = String(organization.createdByUid || "").trim();
+    const createdByEmail = String(organization.createdByEmail || "").trim();
 
     console.log("onOrganizationCreated start", {
       organizationId,
@@ -841,25 +894,22 @@ export const onOrganizationCreated = functions
       }, { merge: true });
 
     if (createdByUid) {
-  　　await organizationRef
-    .collection("admins")
-    .doc(createdByUid)
-    .set({
-      uid: createdByUid,
-      email: createdByEmail,
-      name: createdByEmail,
+      await organizationRef
+        .collection("admins")
+        .doc(createdByUid)
+        .set({
+          uid: createdByUid,
+          email: createdByEmail,
+          name: createdByEmail,
+          role: "owner",
+          isActive: true,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+    }
 
-      role: "owner",
-      isActive: true,
-
-      createdAt:
-        admin.firestore.FieldValue.serverTimestamp(),
-
-      updatedAt:
-        admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
-　　}
-      console.log("onOrganizationCreated completed", {
+    console.log("onOrganizationCreated completed", {
       organizationId,
     });
   });
+  
