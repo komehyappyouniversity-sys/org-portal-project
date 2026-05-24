@@ -1,0 +1,174 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/superAdmins/$(request.auth.uid)).data.isActive == true;
+    }
+
+    function isAdmin(organizationId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/organizations/$(organizationId)/admins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/organizations/$(organizationId)/admins/$(request.auth.uid)).data.isActive == true;
+    }
+
+    function isOrgStaff(organizationId) {
+      return isAdmin(organizationId) || isSuperAdmin();
+    }
+
+    function isOrgActive(organizationId) {
+      return exists(/databases/$(database)/documents/organizations/$(organizationId))
+        && get(/databases/$(database)/documents/organizations/$(organizationId)).data.isActive == true;
+    }
+
+    match /superAdmins/{uid} {
+      allow read, create, update, delete: if isSuperAdmin();
+    }
+
+    match /organizations/{organizationId} {
+
+      allow read: if true;
+      allow create, update: if isSuperAdmin();
+      allow delete: if false;
+
+      match /admins/{adminUid} {
+        allow read: if isOrgStaff(organizationId);
+        allow create, update, delete: if isSuperAdmin();
+      }
+
+      match /members/{memberUid} {
+        allow read: if isOrgStaff(organizationId) || isOwner(memberUid);
+
+        allow create: if isOwner(memberUid)
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.status in ["pending", "approved"];
+
+        allow update: if isOrgStaff(organizationId)
+          || (
+            isOwner(memberUid)
+            && request.resource.data.uid == resource.data.uid
+            && request.resource.data.status == resource.data.status
+          );
+
+        allow delete: if isOrgStaff(organizationId);
+      }
+
+      match /memberRegistrations/{memberUid} {
+        allow read: if isOrgStaff(organizationId) || isOwner(memberUid);
+
+        allow create, update: if isOwner(memberUid)
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.organizationId == organizationId
+          && request.resource.data.status == "pending";
+
+        allow delete: if isOrgStaff(organizationId);
+      }
+
+      match /memberRequests/{requestId} {
+        allow read: if isOrgStaff(organizationId);
+
+        allow create: if isSignedIn()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.status == "pending";
+
+        allow update, delete: if isOrgStaff(organizationId);
+      }
+
+      match /memberPosts/{postId} {
+        allow read: if isOrgStaff(organizationId)
+          || (isSignedIn() && resource.data.memberUid == request.auth.uid);
+
+        allow create: if isSignedIn()
+          && request.resource.data.memberUid == request.auth.uid;
+
+        allow update, delete: if isOrgStaff(organizationId)
+          || (isSignedIn() && resource.data.memberUid == request.auth.uid);
+
+        match /replies/{replyId} {
+          allow read: if isOrgStaff(organizationId)
+            || (
+              isSignedIn()
+              && exists(/databases/$(database)/documents/organizations/$(organizationId)/memberPosts/$(postId))
+              && get(/databases/$(database)/documents/organizations/$(organizationId)/memberPosts/$(postId)).data.memberUid == request.auth.uid
+            );
+
+          allow create, update, delete: if isOrgStaff(organizationId);
+        }
+      }
+
+      match /messages/{messageId} {
+        allow read: if isOrgActive(organizationId);
+        allow create, delete: if isOrgStaff(organizationId);
+
+        allow update: if isOrgStaff(organizationId)
+          || (
+            isSignedIn()
+            && isOrgActive(organizationId)
+            && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+              "isReadBy",
+              "updatedAt"
+            ])
+          );
+      }
+
+      match /categories/{categoryId} {
+        allow read: if isSignedIn() && isOrgActive(organizationId);
+        allow create, update, delete: if isOrgStaff(organizationId);
+      }
+
+      match /videos/{videoId} {
+        allow read: if isSignedIn() && isOrgActive(organizationId);
+        allow create, update, delete: if isOrgStaff(organizationId);
+      }
+
+      match /bookingEvents/{eventId} {
+        allow read: if isSignedIn() && isOrgActive(organizationId);
+        allow create, update, delete: if isOrgStaff(organizationId);
+
+        match /slots/{slotId} {
+          allow read: if isSignedIn() && isOrgActive(organizationId);
+          allow create, update, delete: if isOrgStaff(organizationId);
+        }
+
+        match /reservations/{reservationId} {
+          allow read: if isOrgStaff(organizationId)
+            || (isSignedIn() && resource.data.uid == request.auth.uid);
+
+          allow create: if isSignedIn()
+            && request.resource.data.uid == request.auth.uid;
+
+          allow update, delete: if isOrgStaff(organizationId)
+            || (isSignedIn() && resource.data.uid == request.auth.uid);
+        }
+      }
+
+      match /settings/{document} {
+        allow read: if isSignedIn() && isOrgActive(organizationId);
+        allow write: if isOrgStaff(organizationId);
+      }
+
+      match /private/{document=**} {
+        allow read, write: if isOrgStaff(organizationId);
+      }
+
+      match /{document=**} {
+        allow read, write: if isOrgStaff(organizationId);
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
