@@ -6,6 +6,10 @@ struct MemberHomeView: View {
     @EnvironmentObject private var securityStore: MemberSecurityStore
     @EnvironmentObject private var featureStore: MemberFeatureStore
 
+    private var isLoggedIn: Bool {
+        memberStore.authUid != nil
+    }
+
     private var isAlreadyRegistered: Bool {
         memberStore.profile?.isApproved == true
     }
@@ -83,46 +87,34 @@ struct MemberHomeView: View {
                         }
 
                         if isAlreadyRegistered {
-
-                            if isAlreadyRegistered {
-
-                                NavigationLink {
-                                    MemberAreaGateView()
-                                        .environmentObject(memberStore)
-                                        .environmentObject(organizationStore)
-                                        .environmentObject(securityStore)
-                                        .environmentObject(featureStore)
-
-                                } label: {
-
-                                    menuButton(
-                                        title: "会員ページ",
-                                        subtitle: "Face IDで認証して会員メニューを開きます",
-                                        systemImage: "faceid",
-                                        color: .blue
-                                    )
-                                }
-
-                            } else {
-
-                                NavigationLink {
-                                    MemberRegistrationView()
-                                        .environmentObject(memberStore)
-                                        .environmentObject(organizationStore)
-                                        .environmentObject(securityStore)
-
-                                } label: {
-
-                                    menuButton(
-                                        title: "会員登録",
-                                        subtitle: "新規会員申請はこちら",
-                                        systemImage: "person.badge.plus",
-                                        color: .green
-                                    )
-                                }
+                            NavigationLink {
+                                MemberAreaGateView()
+                                    .environmentObject(memberStore)
+                                    .environmentObject(organizationStore)
+                                    .environmentObject(securityStore)
+                                    .environmentObject(featureStore)
+                            } label: {
+                                menuButton(
+                                    title: "会員ページ",
+                                    subtitle: "Face IDで認証して会員メニューを開きます",
+                                    systemImage: "faceid",
+                                    color: .blue
+                                )
                             }
 
                         } else {
+                            NavigationLink {
+                                MemberLoginView()
+                                    .environmentObject(memberStore)
+                                    .environmentObject(organizationStore)
+                            } label: {
+                                menuButton(
+                                    title: "登録済み会員ログイン",
+                                    subtitle: "登録済みの方はこちら",
+                                    systemImage: "person.crop.circle.badge.checkmark",
+                                    color: .blue
+                                )
+                            }
 
                             NavigationLink {
                                 MemberRegistrationView()
@@ -137,8 +129,6 @@ struct MemberHomeView: View {
                                     color: .green
                                 )
                             }
-
-                        
                         }
                     }
 
@@ -162,7 +152,6 @@ struct MemberHomeView: View {
 
     private var headerSection: some View {
         VStack(spacing: 12) {
-
             Text(organizationTitle)
                 .font(.largeTitle.bold())
                 .multilineTextAlignment(.center)
@@ -188,9 +177,7 @@ struct MemberHomeView: View {
         color: Color,
         showsChevron: Bool = true
     ) -> some View {
-
         HStack(spacing: 16) {
-
             Image(systemName: systemImage)
                 .font(.title2)
                 .foregroundColor(.white)
@@ -199,7 +186,6 @@ struct MemberHomeView: View {
                 .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 6) {
-
                 Text(title)
                     .font(.headline)
                     .foregroundColor(.primary)

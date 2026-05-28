@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		894C8B312FB7DF330035607A /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 894C8B302FB7DF330035607A /* GoogleService-Info.plist */; };
 		894C8B432FB81DF40035607A /* MemberQRCodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 894C8B422FB81DF40035607A /* MemberQRCodeScannerView.swift */; };
 		894C8B452FB81E780035607A /* MemberQRScannerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 894C8B442FB81E780035607A /* MemberQRScannerSheet.swift */; };
 		895DBF002FB592A1008B23B8 /* MemberAppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 895DBEFF2FB592A1008B23B8 /* MemberAppRootView.swift */; };
@@ -19,6 +18,8 @@
 		896E0D722F9C6E4B0077F3B9 /* MemberLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896E0D712F9C6E4B0077F3B9 /* MemberLoginView.swift */; };
 		89900DA82FAAFA8C008CC3E6 /* MemberVideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89900DA72FAAFA8C008CC3E6 /* MemberVideoPlayerView.swift */; };
 		89900DAA2FAAFC43008CC3E6 /* VideoPurchaseStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89900DA92FAAFC43008CC3E6 /* VideoPurchaseStore.swift */; };
+		89933DAE2FC1CC1F007B16AC /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 89933DAD2FC1CC1F007B16AC /* GoogleService-Info.plist */; };
+		89933DB02FC32078007B16AC /* MemberRegistrationSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89933DAF2FC32078007B16AC /* MemberRegistrationSettingsStore.swift */; };
 		899632132FA8A2B0002FA8BC /* PushNavigationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 899632122FA8A2B0002FA8BC /* PushNavigationStore.swift */; };
 		899F3D8A2F996AE100713584 /* MemberMessageItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 899F3D892F996AE100713584 /* MemberMessageItem.swift */; };
 		89A3A90A2FB1AA600026FC39 /* MemberFeatureSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89A3A9092FB1AA600026FC39 /* MemberFeatureSettings.swift */; };
@@ -78,7 +79,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		894C8B302FB7DF330035607A /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		894C8B422FB81DF40035607A /* MemberQRCodeScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberQRCodeScannerView.swift; sourceTree = "<group>"; };
 		894C8B442FB81E780035607A /* MemberQRScannerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberQRScannerSheet.swift; sourceTree = "<group>"; };
 		895DBEFF2FB592A1008B23B8 /* MemberAppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberAppRootView.swift; sourceTree = "<group>"; };
@@ -90,6 +90,8 @@
 		896E0D712F9C6E4B0077F3B9 /* MemberLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberLoginView.swift; sourceTree = "<group>"; };
 		89900DA72FAAFA8C008CC3E6 /* MemberVideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberVideoPlayerView.swift; sourceTree = "<group>"; };
 		89900DA92FAAFC43008CC3E6 /* VideoPurchaseStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPurchaseStore.swift; sourceTree = "<group>"; };
+		89933DAD2FC1CC1F007B16AC /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		89933DAF2FC32078007B16AC /* MemberRegistrationSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberRegistrationSettingsStore.swift; sourceTree = "<group>"; };
 		899632122FA8A2B0002FA8BC /* PushNavigationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNavigationStore.swift; sourceTree = "<group>"; };
 		899F3D892F996AE100713584 /* MemberMessageItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberMessageItem.swift; sourceTree = "<group>"; };
 		89A3A9092FB1AA600026FC39 /* MemberFeatureSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberFeatureSettings.swift; sourceTree = "<group>"; };
@@ -173,8 +175,8 @@
 		89C1971C2F8B13AF00610C65 = {
 			isa = PBXGroup;
 			children = (
+				89933DAD2FC1CC1F007B16AC /* GoogleService-Info.plist */,
 				89C1995E2F9303A200610C65 /* blog-k100-Info.plist */,
-				894C8B302FB7DF330035607A /* GoogleService-Info.plist */,
 				89C1995D2F93038100610C65 /* blog.k100Release.entitlements */,
 				89C4784C2FADEFC600C6D726 /* firebase.json */,
 				89C4784A2FADE7BA00C6D726 /* firestore.rules */,
@@ -242,6 +244,7 @@
 				89C478412FACDEAE00C6D726 /* MemberBookingSlotStore.swift */,
 				89A3A90B2FB1AAD60026FC39 /* MemberFeatureStore.swift */,
 				89A3A90D2FB1D1A60026FC39 /* MemberVideoWatchLogStore.swift */,
+				89933DAF2FC32078007B16AC /* MemberRegistrationSettingsStore.swift */,
 			);
 			path = Stores;
 			sourceTree = "<group>";
@@ -429,7 +432,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				89C4784B2FADE7BA00C6D726 /* firestore.rules in Resources */,
-				894C8B312FB7DF330035607A /* GoogleService-Info.plist in Resources */,
+				89933DAE2FC1CC1F007B16AC /* GoogleService-Info.plist in Resources */,
 				89C1973D2F8B61EB00610C65 /* Assets.xcassets in Resources */,
 				89C4784D2FADEFC600C6D726 /* firebase.json in Resources */,
 			);
@@ -496,6 +499,7 @@
 				89C199642F93C38000610C65 /* AnnouncementService.swift in Sources */,
 				89C198652F8DA54900610C65 /* OrganizationStore.swift in Sources */,
 				89C199762F980AA400610C65 /* SafariView.swift in Sources */,
+				89933DB02FC32078007B16AC /* MemberRegistrationSettingsStore.swift in Sources */,
 				89C198A22F8EF3CF00610C65 /* MemberService.swift in Sources */,
 				89C198672F8DA57E00610C65 /* MemberStore.swift in Sources */,
 				89C1996C2F94ECA700610C65 /* MemberAnnouncementStore.swift in Sources */,
@@ -637,7 +641,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = blog.k100Release.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = D76B4Y2RXA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -680,7 +684,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = blog.k100Release.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = D76B4Y2RXA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;

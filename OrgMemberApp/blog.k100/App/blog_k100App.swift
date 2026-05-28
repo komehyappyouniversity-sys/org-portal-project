@@ -14,6 +14,8 @@ struct blog_k100App: App {
         print("✅ Firebase configured for member app")
     }
 
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    
     var body: some Scene {
         WindowGroup {
             MemberAppRootView()

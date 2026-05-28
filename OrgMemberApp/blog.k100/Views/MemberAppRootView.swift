@@ -102,6 +102,8 @@ struct MemberAppRootView: View {
             organizationId: savedOrganizationId
         )
 
+        memberStore.setOrganizationId(savedOrganizationId)
+
         featureStore.startListening(
             organizationId: savedOrganizationId
         )
@@ -119,6 +121,8 @@ struct MemberAppRootView: View {
             safeOrganizationId,
             forKey: selectedOrganizationIdKey
         )
+        
+        memberStore.setOrganizationId(safeOrganizationId)
 
         featureStore.startListening(
             organizationId: safeOrganizationId

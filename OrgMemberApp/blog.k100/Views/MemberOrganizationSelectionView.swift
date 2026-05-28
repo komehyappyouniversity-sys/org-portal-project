@@ -42,25 +42,29 @@ struct MemberOrganizationSelectionView: View {
                         .padding(.horizontal, 24)
                 }
 
-                TextField("", text: $organizationCode)
-                    .tint(.blue)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .focused($isCodeFieldFocused)
-                    .padding()
-                    .background(Color.white)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(
-                                isCodeFieldFocused ? Color.blue : Color.gray.opacity(0.3),
-                                lineWidth: isCodeFieldFocused ? 2 : 1
-                            )
-                    )
-                    .cornerRadius(12)
-                    .onTapGesture {
-                        isCodeFieldFocused = true
-                    }
-                    .padding(.horizontal, 24)
+                TextField(
+                    "コミュニティコード",
+                    text: $organizationCode
+                )
+                .foregroundColor(.black)
+                .tint(.blue)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .focused($isCodeFieldFocused)
+                .padding()
+                .background(Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(
+                            isCodeFieldFocused ? Color.blue : Color.gray.opacity(0.3),
+                            lineWidth: isCodeFieldFocused ? 2 : 1
+                        )
+                )
+                .cornerRadius(12)
+                .onTapGesture {
+                    isCodeFieldFocused = true
+                }
+                .padding(.horizontal, 24)
 
                 Button {
                     showQRScanner = true

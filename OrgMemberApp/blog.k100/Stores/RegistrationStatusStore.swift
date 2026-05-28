@@ -2,8 +2,6 @@
 //  RegistrationStatusStore.swift
 //  blog.k100
 //
-//  Created by 根津浩 on 2026/04/13.
-//
 
 import Foundation
 import Combine
@@ -26,6 +24,8 @@ final class RegistrationStatusStore: ObservableObject {
     @Published var state: RegistrationState = .checking
     @Published var currentUID: String = ""
 
+    private var currentOrganizationId: String = ""
+
     private var registrationListener: ListenerRegistration?
     private var memberListener: ListenerRegistration?
 
@@ -34,9 +34,31 @@ final class RegistrationStatusStore: ObservableObject {
         memberListener?.remove()
     }
 
+    func setOrganizationId(_ organizationId: String) {
+        let trimmed = organizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmed.isEmpty else {
+            return
+        }
+
+        if currentOrganizationId == trimmed {
+            return
+        }
+
+        currentOrganizationId = trimmed
+        start()
+    }
+
     func start() {
         registrationListener?.remove()
         memberListener?.remove()
+
+        guard !currentOrganizationId.isEmpty else {
+            currentUID = ""
+            state = .error("コミュニティ情報が取得できません。")
+            return
+        }
 
         guard let uid = Auth.auth().currentUser?.uid, !uid.isEmpty else {
             currentUID = ""
@@ -45,21 +67,27 @@ final class RegistrationStatusStore: ObservableObject {
         }
 
         currentUID = uid
-        watchRegistration(uid: uid)
-        watchMember(uid: uid)
+        state = .checking
+
+        watchRegistration(uid: uid, organizationId: currentOrganizationId)
+        watchMember(uid: uid, organizationId: currentOrganizationId)
     }
 
     func refresh() {
         start()
     }
 
-    private func watchRegistration(uid: String) {
+    private func watchRegistration(
+        uid: String,
+        organizationId: String
+    ) {
         let db = Firestore.firestore()
 
         registrationListener?.remove()
+
         registrationListener = db
             .collection("organizations")
-            .document("nagaoka")
+            .document(organizationId)
             .collection("memberRegistrations")
             .document(uid)
             .addSnapshotListener { [weak self] snapshot, error in
@@ -70,12 +98,7 @@ final class RegistrationStatusStore: ObservableObject {
                     return
                 }
 
-                guard let snapshot else {
-                    self.state = .notRegistered
-                    return
-                }
-
-                guard snapshot.exists else {
+                guard let snapshot, snapshot.exists else {
                     self.state = .notRegistered
                     return
                 }
@@ -96,13 +119,17 @@ final class RegistrationStatusStore: ObservableObject {
             }
     }
 
-    private func watchMember(uid: String) {
+    private func watchMember(
+        uid: String,
+        organizationId: String
+    ) {
         let db = Firestore.firestore()
 
         memberListener?.remove()
+
         memberListener = db
             .collection("organizations")
-            .document("nagaoka")
+            .document(organizationId)
             .collection("members")
             .document(uid)
             .addSnapshotListener { [weak self] snapshot, error in

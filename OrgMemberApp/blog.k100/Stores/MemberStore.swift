@@ -1,3 +1,4 @@
+import FirebaseMessaging
 import Foundation
 import Combine
 import FirebaseAuth
@@ -155,6 +156,35 @@ final class MemberStore: ObservableObject {
                 }
 
                 print("✅ member 読み込み:", name, status)
+                let savedFcmToken = data["fcmToken"] as? String ?? ""
+
+                Messaging.messaging().token { token, error in
+                    if let error {
+                        print("❌ MemberStore FCM token取得失敗:", error.localizedDescription)
+                        return
+                    }
+
+                    guard let token, !token.isEmpty else {
+                        print("❌ MemberStore FCM token nil")
+                        return
+                    }
+
+                    if savedFcmToken == token {
+                        print("ℹ️ FCM token 変更なし")
+                        return
+                    }
+
+                    ref.setData([
+                        "fcmToken": token,
+                        "fcmTokenUpdatedAt": FieldValue.serverTimestamp()
+                    ], merge: true) { error in
+                        if let error {
+                            print("❌ MemberStore FCM token保存失敗:", error.localizedDescription)
+                        } else {
+                            print("✅ MemberStore FCM token保存成功:", ref.path)
+                        }
+                    }
+                }
 
                 self.profile = MemberProfile(
                     id: uid,
