@@ -103,7 +103,7 @@ struct MemberPostView: View {
                 ) {
 
                     Label(
-                        "画像を添付",
+                        selectedImageDataList.isEmpty ? "画像を添付" : "画像を変更",
                         systemImage: "photo"
                     )
                 }
@@ -293,13 +293,12 @@ struct MemberPostView: View {
                         return
                     }
 
-                    selectedImageDataList.append(
+                    selectedImageDataList = [
                         (
-                            fileName:
-                                "image_\(UUID().uuidString).jpg",
+                            fileName: "image_\(UUID().uuidString).jpg",
                             data: data
                         )
-                    )
+                    ]
 
                     selectedPhotoItem = nil
 

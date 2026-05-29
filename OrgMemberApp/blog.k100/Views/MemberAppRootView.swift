@@ -58,6 +58,13 @@ struct MemberAppRootView: View {
                             securityStore.authenticateIfNeededOnFirstEntry()
                         }
 
+                } else if memberStore.profile?.isApproved == true {
+                    MemberPageView()
+                        .environmentObject(memberStore)
+                        .environmentObject(organizationStore)
+                        .environmentObject(securityStore)
+                        .environmentObject(featureStore)
+
                 } else {
                     MemberHomeView()
                         .environmentObject(memberStore)

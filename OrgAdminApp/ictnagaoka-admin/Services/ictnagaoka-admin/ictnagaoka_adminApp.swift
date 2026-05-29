@@ -4,6 +4,8 @@ import FirebaseCore
 @main
 struct ictnagaoka_adminApp: App {
 
+    @UIApplicationDelegateAdaptor(AdminAppDelegate.self) var appDelegate
+
     @StateObject private var organizationStore = AdminOrganizationStore()
     @StateObject private var authStore = AdminAuthStore()
     @StateObject private var featureStore = AdminFeatureStore()

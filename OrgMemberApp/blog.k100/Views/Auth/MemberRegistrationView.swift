@@ -15,7 +15,8 @@ struct MemberRegistrationView: View {
     @State private var email = ""
     @State private var phone = ""
     @State private var password = ""
-
+    @State private var confirmPassword = ""
+    
     @State private var selectedYear = Calendar.current.component(.year, from: Date()) - 60
     @State private var selectedMonth = 1
     @State private var selectedDay = 1
@@ -34,6 +35,7 @@ struct MemberRegistrationView: View {
         case email
         case phone
         case password
+        case confirmPassword
     }
 
     private var currentYear: Int {
@@ -213,6 +215,18 @@ struct MemberRegistrationView: View {
                 .textFieldStyle(.roundedBorder)
                 .focused($focusedField, equals: .password)
                 .tint(.blue)
+            fieldTitle("パスワード確認")
+
+            SecureField("", text: $confirmPassword)
+                .placeholder(when: confirmPassword.isEmpty) {
+                    Text("もう一度入力してください").foregroundColor(.gray)
+                }
+                .textContentType(.newPassword)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .textFieldStyle(.roundedBorder)
+                .focused($focusedField, equals: .confirmPassword)
+                .tint(.blue)
         }
     }
 
@@ -291,6 +305,9 @@ struct MemberRegistrationView: View {
         let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedPhone = phone.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedPassword = password.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        let trimmedConfirmPassword = confirmPassword.trimmingCharacters(in: .whitespacesAndNewlines)
+        
         let organizationId = resolvedOrganizationId()
 
         guard !trimmedName.isEmpty else {
@@ -323,6 +340,11 @@ struct MemberRegistrationView: View {
             return
         }
 
+        guard trimmedPassword == trimmedConfirmPassword else {
+            errorMessage = "パスワードが一致していません。もう一度確認してください。"
+            return
+        }
+        
         guard !organizationId.isEmpty else {
             errorMessage = "コミュニティ情報が取得できません。"
             return

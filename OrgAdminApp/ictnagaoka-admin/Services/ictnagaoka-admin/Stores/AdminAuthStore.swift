@@ -136,6 +136,8 @@ final class AdminAuthStore: NSObject, ObservableObject {
                     organizationId: orgId
                 )
 
+                refreshFCMTokenIfNeeded()
+
                 return
             }
 
@@ -327,13 +329,21 @@ final class AdminAuthStore: NSObject, ObservableObject {
     }
 
     func refreshFCMTokenIfNeeded() {
+        print("🔔 管理者FCM再取得開始")
+        print("🔔 organizationId:", organizationId)
+
         Messaging.messaging().token { [weak self] token, error in
             if let error {
-                print("管理者FCMトークン取得失敗:", error.localizedDescription)
+                print("❌ 管理者FCMトークン取得失敗:", error.localizedDescription)
                 return
             }
 
-            guard let token else { return }
+            guard let token, !token.isEmpty else {
+                print("❌ 管理者FCMトークン nil または空")
+                return
+            }
+
+            print("✅ 管理者FCMトークン取得成功:", token)
 
             Task {
                 await self?.saveAdminFCMToken(token: token)

@@ -957,4 +957,140 @@ export const onOrganizationCreated = functions
       organizationId,
     });
   });
-  
+ // MARK: - 管理者FCMトークン取得
+
+async function getActiveAdminTokens(organizationId: string): Promise<string[]> {
+  const adminsSnap = await db
+    .collection("organizations")
+    .doc(organizationId)
+    .collection("admins")
+    .where("isActive", "==", true)
+    .get();
+
+  const tokens: string[] = [];
+
+  adminsSnap.docs.forEach((doc) => {
+    const adminData = doc.data();
+    const token = String(adminData.fcmToken || "").trim();
+
+    if (token) {
+      tokens.push(token);
+    }
+  });
+
+  return tokens;
+}
+
+// MARK: - 会員登録申請時 管理者通知
+
+export const onMemberRegistrationCreated = functions
+  .region(REGION)
+  .firestore
+  .document("organizations/{organizationId}/memberRegistrations/{registrationId}")
+  .onCreate(async (snap, context) => {
+    const organizationId = context.params.organizationId;
+    const registration = snap.data() || {};
+
+    const name = String(registration.name || "新しい会員");
+    const tokens = await getActiveAdminTokens(organizationId);
+
+    if (tokens.length === 0) {
+      console.log("管理者FCMトークンなし", {
+        organizationId,
+        type: "memberRegistration",
+      });
+      return;
+    }
+
+    await admin.messaging().sendEachForMulticast({
+      tokens,
+      notification: {
+        title: "新しい会員登録申請があります",
+        body: `${name} さんから会員登録申請が届きました。`,
+      },
+      data: {
+        organizationId,
+        type: "memberRegistration",
+      },
+      apns: {
+        headers: {
+          "apns-priority": "10",
+        },
+        payload: {
+          aps: {
+            alert: {
+              title: "新しい会員登録申請があります",
+              body: `${name} さんから会員登録申請が届きました。`,
+            },
+            sound: "default",
+            badge: 1,
+          },
+        },
+      },
+    });
+
+    console.log("会員登録申請通知送信完了", {
+      organizationId,
+      targetCount: tokens.length,
+    });
+  });
+
+// MARK: - 会員投稿時 管理者通知
+
+export const onMemberPostCreated = functions
+  .region(REGION)
+  .firestore
+  .document("organizations/{organizationId}/memberPosts/{postId}")
+  .onCreate(async (snap, context) => {
+    const organizationId = context.params.organizationId;
+    const postId = context.params.postId;
+    const post = snap.data() || {};
+
+    const memberName = String(post.memberName || "会員");
+    const postTitle = String(post.title || "新しい投稿");
+    const tokens = await getActiveAdminTokens(organizationId);
+
+    if (tokens.length === 0) {
+      console.log("管理者FCMトークンなし", {
+        organizationId,
+        postId,
+        type: "memberPost",
+      });
+      return;
+    }
+
+    await admin.messaging().sendEachForMulticast({
+      tokens,
+      notification: {
+        title: "会員から投稿が届きました",
+        body: `${memberName} さん：${postTitle}`,
+      },
+      data: {
+        organizationId,
+        postId,
+        type: "memberPost",
+      },
+      apns: {
+        headers: {
+          "apns-priority": "10",
+        },
+        payload: {
+          aps: {
+            alert: {
+              title: "会員から投稿が届きました",
+              body: `${memberName} さん：${postTitle}`,
+            },
+            sound: "default",
+            badge: 1,
+          },
+        },
+      },
+    });
+
+    console.log("会員投稿通知送信完了", {
+      organizationId,
+      postId,
+      targetCount: tokens.length,
+    });
+  });
+   

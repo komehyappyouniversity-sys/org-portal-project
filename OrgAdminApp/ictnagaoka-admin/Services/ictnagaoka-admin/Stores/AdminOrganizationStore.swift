@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import FirebaseAuth
 import FirebaseFirestore
+import FirebaseMessaging
 
 struct AdminOrganization: Identifiable, Equatable {
     let id: String
@@ -87,6 +88,10 @@ final class AdminOrganizationStore: ObservableObject {
         )
 
         print("✅ 管理アプリ 現在の組織: \(organization.id) / \(organization.name)")
+
+        saveFCMTokenForCurrentOrganization(
+            organizationId: organization.id
+        )
     }
 
     func startListening(organizationId newOrganizationId: String) {
@@ -106,6 +111,10 @@ final class AdminOrganizationStore: ObservableObject {
         )
 
         print("✅ 管理アプリ 組織ID指定: \(newOrganizationId)")
+
+        saveFCMTokenForCurrentOrganization(
+            organizationId: newOrganizationId
+        )
     }
 
     private func loadAvailableOrganizations(uid: String) async {
@@ -184,6 +193,49 @@ final class AdminOrganizationStore: ObservableObject {
         }
 
         clearCurrentOrganizationOnly()
+    }
+
+    private func saveFCMTokenForCurrentOrganization(organizationId: String) {
+        let orgId = organizationId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !orgId.isEmpty else {
+            print("❌ FCM保存スキップ: organizationId 空")
+            return
+        }
+
+        guard let uid = Auth.auth().currentUser?.uid else {
+            print("❌ FCM保存スキップ: 管理者UIDなし")
+            return
+        }
+
+        Messaging.messaging().token { [weak self] token, error in
+            if let error {
+                print("❌ 組織選択後 FCM取得失敗:", error.localizedDescription)
+                return
+            }
+
+            guard let token, !token.isEmpty else {
+                print("❌ 組織選択後 FCM token nil")
+                return
+            }
+
+            self?.db.collection("organizations")
+                .document(orgId)
+                .collection("admins")
+                .document(uid)
+                .setData([
+                    "fcmToken": token,
+                    "fcmTokenUpdatedAt": FieldValue.serverTimestamp(),
+                    "updatedAt": FieldValue.serverTimestamp()
+                ], merge: true) { error in
+                    if let error {
+                        print("❌ 選択中組織へのFCM保存失敗:", error.localizedDescription)
+                    } else {
+                        print("✅ 選択中組織へのFCM保存成功 organizationId:", orgId)
+                    }
+                }
+        }
     }
 
     private func clearCurrentOrganizationOnly() {
