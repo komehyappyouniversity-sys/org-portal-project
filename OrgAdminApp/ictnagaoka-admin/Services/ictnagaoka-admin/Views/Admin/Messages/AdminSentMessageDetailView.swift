@@ -37,6 +37,17 @@ struct AdminSentMessageDetailView: View {
                 Text(message.body)
                     .font(.body)
 
+                if !message.attachments.isEmpty {
+                    Divider()
+
+                    Text("添付ファイル")
+                        .font(.headline)
+
+                    ForEach(message.attachments.indices, id: \.self) { index in
+                        attachmentView(message.attachments[index])
+                    }
+                }
+
                 Divider()
 
                 HStack {
@@ -114,6 +125,60 @@ struct AdminSentMessageDetailView: View {
         }
     }
 
+    @ViewBuilder
+    private func attachmentView(_ attachment: [String: Any]) -> some View {
+        let type = attachment["type"] as? String ?? ""
+        let name = attachment["name"] as? String ?? "添付ファイル"
+        let urlString = attachment["url"] as? String ?? ""
+
+        VStack(alignment: .leading, spacing: 8) {
+            if type == "image",
+               let url = URL(string: urlString) {
+
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .empty:
+                        ProgressView()
+
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFit()
+                            .cornerRadius(12)
+
+                    case .failure:
+                        Text("画像を表示できませんでした")
+                            .foregroundColor(.red)
+
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
+
+            } else if let url = URL(string: urlString) {
+
+                Link(
+                    name.isEmpty ? "添付ファイルを開く" : name,
+                    destination: url
+                )
+                .font(.body.bold())
+                .foregroundColor(.white)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 14)
+                .background(Color.blue)
+                .cornerRadius(12)
+
+            } else {
+                Text("添付ファイルのURLがありません")
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding()
+        .background(Color.gray.opacity(0.08))
+        .cornerRadius(12)
+    }
+    
+    
     private func statBox(title: String, count: Int) -> some View {
         VStack(spacing: 6) {
             Text(title)

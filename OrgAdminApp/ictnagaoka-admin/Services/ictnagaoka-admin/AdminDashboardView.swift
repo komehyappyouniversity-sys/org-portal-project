@@ -39,8 +39,14 @@ struct AdminDashboardView: View {
                     }
 
                     if featureStore.messageEnabled {
+
                         menuButton(title: "会員へ一斉送信") {
                             AdminMessageComposerView()
+                                .environmentObject(organizationStore)
+                        }
+
+                        menuButton(title: "会員1人へ送信") {
+                            AdminMemberDirectMessageView()
                                 .environmentObject(organizationStore)
                         }
                     }

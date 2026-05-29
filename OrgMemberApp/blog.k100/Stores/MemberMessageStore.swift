@@ -140,10 +140,17 @@ final class MemberMessageStore: ObservableObject {
                 messageType == "announcement" ||
                 targetType == "public"
 
+            let targetMemberUids =
+                data["targetMemberUids"] as? [String] ?? []
+
+            let isDirectMessage =
+                targetMemberUids.contains(uid)
+
             let isMemberMessage =
                 messageType == "memberMessage" ||
                 targetType == "members" ||
-                isBroadcast
+                isBroadcast ||
+                isDirectMessage
 
             guard isPublic || isMemberMessage else { return nil }
         }
