@@ -138,8 +138,35 @@ struct MemberPageView: View {
                     menuButton(title: "講座予約")
                 }
             }
+            
+            NavigationLink {
+                TodayScheduleView()
+            } label: {
+                menuButton(title: "今日の予定")
+            }
+            
+            NavigationLink {
+                MemberDiaryListView(
+                    organizationId: organizationStore.organizationId
+                )
+            } label: {
+                menuButton(title: "日記")
+            }
+
+            NavigationLink {
+                SNSPostMenuView()
+            } label: {
+                menuButton(title: "SNSに投稿")
+            }
+            
+            NavigationLink {
+                SecuritySettingsView()
+            } label: {
+                menuButton(title: "セキュリティ設定")
+            }
 
             if featureStore.settings.memberMessageEnabled {
+                
 
                 NavigationLink {
                     MemberMessageListView(

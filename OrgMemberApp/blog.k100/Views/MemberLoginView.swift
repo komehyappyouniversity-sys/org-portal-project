@@ -3,12 +3,14 @@ import FirebaseAuth
 
 struct MemberLoginView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var securityStore: MemberSecurityStore
 
     @State private var email = ""
     @State private var password = ""
     @State private var isLoading = false
     @State private var errorMessage = ""
     @State private var successMessage = ""
+    @State private var didTryAutoLogin = false
 
     var body: some View {
         ZStack {
@@ -93,6 +95,29 @@ struct MemberLoginView: View {
             }
         }
         .navigationTitle("ログイン")
+        .onAppear {
+            autoLoginWithFaceIDIfNeeded()
+        }
+    }
+
+    private func autoLoginWithFaceIDIfNeeded() {
+        guard !didTryAutoLogin else { return }
+        didTryAutoLogin = true
+
+        guard MemberSavedLoginStore.shared.hasSavedLogin() else {
+            return
+        }
+
+        securityStore.authenticateForSavedLogin { success in
+            guard success else {
+                return
+            }
+
+            email = MemberSavedLoginStore.shared.loadEmail()
+            password = MemberSavedLoginStore.shared.loadPassword()
+
+            login()
+        }
     }
 
     private func login() {
@@ -120,6 +145,12 @@ struct MemberLoginView: View {
             }
 
             if result?.user != nil {
+
+                MemberSavedLoginStore.shared.save(
+                    email: trimmedEmail,
+                    password: password
+                )
+
                 successMessage = "ログイン成功"
 
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {

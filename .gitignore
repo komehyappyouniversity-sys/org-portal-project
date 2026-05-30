@@ -23,3 +23,5 @@ yarn-error.log
 
 # その他
 *.log
+_unused_backup/
+*.bak

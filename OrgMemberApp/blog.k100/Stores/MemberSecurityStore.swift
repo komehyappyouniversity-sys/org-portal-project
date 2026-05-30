@@ -104,4 +104,52 @@ final class MemberSecurityStore: ObservableObject {
         guard let lastInactiveDate else { return false }
         return Date().timeIntervalSince(lastInactiveDate) >= relockInterval
     }
+    func authenticateForSavedLogin(completion: @escaping (Bool) -> Void) {
+        guard !isAuthenticating else {
+            completion(false)
+            return
+        }
+
+        print("🔐 saved login Face ID start")
+
+        let context = LAContext()
+        var error: NSError?
+
+        isAuthenticating = true
+        errorMessage = ""
+
+        let reason = "保存されたログイン情報を使うためにFace IDで確認します。"
+
+        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
+            print("❌ saved login Face ID unavailable:", error?.localizedDescription ?? "unknown")
+            isAuthenticating = false
+            errorMessage = error?.localizedDescription ?? "この端末ではFace IDが利用できません。"
+            completion(false)
+            return
+        }
+
+        context.evaluatePolicy(
+            .deviceOwnerAuthenticationWithBiometrics,
+            localizedReason: reason
+        ) { [weak self] success, evalError in
+            DispatchQueue.main.async {
+                guard let self else {
+                    completion(false)
+                    return
+                }
+
+                self.isAuthenticating = false
+
+                if success {
+                    self.errorMessage = ""
+                    print("✅ saved login Face ID success")
+                    completion(true)
+                } else {
+                    self.errorMessage = evalError?.localizedDescription ?? "Face ID認証に失敗しました。"
+                    print("❌ saved login Face ID failed")
+                    completion(false)
+                }
+            }
+        }
+    }
 }
