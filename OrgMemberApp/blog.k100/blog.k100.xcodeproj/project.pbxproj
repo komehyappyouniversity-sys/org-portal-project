@@ -69,9 +69,6 @@
 		89C199332F90BD9700610C65 /* MemberRegistrationItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C199322F90BD9700610C65 /* MemberRegistrationItem.swift */; };
 		89C1995C2F9302A100610C65 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 89C1995B2F9302A100610C65 /* FirebaseMessaging */; };
 		89C199622F93A2C200610C65 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C199612F93A2BD00610C65 /* AppDelegate.swift */; };
-		89C199642F93C38000610C65 /* AnnouncementService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C199632F93C36400610C65 /* AnnouncementService.swift */; };
-		89C1996A2F94EC6D00610C65 /* MemberAnnouncementItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C199692F94EC6D00610C65 /* MemberAnnouncementItem.swift */; };
-		89C1996C2F94ECA700610C65 /* MemberAnnouncementStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C1996B2F94ECA700610C65 /* MemberAnnouncementStore.swift */; };
 		89C199762F980AA400610C65 /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C199752F98098D00610C65 /* SafariView.swift */; };
 		89C4783C2FACDD9000C6D726 /* MemberBookingEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C4783B2FACDD9000C6D726 /* MemberBookingEvent.swift */; };
 		89C4783E2FACDDF600C6D726 /* MemberBookingSlot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C4783D2FACDDF600C6D726 /* MemberBookingSlot.swift */; };
@@ -143,9 +140,6 @@
 		89C1995D2F93038100610C65 /* blog.k100Release.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = blog.k100Release.entitlements; sourceTree = "<group>"; };
 		89C1995E2F9303A200610C65 /* blog-k100-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "blog-k100-Info.plist"; sourceTree = "<group>"; };
 		89C199612F93A2BD00610C65 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		89C199632F93C36400610C65 /* AnnouncementService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncementService.swift; sourceTree = "<group>"; };
-		89C199692F94EC6D00610C65 /* MemberAnnouncementItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberAnnouncementItem.swift; sourceTree = "<group>"; };
-		89C1996B2F94ECA700610C65 /* MemberAnnouncementStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberAnnouncementStore.swift; sourceTree = "<group>"; };
 		89C199752F98098D00610C65 /* SafariView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariView.swift; sourceTree = "<group>"; };
 		89C4783B2FACDD9000C6D726 /* MemberBookingEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberBookingEvent.swift; sourceTree = "<group>"; };
 		89C4783D2FACDDF600C6D726 /* MemberBookingSlot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberBookingSlot.swift; sourceTree = "<group>"; };
@@ -244,7 +238,6 @@
 				89C197492F8B71BE00610C65 /* MemberRegistration.swift */,
 				89C1986E2F8E150C00610C65 /* ScheduleEvent.swift */,
 				89C198802F8E231300610C65 /* PhotoPickerItem.swift */,
-				89C199692F94EC6D00610C65 /* MemberAnnouncementItem.swift */,
 				896E0D0A2F9B97C40077F3B9 /* VideoItem.swift */,
 				89C4783B2FACDD9000C6D726 /* MemberBookingEvent.swift */,
 				89C4783D2FACDDF600C6D726 /* MemberBookingSlot.swift */,
@@ -265,7 +258,6 @@
 				89C198682F8DA60000610C65 /* AppBootstrapStore.swift */,
 				89C198702F8E153500610C65 /* ScheduleStore.swift */,
 				89C198B12F8EF8B100610C65 /* MemberPostStore.swift */,
-				89C1996B2F94ECA700610C65 /* MemberAnnouncementStore.swift */,
 				899632122FA8A2B0002FA8BC /* PushNavigationStore.swift */,
 				89C4783F2FACDE6400C6D726 /* MemberBookingEventStore.swift */,
 				89C478412FACDEAE00C6D726 /* MemberBookingSlotStore.swift */,
@@ -346,7 +338,6 @@
 		89C197412F8B62C300610C65 /* Message */ = {
 			isa = PBXGroup;
 			children = (
-				89C199632F93C36400610C65 /* AnnouncementService.swift */,
 				899F3D892F996AE100713584 /* MemberMessageItem.swift */,
 			);
 			path = Message;
@@ -527,7 +518,6 @@
 				89C1986F2F8E150C00610C65 /* ScheduleEvent.swift in Sources */,
 				895DBF022FB5937B008B23B8 /* MemberOrganizationSelectionView.swift in Sources */,
 				896E0D052F9AFD950077F3B9 /* MemberVideoItem.swift in Sources */,
-				89C1996A2F94EC6D00610C65 /* MemberAnnouncementItem.swift in Sources */,
 				89C199252F8F9ED100610C65 /* MemberPostDetailView.swift in Sources */,
 				89C1986B2F8DA64900610C65 /* LoadingView.swift in Sources */,
 				89C198432F8C5A0E00610C65 /* MemberPageView.swift in Sources */,
@@ -535,14 +525,12 @@
 				899F3D8A2F996AE100713584 /* MemberMessageItem.swift in Sources */,
 				89C4783E2FACDDF600C6D726 /* MemberBookingSlot.swift in Sources */,
 				895DBF002FB592A1008B23B8 /* MemberAppRootView.swift in Sources */,
-				89C199642F93C38000610C65 /* AnnouncementService.swift in Sources */,
 				89C198652F8DA54900610C65 /* OrganizationStore.swift in Sources */,
 				89C199762F980AA400610C65 /* SafariView.swift in Sources */,
 				89933DB62FC9C237007B16AC /* DailyScheduleNotificationManager.swift in Sources */,
 				89933DB02FC32078007B16AC /* MemberRegistrationSettingsStore.swift in Sources */,
 				89C198A22F8EF3CF00610C65 /* MemberService.swift in Sources */,
 				89C198672F8DA57E00610C65 /* MemberStore.swift in Sources */,
-				89C1996C2F94ECA700610C65 /* MemberAnnouncementStore.swift in Sources */,
 				89C198612F8D9CF900610C65 /* MemberSecurityStore.swift in Sources */,
 				89C197472F8B6A2000610C65 /* blog_k100App.swift in Sources */,
 				894C8B432FB81DF40035607A /* MemberQRCodeScannerView.swift in Sources */,
