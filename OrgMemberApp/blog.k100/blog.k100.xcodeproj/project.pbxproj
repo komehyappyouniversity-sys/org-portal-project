@@ -56,7 +56,6 @@
 		89C198892F8E459200610C65 /* MemberMessageListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C198882F8E459200610C65 /* MemberMessageListView.swift */; };
 		89C1988B2F8E45AF00610C65 /* MemberMessageDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C1988A2F8E45AF00610C65 /* MemberMessageDetailView.swift */; };
 		89C198A22F8EF3CF00610C65 /* MemberService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C198A12F8EF3CF00610C65 /* MemberService.swift */; };
-		89C198A62F8EF42600610C65 /* MessageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C198A52F8EF42600610C65 /* MessageService.swift */; };
 		89C198AA2F8EF4C200610C65 /* CategoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C198A92F8EF4C200610C65 /* CategoryService.swift */; };
 		89C198AE2F8EF50400610C65 /* MemberOrganizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C198AD2F8EF50400610C65 /* MemberOrganizationService.swift */; };
 		89C198B22F8EF8B100610C65 /* MemberPostStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89C198B12F8EF8B100610C65 /* MemberPostStore.swift */; };
@@ -126,7 +125,6 @@
 		89C198882F8E459200610C65 /* MemberMessageListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberMessageListView.swift; sourceTree = "<group>"; };
 		89C1988A2F8E45AF00610C65 /* MemberMessageDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberMessageDetailView.swift; sourceTree = "<group>"; };
 		89C198A12F8EF3CF00610C65 /* MemberService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberService.swift; sourceTree = "<group>"; };
-		89C198A52F8EF42600610C65 /* MessageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageService.swift; sourceTree = "<group>"; };
 		89C198A92F8EF4C200610C65 /* CategoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryService.swift; sourceTree = "<group>"; };
 		89C198AD2F8EF50400610C65 /* MemberOrganizationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberOrganizationService.swift; sourceTree = "<group>"; };
 		89C198B12F8EF8B100610C65 /* MemberPostStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberPostStore.swift; sourceTree = "<group>"; };
@@ -375,7 +373,6 @@
 			children = (
 				89933DCE2FC9DFBF007B16AC /* Security */,
 				89C198A12F8EF3CF00610C65 /* MemberService.swift */,
-				89C198A52F8EF42600610C65 /* MessageService.swift */,
 				89C198A92F8EF4C200610C65 /* CategoryService.swift */,
 				89C198AD2F8EF50400610C65 /* MemberOrganizationService.swift */,
 				89933DB52FC9C237007B16AC /* DailyScheduleNotificationManager.swift */,
@@ -503,7 +500,6 @@
 				89933DB42FC9C1E8007B16AC /* CalendarEventStore.swift in Sources */,
 				89900DAA2FAAFC43008CC3E6 /* VideoPurchaseStore.swift in Sources */,
 				89A3A90C2FB1AAD60026FC39 /* MemberFeatureStore.swift in Sources */,
-				89C198A62F8EF42600610C65 /* MessageService.swift in Sources */,
 				896E0D072F9AFDC70077F3B9 /* MemberVideoStore.swift in Sources */,
 				89C1985D2F8CF2C900610C65 /* MemberMessageStore.swift in Sources */,
 				89C198412F8C59F700610C65 /* MemberHomeView.swift in Sources */,
