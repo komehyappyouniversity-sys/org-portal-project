@@ -15,6 +15,35 @@ struct MemberVideoListView: View {
 
     @State private var purchaseMessage: String = ""
 
+    private let columns = [
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12)
+    ]
+
+    private var sortedVideos: [MemberVideoItem] {
+
+        store.videos.sorted { first, second in
+
+            let firstNumber = extractNumber(from: first.title)
+            let secondNumber = extractNumber(from: second.title)
+
+            switch (firstNumber, secondNumber) {
+
+            case let (first?, second?):
+                return first < second
+
+            case (_?, nil):
+                return true
+
+            case (nil, _?):
+                return false
+
+            case (nil, nil):
+                return first.title < second.title
+            }
+        }
+    }
+
     var body: some View {
 
         Group {
@@ -33,13 +62,19 @@ struct MemberVideoListView: View {
 
             } else {
 
-                List {
+                ScrollView {
 
-                    ForEach(store.videos) { video in
-                        videoRow(video)
+                    LazyVGrid(columns: columns, spacing: 14) {
+
+                        ForEach(sortedVideos) { video in
+
+                            videoCard(video)
+                        }
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 12)
                 }
-                .listStyle(.insetGrouped)
+                .background(Color(.systemGroupedBackground))
             }
         }
         .navigationTitle("動画コンテンツ")
@@ -76,54 +111,45 @@ struct MemberVideoListView: View {
         }
     }
 
-    // MARK: - 行UI
+    // MARK: - カードUI
 
-    private func videoRow(_ video: MemberVideoItem) -> some View {
+    private func videoCard(_ video: MemberVideoItem) -> some View {
 
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
 
-            HStack(alignment: .top, spacing: 12) {
+            thumbnailView(video)
 
-                thumbnailView(video)
+            Text(video.title)
+                .font(.headline)
+                .foregroundColor(.primary)
+                .lineLimit(3)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(minHeight: 66, alignment: .top)
 
-                VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
 
-                    HStack(alignment: .top, spacing: 8) {
-
-                        Text(video.title)
-                            .font(.headline)
-                            .lineLimit(2)
-
-                        Spacer()
-
-                        if video.isPremium &&
-                            !video.displayPriceText.isEmpty {
-
-                            Text(video.displayPriceText)
-                                .font(.subheadline.bold())
-                                .foregroundColor(.orange)
-                                .multilineTextAlignment(.trailing)
-                                .lineLimit(2)
-                        }
-                    }
-
-                    HStack(spacing: 8) {
-
-                        if video.isMembersOnly {
-                            badge("会員限定", .blue)
-                        }
-
-                        if video.isPremium {
-                            badge("有料", .orange)
-
-                        } else {
-                            badge("無料", .green)
-                        }
-                    }
+                if video.isMembersOnly {
+                    badge("会員限定", .blue)
                 }
 
-                Spacer()
+                if video.isPremium {
+                    badge("有料", .orange)
+
+                } else {
+                    badge("無料", .green)
+                }
             }
+
+            if video.isPremium &&
+                !video.displayPriceText.isEmpty {
+
+                Text(video.displayPriceText)
+                    .font(.subheadline.bold())
+                    .foregroundColor(.orange)
+            }
+
+            Spacer(minLength: 0)
 
             actionButton(video)
 
@@ -132,9 +158,20 @@ struct MemberVideoListView: View {
                 Text(purchaseMessage)
                     .font(.caption)
                     .foregroundColor(.red)
+                    .lineLimit(3)
             }
         }
-        .padding(.vertical, 8)
+        .padding(10)
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: 300, alignment: .top)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .shadow(
+            color: Color.black.opacity(0.06),
+            radius: 6,
+            x: 0,
+            y: 3
+        )
     }
 
     // MARK: - ボタン
@@ -159,7 +196,7 @@ struct MemberVideoListView: View {
                 MemberVideoPlayerView(video: video)
 
             } label: {
-                playButtonLabel("購入済み・再生する")
+                playButtonLabel("購入済み・再生")
             }
 
         } else {
@@ -203,16 +240,18 @@ struct MemberVideoListView: View {
 
     private func playButtonLabel(_ text: String) -> some View {
 
-        HStack {
+        HStack(spacing: 6) {
 
             Image(systemName: "play.fill")
 
             Text(text)
                 .fontWeight(.bold)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
         .foregroundColor(.white)
         .frame(maxWidth: .infinity)
-        .frame(height: 48)
+        .frame(height: 42)
         .background(Color.blue)
         .cornerRadius(12)
     }
@@ -221,7 +260,7 @@ struct MemberVideoListView: View {
         _ video: MemberVideoItem
     ) -> some View {
 
-        HStack {
+        HStack(spacing: 6) {
 
             Image(systemName: "cart.fill")
 
@@ -229,16 +268,20 @@ struct MemberVideoListView: View {
 
                 Text("\(video.displayPriceText)で購入")
                     .fontWeight(.bold)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
 
             } else {
 
                 Text("購入する")
                     .fontWeight(.bold)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
         }
         .foregroundColor(.white)
         .frame(maxWidth: .infinity)
-        .frame(height: 48)
+        .frame(height: 42)
         .background(Color.orange)
         .cornerRadius(12)
     }
@@ -249,7 +292,9 @@ struct MemberVideoListView: View {
         _ video: MemberVideoItem
     ) -> some View {
 
-        Group {
+        ZStack {
+
+            Color(.systemGray6)
 
             if let url = URL(string: video.thumbnailUrl),
                !video.thumbnailUrl.isEmpty {
@@ -260,16 +305,13 @@ struct MemberVideoListView: View {
 
                     case .empty:
 
-                        ZStack {
-                            Color(.systemGray5)
-                            ProgressView()
-                        }
+                        ProgressView()
 
                     case .success(let image):
 
                         image
                             .resizable()
-                            .scaledToFill()
+                            .scaledToFit()
 
                     case .failure:
 
@@ -286,20 +328,57 @@ struct MemberVideoListView: View {
                 placeholderThumbnail
             }
         }
-        .frame(width: 110, height: 70)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .frame(maxWidth: .infinity)
+        .frame(height: 115)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var placeholderThumbnail: some View {
 
-        ZStack {
+        Image(systemName: "play.rectangle.fill")
+            .font(.title2)
+            .foregroundColor(.gray)
+    }
 
-            Color(.systemGray5)
+    // MARK: - 並び順
 
-            Image(systemName: "play.rectangle.fill")
-                .font(.title2)
-                .foregroundColor(.gray)
+    private func extractNumber(from title: String) -> Int? {
+
+        let circledNumbers: [Character: Int] = [
+            "①": 1,
+            "②": 2,
+            "③": 3,
+            "④": 4,
+            "⑤": 5,
+            "⑥": 6,
+            "⑦": 7,
+            "⑧": 8,
+            "⑨": 9,
+            "⑩": 10,
+            "⑪": 11,
+            "⑫": 12,
+            "⑬": 13,
+            "⑭": 14,
+            "⑮": 15,
+            "⑯": 16,
+            "⑰": 17,
+            "⑱": 18,
+            "⑲": 19,
+            "⑳": 20
+        ]
+
+        for character in title {
+
+            if let number = circledNumbers[character] {
+                return number
+            }
         }
+
+        let numberText = title.prefix {
+            $0.isNumber
+        }
+
+        return Int(numberText)
     }
 
     // MARK: - 共通UI
@@ -312,10 +391,12 @@ struct MemberVideoListView: View {
         Text(text)
             .font(.caption.bold())
             .foregroundColor(color)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 7)
             .padding(.vertical, 4)
             .background(color.opacity(0.15))
             .cornerRadius(8)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
     }
 
     private var loadingView: some View {

@@ -21,7 +21,7 @@ struct AdminMemberDirectMessageView: View {
 
     @State private var title = ""
     @State private var bodyText = ""
-    
+
     @State private var selectedImageItem: PhotosPickerItem?
     @State private var selectedImageData: Data?
     @State private var selectedImageName = ""
@@ -71,7 +71,7 @@ struct AdminMemberDirectMessageView: View {
                 TextEditor(text: $bodyText)
                     .frame(minHeight: 180)
             }
-            
+
             Section("添付画像") {
                 PhotosPicker(
                     selection: $selectedImageItem,
@@ -204,23 +204,28 @@ struct AdminMemberDirectMessageView: View {
             .getDocuments { snapshot, error in
                 isLoading = false
 
-                if let error = error {
+                if let error {
                     errorMessage = "会員の取得に失敗しました: \(error.localizedDescription)"
                     return
                 }
 
                 let docs = (snapshot?.documents ?? []).filter { doc in
-
                     let data = doc.data()
 
                     if let isActive = data["isActive"] as? Bool {
                         return isActive
                     }
 
-                    // isActive フィールドが存在しない古い会員は表示
+                    let status = data["status"] as? String ?? ""
+                    if status == "approved" || status == "active" {
+                        return true
+                    }
+
                     return true
                 }
+
                 print("📨 DirectMessage members count = \(docs.count)")
+
                 members = docs.map { doc in
                     let data = doc.data()
 
@@ -271,11 +276,19 @@ struct AdminMemberDirectMessageView: View {
                 "body": trimmedBody,
                 "createdAt": now,
                 "publishedAt": now,
+
+                // 個別送信も会員向けメッセージとして統一
                 "messageType": "memberMessage",
                 "targetType": "members",
                 "visibility": "member",
+
+                // 会員アプリ側で「あなた宛」と表示するための目印
+                "isPersonalMessage": true,
+
                 "isBroadcast": false,
+                "targetMemberName": displayName(for: member),
                 "targetMemberUids": [member.id],
+                "toUids": [member.id],
                 "categoryTargets": [],
                 "isReadBy": [],
                 "attachments": attachments,
@@ -288,7 +301,8 @@ struct AdminMemberDirectMessageView: View {
                 .addDocument(data: data)
 
             print("✅ 個別送信成功")
-            print("✅ attachments count: \(attachments.count)")
+            print("✅ target uid:", member.id)
+            print("✅ attachments count:", attachments.count)
 
             isSending = false
             showCompleteAlert = true

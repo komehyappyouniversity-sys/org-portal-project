@@ -16,7 +16,7 @@ struct MemberRegistrationView: View {
     @State private var phone = ""
     @State private var password = ""
     @State private var confirmPassword = ""
-    
+
     @State private var selectedYear = Calendar.current.component(.year, from: Date()) - 60
     @State private var selectedMonth = 1
     @State private var selectedDay = 1
@@ -167,6 +167,8 @@ struct MemberRegistrationView: View {
                 birthDatePicker
             }
 
+            fieldTitle("メールアドレス")
+
             ZStack(alignment: .leading) {
 
                 TextField("", text: $email)
@@ -215,6 +217,7 @@ struct MemberRegistrationView: View {
                 .textFieldStyle(.roundedBorder)
                 .focused($focusedField, equals: .password)
                 .tint(.blue)
+
             fieldTitle("パスワード確認")
 
             SecureField("", text: $confirmPassword)
@@ -305,46 +308,80 @@ struct MemberRegistrationView: View {
         let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedPhone = phone.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedPassword = password.trimmingCharacters(in: .whitespacesAndNewlines)
-        
         let trimmedConfirmPassword = confirmPassword.trimmingCharacters(in: .whitespacesAndNewlines)
-        
+
         let organizationId = resolvedOrganizationId()
 
-        guard !trimmedName.isEmpty else {
-            errorMessage = "お名前を入力してください。"
-            return
+        var missingItems: [String] = []
+
+        if trimmedName.isEmpty {
+            missingItems.append("お名前")
         }
 
-        guard !trimmedFurigana.isEmpty else {
-            errorMessage = "ふりがなを入力してください。"
+        if trimmedFurigana.isEmpty {
+            missingItems.append("ふりがな")
+        }
+
+        if registrationSettingsStore.birthDateRequired {
+            if selectedYear <= 0 || selectedMonth <= 0 || selectedDay <= 0 {
+                missingItems.append("生年月日")
+            }
+        }
+
+        if trimmedEmail.isEmpty {
+            missingItems.append("メールアドレス")
+        }
+
+        if trimmedPhone.isEmpty {
+            missingItems.append("電話番号")
+        }
+
+        if trimmedPassword.isEmpty {
+            missingItems.append("パスワード")
+        }
+
+        if trimmedConfirmPassword.isEmpty {
+            missingItems.append("パスワード確認")
+        }
+
+        if !missingItems.isEmpty {
+            errorMessage =
+            """
+            以下の入力をお願いします。
+
+            \(missingItems.map { "・\($0)" }.joined(separator: "\n"))
+            """
+
+            focusFirstMissingField(
+                trimmedName: trimmedName,
+                trimmedFurigana: trimmedFurigana,
+                trimmedEmail: trimmedEmail,
+                trimmedPhone: trimmedPhone,
+                trimmedPassword: trimmedPassword,
+                trimmedConfirmPassword: trimmedConfirmPassword
+            )
+
             return
         }
 
         guard isHiragana(trimmedFurigana) else {
             errorMessage = "ふりがなは、ひらがなで入力してください。"
-            return
-        }
-
-        guard !trimmedEmail.isEmpty else {
-            errorMessage = "メールアドレスを入力してください。"
-            return
-        }
-
-        guard !trimmedPhone.isEmpty else {
-            errorMessage = "電話番号を入力してください。"
+            focusedField = .furigana
             return
         }
 
         guard trimmedPassword.count >= 6 else {
             errorMessage = "パスワードは6文字以上で入力してください。"
+            focusedField = .password
             return
         }
 
         guard trimmedPassword == trimmedConfirmPassword else {
             errorMessage = "パスワードが一致していません。もう一度確認してください。"
+            focusedField = .confirmPassword
             return
         }
-        
+
         guard !organizationId.isEmpty else {
             errorMessage = "コミュニティ情報が取得できません。"
             return
@@ -429,6 +466,45 @@ struct MemberRegistrationView: View {
         }
     }
 
+    private func focusFirstMissingField(
+        trimmedName: String,
+        trimmedFurigana: String,
+        trimmedEmail: String,
+        trimmedPhone: String,
+        trimmedPassword: String,
+        trimmedConfirmPassword: String
+    ) {
+        if trimmedName.isEmpty {
+            focusedField = .name
+            return
+        }
+
+        if trimmedFurigana.isEmpty {
+            focusedField = .furigana
+            return
+        }
+
+        if trimmedEmail.isEmpty {
+            focusedField = .email
+            return
+        }
+
+        if trimmedPhone.isEmpty {
+            focusedField = .phone
+            return
+        }
+
+        if trimmedPassword.isEmpty {
+            focusedField = .password
+            return
+        }
+
+        if trimmedConfirmPassword.isEmpty {
+            focusedField = .confirmPassword
+            return
+        }
+    }
+
     private func saveRegistration(
         organizationId: String,
         uid: String,
@@ -478,7 +554,8 @@ struct MemberRegistrationView: View {
         let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !trimmedEmail.isEmpty else {
-            errorMessage = "パスワードリセットにはメールアドレスを入力してください。"
+            errorMessage = "メールアドレスの入力をお願いします"
+            focusedField = .email
             return
         }
 

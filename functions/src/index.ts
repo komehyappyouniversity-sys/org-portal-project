@@ -321,15 +321,13 @@ export const saveVimeoConfigHttp = functions
 
       await assertAdminOrSuperAdmin(organizationId, uid);
 
-      const encryptedAccessToken = encryptText(accessToken);
-
       await db
         .collection("organizations")
         .doc(organizationId)
         .collection("private")
         .doc("vimeo")
         .set({
-          encryptedAccessToken,
+          encryptedAccessToken: encryptText(accessToken),
           userId,
           query: query || "",
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -541,6 +539,14 @@ export const onMessageCreated = functions
         ? message.targetMemberUids
         : [];
 
+      const toUids: string[] = Array.isArray(message.toUids)
+        ? message.toUids
+        : [];
+
+      const directTargetUids = Array.from(
+        new Set([...targetMemberUids, ...toUids])
+      );
+
       const categoryTargets: string[] = Array.isArray(message.categoryTargets)
         ? message.categoryTargets
         : [];
@@ -559,7 +565,7 @@ export const onMessageCreated = functions
         const member = doc.data();
         const uid = doc.id;
 
-        if (targetMemberUids.length > 0 && !targetMemberUids.includes(uid)) {
+        if (directTargetUids.length > 0 && !directTargetUids.includes(uid)) {
           return;
         }
 
@@ -751,6 +757,14 @@ export const sendUnreadReminderHttp = functions
         ? message.targetMemberUids
         : [];
 
+      const toUids: string[] = Array.isArray(message.toUids)
+        ? message.toUids
+        : [];
+
+      const directTargetUids = Array.from(
+        new Set([...targetMemberUids, ...toUids])
+      );
+
       const categoryTargets: string[] = Array.isArray(message.categoryTargets)
         ? message.categoryTargets
         : [];
@@ -773,7 +787,7 @@ export const sendUnreadReminderHttp = functions
           return;
         }
 
-        if (targetMemberUids.length > 0 && !targetMemberUids.includes(memberUid)) {
+        if (directTargetUids.length > 0 && !directTargetUids.includes(memberUid)) {
           return;
         }
 
@@ -957,7 +971,8 @@ export const onOrganizationCreated = functions
       organizationId,
     });
   });
- // MARK: - 管理者FCMトークン取得
+
+// MARK: - 管理者FCMトークン取得
 
 async function getActiveAdminTokens(organizationId: string): Promise<string[]> {
   const adminsSnap = await db
@@ -1093,4 +1108,4 @@ export const onMemberPostCreated = functions
       targetCount: tokens.length,
     });
   });
-   
+  

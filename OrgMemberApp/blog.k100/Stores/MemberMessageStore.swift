@@ -142,9 +142,14 @@ final class MemberMessageStore: ObservableObject {
 
             let targetMemberUids =
                 data["targetMemberUids"] as? [String] ?? []
-
+            
+            let toUids =
+                data["toUids"] as? [String] ?? []
+            
+            
             let isDirectMessage =
-                targetMemberUids.contains(uid)
+                targetMemberUids.contains(uid) ||
+                toUids.contains(uid)
 
             let isMemberMessage =
                 messageType == "memberMessage" ||

@@ -110,9 +110,7 @@ struct AdminMemberListView: View {
             Text("\(selectedMember?.name.isEmpty == false ? selectedMember?.name ?? "" : "この会員") を管理者として登録します。")
         }
         .onAppear {
-
             print("👀 管理アプリ 会員一覧 organizationId:", organizationId)
-
             fetch()
         }
     }
@@ -134,7 +132,6 @@ struct AdminMemberListView: View {
             .order(by: "createdAt", descending: true)
             .getDocuments { snapshot, error in
                 if let error {
-
                     print("🔥 members 取得エラー:", error.localizedDescription)
 
                     self.errorMessage = error.localizedDescription
@@ -144,50 +141,55 @@ struct AdminMemberListView: View {
                 }
 
                 let docs = snapshot?.documents ?? []
+
                 print("👥 members docs count:", docs.count)
                 print("👥 members docIDs:", docs.map { $0.documentID })
 
                 Task {
-                    var loadedMembers: [AdminMemberItem] = []
+                    let loadedMembers: [AdminMemberItem] = await {
+                        var result: [AdminMemberItem] = []
 
-                    for doc in docs {
-                        let data = doc.data()
+                        for doc in docs {
+                            let data = doc.data()
 
-                        let arrayCategories = data["categories"] as? [String] ?? []
+                            let arrayCategories = data["categories"] as? [String] ?? []
 
-                        let legacyString = data["categories"] as? String ?? ""
-                        let legacyCategories = legacyString
-                            .replacingOccurrences(of: "[", with: "")
-                            .replacingOccurrences(of: "]", with: "")
-                            .replacingOccurrences(of: "\"", with: "")
-                            .split(separator: ",")
-                            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                            .filter { !$0.isEmpty }
+                            let legacyString = data["categories"] as? String ?? ""
+                            let legacyCategories = legacyString
+                                .replacingOccurrences(of: "[", with: "")
+                                .replacingOccurrences(of: "]", with: "")
+                                .replacingOccurrences(of: "\"", with: "")
+                                .split(separator: ",")
+                                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                                .filter { !$0.isEmpty }
 
-                        let categories = arrayCategories.isEmpty ? legacyCategories : arrayCategories
+                            let categories = arrayCategories.isEmpty ? legacyCategories : arrayCategories
 
-                        let adminDoc = try? await db
-                            .collection("organizations")
-                            .document(orgId)
-                            .collection("admins")
-                            .document(doc.documentID)
-                            .getDocument()
+                            let adminDoc = try? await db
+                                .collection("organizations")
+                                .document(orgId)
+                                .collection("admins")
+                                .document(doc.documentID)
+                                .getDocument()
 
-                        let adminData = adminDoc?.data()
-                        let isAdmin = adminData?["isActive"] as? Bool ?? false
+                            let adminData = adminDoc?.data()
+                            let isAdmin = adminData?["isActive"] as? Bool ?? false
 
-                        loadedMembers.append(
-                            AdminMemberItem(
-                                id: doc.documentID,
-                                name: data["name"] as? String ?? "",
-                                status: data["status"] as? String ?? "",
-                                email: data["email"] as? String ?? "",
-                                phone: data["phone"] as? String ?? "",
-                                categories: categories,
-                                isAdmin: isAdmin
+                            result.append(
+                                AdminMemberItem(
+                                    id: doc.documentID,
+                                    name: data["name"] as? String ?? "",
+                                    status: data["status"] as? String ?? "",
+                                    email: data["email"] as? String ?? "",
+                                    phone: data["phone"] as? String ?? "",
+                                    categories: categories,
+                                    isAdmin: isAdmin
+                                )
                             )
-                        )
-                    }
+                        }
+
+                        return result
+                    }()
 
                     await MainActor.run {
                         self.members = loadedMembers
