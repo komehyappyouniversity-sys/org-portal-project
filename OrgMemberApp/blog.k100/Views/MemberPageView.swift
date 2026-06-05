@@ -14,32 +14,65 @@ struct MemberPageView: View {
     private let logoDisplayHeight: CGFloat = 220
 
     var body: some View {
-        ScrollView {
+
+        if memberStore.isLoading {
+
+            ProgressView("会員情報を確認しています")
+                .navigationTitle("会員ページ")
+
+        } else if memberStore.profile?.isApproved == true {
+
+            ScrollView {
+
+                VStack(spacing: 24) {
+                    organizationHeader
+                    headerCard
+                    menuSection
+                    logoutSection
+                }
+                .padding(20)
+            }
+            .navigationTitle("会員ページ")
+            .navigationBarTitleDisplayMode(.inline)
+            .alert("ログアウトしますか？", isPresented: $showLogoutAlert) {
+
+                Button("キャンセル", role: .cancel) { }
+
+                Button("ログアウト", role: .destructive) {
+                    logout()
+                }
+
+            } message: {
+                Text("この端末の会員ページ認証を解除します。")
+            }
+            .onAppear {
+                startPostListeningIfPossible()
+            }
+            .onDisappear {
+                postStore.stopListening()
+            }
+
+        } else {
+
             VStack(spacing: 24) {
-                organizationHeader
-                headerCard
-                menuSection
-                logoutSection
-            }
-            .padding(20)
-        }
-        .navigationTitle("会員ページ")
-        .navigationBarTitleDisplayMode(.inline)
-        .alert("ログアウトしますか？", isPresented: $showLogoutAlert) {
-            Button("キャンセル", role: .cancel) { }
 
-            Button("ログアウト", role: .destructive) {
-                logout()
-            }
+                Image(systemName: "person.crop.circle.badge.exclamationmark")
+                    .font(.system(size: 72))
+                    .foregroundColor(.orange)
 
-        } message: {
-            Text("この端末の会員ページ認証を解除します。")
-        }
-        .onAppear {
-            startPostListeningIfPossible()
-        }
-        .onDisappear {
-            postStore.stopListening()
+                Text("管理者の承認待ちです")
+                    .font(.title2.bold())
+
+                Text("会員ページは、管理者が会員申請を承認した後に利用できます。")
+                    .multilineTextAlignment(.center)
+
+                Button("閉じる") {
+                    logout()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding()
+            .navigationTitle("会員認証")
         }
     }
 
@@ -191,6 +224,14 @@ struct MemberPageView: View {
                 } label: {
                     menuButton(title: "動画コンテンツ")
                 }
+                NavigationLink {
+                    MemberVideoQuestionListView()
+                        .environmentObject(memberStore)
+                        .environmentObject(organizationStore)
+
+                } label: {
+                    menuButton(title: "動画質問・回答")
+                }
             }
 
             if featureStore.settings.memberPostEnabled {
@@ -340,6 +381,10 @@ struct MemberPageView: View {
     }
 
     private func startPostListeningIfPossible() {
+        
+        guard memberStore.profile?.isApproved == true else {
+            return
+        }
 
         let organizationId = organizationStore.organizationId
             .trimmingCharacters(in: .whitespacesAndNewlines)

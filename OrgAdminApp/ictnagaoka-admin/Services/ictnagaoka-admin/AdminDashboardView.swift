@@ -107,6 +107,23 @@ struct AdminDashboardView: View {
                                 .environmentObject(organizationStore)
                         }
                     }
+                    
+                    if featureStore.videoEnabled {
+                        menuButton(title: "Vimeo連携設定") {
+                            AdminVimeoSettingsView()
+                                .environmentObject(organizationStore)
+                        }
+
+                        menuButton(title: "動画管理") {
+                            AdminVideoManagementView()
+                                .environmentObject(organizationStore)
+                        }
+
+                        menuButton(title: "動画質問一覧") {
+                            AdminVideoQuestionListView()
+                                .environmentObject(organizationStore)
+                        }
+                    }
 
                     if featureStore.isLoading {
                         ProgressView("機能設定を読み込み中...")
@@ -126,6 +143,19 @@ struct AdminDashboardView: View {
             .onAppear {
                 featureStore.startListening(
                     organizationId: resolvedOrganizationId
+                )
+            }
+            .onChange(of: organizationStore.currentOrganizationId) { _, newValue in
+
+                let organizationId = newValue
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                guard !organizationId.isEmpty else {
+                    return
+                }
+
+                featureStore.startListening(
+                    organizationId: organizationId
                 )
             }
         }

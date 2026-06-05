@@ -9,11 +9,11 @@ import FirebaseFirestore
 
 @MainActor
 final class MemberVideoStore: ObservableObject {
+
     @Published var videos: [MemberVideoItem] = []
     @Published var isLoading: Bool = false
     @Published var errorMessage: String = ""
 
-    private let db = Firestore.firestore()
     private var listener: ListenerRegistration?
 
     deinit {
@@ -21,7 +21,10 @@ final class MemberVideoStore: ObservableObject {
     }
 
     func startListening(organizationId: String) {
-        let orgId = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let orgId = organizationId.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
 
         guard !orgId.isEmpty else {
             errorMessage = "organizationId が空です。"
@@ -33,27 +36,40 @@ final class MemberVideoStore: ObservableObject {
         isLoading = true
         errorMessage = ""
 
-        listener = db.collection("organizations")
+        listener = Firestore.firestore()
+            .collection("organizations")
             .document(orgId)
             .collection("videos")
             .whereField("isPublished", isEqualTo: true)
-            .order(by: "createdAt", descending: true)
             .addSnapshotListener { [weak self] snapshot, error in
-                guard let self else { return }
+
+                guard let self else {
+                    return
+                }
 
                 Task { @MainActor in
+
                     self.isLoading = false
 
                     if let error {
+
                         self.errorMessage = error.localizedDescription
                         self.videos = []
-                        print("❌ MemberVideoStore error:", error.localizedDescription)
+
+                        print(
+                            "❌ MemberVideoStore error:",
+                            error.localizedDescription
+                        )
+
                         return
                     }
 
-                    self.videos = snapshot?.documents.compactMap {
-                        MemberVideoItem(document: $0)
-                    } ?? []
+                    let loadedVideos: [MemberVideoItem] =
+                        snapshot?.documents.compactMap { document in
+                            MemberVideoItem(document: document)
+                        } ?? []
+
+                    self.videos = loadedVideos
 
                     print("✅ 動画読み込み成功:", self.videos.count)
                 }

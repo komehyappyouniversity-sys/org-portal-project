@@ -88,6 +88,20 @@ struct OrganizationDetailView: View {
                 }
             }
 
+            Section("会員アプリ設定") {
+
+                NavigationLink {
+                    MemberRegistrationSettingsView(
+                        organizationId: organization.id
+                    )
+                } label: {
+                    Label(
+                        "会員登録項目設定",
+                        systemImage: "person.text.rectangle"
+                    )
+                }
+            }
+
             Section("管理アプリ設定") {
 
                 NavigationLink {

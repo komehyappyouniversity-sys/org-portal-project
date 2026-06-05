@@ -15,6 +15,8 @@ final class MemberSecurityStore: ObservableObject {
     let relockInterval: TimeInterval = 30
 
     func authenticateIfNeededOnFirstEntry() {
+        guard UserDefaults.standard.bool(forKey: "faceIDAutoLoginEnabled") else { return }
+
         guard !didAuthenticateOnFirstEntry else { return }
         guard !isUnlocked else { return }
         guard !isAuthenticating else { return }
@@ -33,6 +35,11 @@ final class MemberSecurityStore: ObservableObject {
         case .active:
             if shouldRelock {
                 isUnlocked = false
+
+                guard UserDefaults.standard.bool(forKey: "faceIDAutoLoginEnabled") else {
+                    return
+                }
+
                 authenticate()
             }
 
@@ -105,6 +112,12 @@ final class MemberSecurityStore: ObservableObject {
         return Date().timeIntervalSince(lastInactiveDate) >= relockInterval
     }
     func authenticateForSavedLogin(completion: @escaping (Bool) -> Void) {
+
+        guard UserDefaults.standard.bool(forKey: "faceIDAutoLoginEnabled") else {
+            completion(false)
+            return
+        }
+
         guard !isAuthenticating else {
             completion(false)
             return

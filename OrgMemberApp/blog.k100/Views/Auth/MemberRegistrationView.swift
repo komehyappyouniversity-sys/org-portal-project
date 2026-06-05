@@ -16,7 +16,10 @@ struct MemberRegistrationView: View {
     @State private var phone = ""
     @State private var password = ""
     @State private var confirmPassword = ""
+    @State private var isPasswordVisible = false
+    @State private var isConfirmPasswordVisible = false
 
+    @State private var wantsToEnterBirthDate = false
     @State private var selectedYear = Calendar.current.component(.year, from: Date()) - 60
     @State private var selectedMonth = 1
     @State private var selectedDay = 1
@@ -163,8 +166,12 @@ struct MemberRegistrationView: View {
                 .tint(.blue)
 
             if registrationSettingsStore.birthDateRequired {
-                fieldTitle("生年月日")
-                birthDatePicker
+                Toggle("生年月日を入力する（任意）", isOn: $wantsToEnterBirthDate)
+                    .font(.title3.bold())
+
+                if wantsToEnterBirthDate {
+                    birthDatePicker
+                }
             }
 
             fieldTitle("メールアドレス")
@@ -194,7 +201,7 @@ struct MemberRegistrationView: View {
                     .stroke(Color.gray.opacity(0.35), lineWidth: 1)
             )
 
-            fieldTitle("電話番号")
+            fieldTitle("電話番号（任意）")
 
             TextField("", text: $phone)
                 .placeholder(when: phone.isEmpty) {
@@ -207,18 +214,45 @@ struct MemberRegistrationView: View {
 
             fieldTitle("パスワード")
 
-            SecureField("", text: $password)
+            HStack {
+
+                Group {
+
+                    if isPasswordVisible {
+
+                        TextField("", text: $password)
+
+                    } else {
+
+                        SecureField("", text: $password)
+                    }
+                }
                 .placeholder(when: password.isEmpty) {
-                    Text("6文字以上").foregroundColor(.gray)
+                    Text("6文字以上")
+                        .foregroundColor(.gray)
                 }
                 .textContentType(.newPassword)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
-                .textFieldStyle(.roundedBorder)
                 .focused($focusedField, equals: .password)
                 .tint(.blue)
 
-            fieldTitle("パスワード確認")
+                Button {
+
+                    isPasswordVisible.toggle()
+
+                } label: {
+
+                    Image(
+                        systemName:
+                            isPasswordVisible
+                            ? "eye.slash"
+                            : "eye"
+                    )
+                    .foregroundColor(.blue)
+                }
+            }
+            .textFieldStyle(.roundedBorder)
 
             SecureField("", text: $confirmPassword)
                 .placeholder(when: confirmPassword.isEmpty) {
@@ -322,18 +356,8 @@ struct MemberRegistrationView: View {
             missingItems.append("ふりがな")
         }
 
-        if registrationSettingsStore.birthDateRequired {
-            if selectedYear <= 0 || selectedMonth <= 0 || selectedDay <= 0 {
-                missingItems.append("生年月日")
-            }
-        }
-
         if trimmedEmail.isEmpty {
             missingItems.append("メールアドレス")
-        }
-
-        if trimmedPhone.isEmpty {
-            missingItems.append("電話番号")
         }
 
         if trimmedPassword.isEmpty {
@@ -356,7 +380,6 @@ struct MemberRegistrationView: View {
                 trimmedName: trimmedName,
                 trimmedFurigana: trimmedFurigana,
                 trimmedEmail: trimmedEmail,
-                trimmedPhone: trimmedPhone,
                 trimmedPassword: trimmedPassword,
                 trimmedConfirmPassword: trimmedConfirmPassword
             )
@@ -470,7 +493,6 @@ struct MemberRegistrationView: View {
         trimmedName: String,
         trimmedFurigana: String,
         trimmedEmail: String,
-        trimmedPhone: String,
         trimmedPassword: String,
         trimmedConfirmPassword: String
     ) {
@@ -486,11 +508,6 @@ struct MemberRegistrationView: View {
 
         if trimmedEmail.isEmpty {
             focusedField = .email
-            return
-        }
-
-        if trimmedPhone.isEmpty {
-            focusedField = .phone
             return
         }
 
@@ -519,13 +536,16 @@ struct MemberRegistrationView: View {
             "name": name,
             "furigana": furigana,
             "email": email,
-            "phone": phone,
             "status": "pending",
             "createdAt": FieldValue.serverTimestamp(),
             "updatedAt": FieldValue.serverTimestamp()
         ]
 
-        if registrationSettingsStore.birthDateRequired {
+        if !phone.isEmpty {
+            data["phone"] = phone
+        }
+
+        if wantsToEnterBirthDate {
             data["birthDate"] = Timestamp(date: selectedBirthDate)
         }
 
@@ -539,9 +559,17 @@ struct MemberRegistrationView: View {
                     self.isLoading = false
 
                     if let error {
+
                         self.errorMessage =
                         "登録保存に失敗しました：\(error.localizedDescription)"
+
                     } else {
+
+                        UserDefaults.standard.set(
+                            name,
+                            forKey: "memberName"
+                        )
+
                         self.showCompleteAlert = true
                     }
                 }

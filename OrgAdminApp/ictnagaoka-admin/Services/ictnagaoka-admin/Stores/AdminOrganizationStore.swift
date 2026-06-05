@@ -37,7 +37,6 @@ final class AdminOrganizationStore: ObservableObject {
     @Published var currentOrganizationName = ""
     @Published var errorMessage = ""
 
-    private let db = Firestore.firestore()
     private var authHandle: AuthStateDidChangeListenerHandle?
 
     private let currentOrganizationIdKey = "admin_current_organization_id"
@@ -122,7 +121,7 @@ final class AdminOrganizationStore: ObservableObject {
         errorMessage = ""
 
         do {
-            let snapshot = try await db.collection("organizations")
+            let snapshot = try await Firestore.firestore().collection("organizations")
                 .whereField("isActive", isEqualTo: true)
                 .getDocuments()
 
@@ -131,7 +130,7 @@ final class AdminOrganizationStore: ObservableObject {
             for document in snapshot.documents {
                 let orgId = document.documentID
 
-                let adminDoc = try await db.collection("organizations")
+                let adminDoc = try await Firestore.firestore().collection("organizations")
                     .document(orgId)
                     .collection("admins")
                     .document(uid)
@@ -220,7 +219,7 @@ final class AdminOrganizationStore: ObservableObject {
                 return
             }
 
-            self?.db.collection("organizations")
+            Firestore.firestore().collection("organizations")
                 .document(orgId)
                 .collection("admins")
                 .document(uid)

@@ -37,7 +37,10 @@ final class MemberSavedLoginStore {
     }
 
     private func saveValue(_ value: String, account: String) {
-        guard let data = value.data(using: .utf8) else { return }
+
+        guard let data = value.data(using: .utf8) else {
+            return
+        }
 
         deleteValue(account: account)
 
@@ -46,13 +49,15 @@ final class MemberSavedLoginStore {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            kSecAttrAccessible as String:
+                kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         ]
 
         SecItemAdd(query as CFDictionary, nil)
     }
 
     private func loadValue(account: String) -> String? {
+
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -62,11 +67,18 @@ final class MemberSavedLoginStore {
         ]
 
         var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
+
+        let status = SecItemCopyMatching(
+            query as CFDictionary,
+            &item
+        )
 
         guard status == errSecSuccess,
               let data = item as? Data,
-              let value = String(data: data, encoding: .utf8) else {
+              let value = String(
+                data: data,
+                encoding: .utf8
+              ) else {
             return nil
         }
 
@@ -74,6 +86,7 @@ final class MemberSavedLoginStore {
     }
 
     private func deleteValue(account: String) {
+
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

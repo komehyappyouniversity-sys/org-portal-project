@@ -7,6 +7,7 @@ struct MemberLoginView: View {
 
     @State private var email = ""
     @State private var password = ""
+    @State private var isPasswordVisible = false
     @State private var isLoading = false
     @State private var errorMessage = ""
     @State private var successMessage = ""
@@ -36,10 +37,26 @@ struct MemberLoginView: View {
                         .autocorrectionDisabled()
                         .keyboardType(.emailAddress)
                         .textFieldStyle(.roundedBorder)
+                        .tint(.blue)
 
-                    SecureField("パスワード", text: $password)
-                        .textFieldStyle(.roundedBorder)
+                    HStack {
 
+                        if isPasswordVisible {
+                            TextField("パスワード", text: $password)
+                                .tint(.blue)
+                        } else {
+                            SecureField("パスワード", text: $password)
+                                .tint(.blue)
+                        }
+
+                        Button {
+                            isPasswordVisible.toggle()
+                        } label: {
+                            Image(systemName: isPasswordVisible ? "eye.slash" : "eye")
+                                .foregroundColor(.blue)
+                        }
+                    }
+                    .textFieldStyle(.roundedBorder)
                     Button {
                         login()
                     } label: {

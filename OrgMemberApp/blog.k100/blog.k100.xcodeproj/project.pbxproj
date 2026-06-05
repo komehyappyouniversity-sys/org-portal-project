@@ -24,6 +24,7 @@
 		89933DB62FC9C237007B16AC /* DailyScheduleNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89933DB52FC9C237007B16AC /* DailyScheduleNotificationManager.swift */; };
 		89933DC72FC9CF59007B16AC /* MemberDiaryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89933DC62FC9CF59007B16AC /* MemberDiaryStore.swift */; };
 		89933DC92FC9CF77007B16AC /* MemberDiary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89933DC82FC9CF77007B16AC /* MemberDiary.swift */; };
+		89933E122FD1AB87007B16AC /* MemberVideoQuestionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89933E112FD1AB87007B16AC /* MemberVideoQuestionListView.swift */; };
 		899632132FA8A2B0002FA8BC /* PushNavigationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 899632122FA8A2B0002FA8BC /* PushNavigationStore.swift */; };
 		899F3D8A2F996AE100713584 /* MemberMessageItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 899F3D892F996AE100713584 /* MemberMessageItem.swift */; };
 		89A3A90A2FB1AA600026FC39 /* MemberFeatureSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89A3A9092FB1AA600026FC39 /* MemberFeatureSettings.swift */; };
@@ -95,6 +96,7 @@
 		89933DB52FC9C237007B16AC /* DailyScheduleNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyScheduleNotificationManager.swift; sourceTree = "<group>"; };
 		89933DC62FC9CF59007B16AC /* MemberDiaryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberDiaryStore.swift; sourceTree = "<group>"; };
 		89933DC82FC9CF77007B16AC /* MemberDiary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberDiary.swift; sourceTree = "<group>"; };
+		89933E112FD1AB87007B16AC /* MemberVideoQuestionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberVideoQuestionListView.swift; sourceTree = "<group>"; };
 		899632122FA8A2B0002FA8BC /* PushNavigationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNavigationStore.swift; sourceTree = "<group>"; };
 		899F3D892F996AE100713584 /* MemberMessageItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberMessageItem.swift; sourceTree = "<group>"; };
 		89A3A9092FB1AA600026FC39 /* MemberFeatureSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberFeatureSettings.swift; sourceTree = "<group>"; };
@@ -288,6 +290,7 @@
 				895DBF012FB5937B008B23B8 /* MemberOrganizationSelectionView.swift */,
 				894C8B422FB81DF40035607A /* MemberQRCodeScannerView.swift */,
 				894C8B442FB81E780035607A /* MemberQRScannerSheet.swift */,
+				89933E112FD1AB87007B16AC /* MemberVideoQuestionListView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -491,6 +494,7 @@
 				89C198732F8E156900610C65 /* ScheduleView.swift in Sources */,
 				89C1983A2F8C52CA00610C65 /* RegistrationStatusStore.swift in Sources */,
 				89933DC72FC9CF59007B16AC /* MemberDiaryStore.swift in Sources */,
+				89933E122FD1AB87007B16AC /* MemberVideoQuestionListView.swift in Sources */,
 				89C198AE2F8EF50400610C65 /* MemberOrganizationService.swift in Sources */,
 				89C1992F2F90BCED00610C65 /* MemberPost.swift in Sources */,
 				89933DC92FC9CF77007B16AC /* MemberDiary.swift in Sources */,
@@ -665,7 +669,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = blog.k100Release.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 14;
+				CURRENT_PROJECT_VERSION = 15;
 				DEVELOPMENT_TEAM = D76B4Y2RXA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -709,7 +713,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = blog.k100Release.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 14;
+				CURRENT_PROJECT_VERSION = 15;
 				DEVELOPMENT_TEAM = D76B4Y2RXA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;

@@ -5,7 +5,7 @@ import FirebaseFirestore
 @MainActor
 final class MemberRegistrationSettingsStore: ObservableObject {
 
-    @Published var birthDateRequired: Bool = true
+    @Published var birthDateRequired: Bool = false
     @Published var isLoading: Bool = false
     @Published var errorMessage: String = ""
 
@@ -22,7 +22,7 @@ final class MemberRegistrationSettingsStore: ObservableObject {
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !trimmedOrganizationId.isEmpty else {
-            birthDateRequired = true
+            birthDateRequired = false
             errorMessage = "organizationId が空です。"
             return
         }
@@ -51,19 +51,19 @@ final class MemberRegistrationSettingsStore: ObservableObject {
 
                 if let error {
                     print("❌ memberRegistration settings 読み込み失敗:", error.localizedDescription)
-                    self.birthDateRequired = true
+                    self.birthDateRequired = false
                     self.errorMessage = error.localizedDescription
                     return
                 }
 
                 guard let snapshot, snapshot.exists else {
-                    print("ℹ️ memberRegistration settings 未作成のため birthDateRequired=true")
-                    self.birthDateRequired = true
+                    print("ℹ️ memberRegistration settings 未作成のため birthDateRequired=false")
+                    self.birthDateRequired = false
                     return
                 }
 
                 let data = snapshot.data() ?? [:]
-                self.birthDateRequired = data["birthDateRequired"] as? Bool ?? true
+                self.birthDateRequired = data["birthDateRequired"] as? Bool ?? false
 
                 print("✅ memberRegistration settings 読み込み:", self.birthDateRequired)
             }

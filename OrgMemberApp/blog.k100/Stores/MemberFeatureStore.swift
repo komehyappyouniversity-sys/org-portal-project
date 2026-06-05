@@ -22,7 +22,7 @@ final class MemberFeatureStore: ObservableObject {
         let orgId = organizationId.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !orgId.isEmpty else {
-            errorMessage = "organizationId が空です"
+            errorMessage = ""
             print("❌ MemberFeatureStore organizationId empty")
             return
         }
@@ -44,18 +44,20 @@ final class MemberFeatureStore: ObservableObject {
                     self.isLoading = false
 
                     if let error {
-                        self.errorMessage = error.localizedDescription
                         self.settings = .default
+                        self.errorMessage = self.userFriendlyErrorMessage(error)
                         print("❌ member adminFeatures read error:", error.localizedDescription)
                         return
                     }
 
                     guard let data = snapshot?.data() else {
                         self.settings = .default
+                        self.errorMessage = ""
                         print("⚠️ settings/adminFeatures not found. using default settings")
                         return
                     }
 
+                    self.errorMessage = ""
                     self.settings = MemberFeatureSettings(data: data)
 
                     print("✅ member adminFeatures loaded from settings/adminFeatures:", data)
@@ -86,5 +88,15 @@ final class MemberFeatureStore: ObservableObject {
 
     var announcementEnabled: Bool {
         settings.announcementEnabled
+    }
+
+    private func userFriendlyErrorMessage(_ error: Error) -> String {
+        let message = error.localizedDescription
+
+        if message.contains("Missing or insufficient permissions") {
+            return "ログインすると会員ページを利用できます。"
+        }
+
+        return "情報を読み込めませんでした。時間をおいてもう一度お試しください。"
     }
 }
