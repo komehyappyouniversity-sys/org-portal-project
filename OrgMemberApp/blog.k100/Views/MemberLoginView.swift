@@ -167,6 +167,8 @@ struct MemberLoginView: View {
                     email: trimmedEmail,
                     password: password
                 )
+                
+                securityStore.isUnlocked = true
 
                 successMessage = "ログイン成功"
 

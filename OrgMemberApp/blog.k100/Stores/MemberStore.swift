@@ -210,14 +210,20 @@ final class MemberStore: ObservableObject {
     }
 
     func signOut() {
+
+        UserDefaults.standard.set(
+            false,
+            forKey: "faceIDAutoLoginEnabled"
+        )
+
+        memberListener?.remove()
+        memberListener = nil
+
         try? Auth.auth().signOut()
 
         authUid = nil
         profile = nil
         isLoading = false
         watchingMemberPath = ""
-
-        memberListener?.remove()
-        memberListener = nil
     }
 }

@@ -404,7 +404,7 @@ struct MemberPageView: View {
     }
 
     private func logout() {
-        securityStore.isUnlocked = false
-        dismiss()
+
+        securityStore.lockNow()
     }
 }

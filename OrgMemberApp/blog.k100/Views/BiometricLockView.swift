@@ -1,7 +1,9 @@
 import SwiftUI
+import FirebaseAuth
 
 struct BiometricLockView: View {
     @EnvironmentObject var securityStore: MemberSecurityStore
+    @EnvironmentObject var memberStore: MemberStore
 
     var body: some View {
         VStack(spacing: 24) {
@@ -49,10 +51,37 @@ struct BiometricLockView: View {
             .disabled(securityStore.isAuthenticating)
             .padding(.horizontal)
 
+            Button {
+                loginWithEmail()
+            } label: {
+                Text("メールアドレスでログイン")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.gray.opacity(0.15))
+                    .foregroundStyle(.blue)
+                    .clipShape(Capsule())
+            }
+            .padding(.horizontal)
+
             Spacer()
         }
         .padding()
         .navigationTitle("会員認証")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func loginWithEmail() {
+
+        UserDefaults.standard.set(
+            false,
+            forKey: "faceIDAutoLoginEnabled"
+        )
+
+        memberStore.signOut()
+
+        securityStore.isUnlocked = true
+        securityStore.isAuthenticating = false
+        securityStore.errorMessage = ""
     }
 }

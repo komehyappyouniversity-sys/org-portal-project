@@ -23,6 +23,7 @@ final class VideoPurchaseStore: ObservableObject {
     }
 
     func loadProducts(productIds: [String]) async {
+        print("🟡 loadProducts開始 productIds:", productIds)
         let uniqueIds = Array(Set(productIds)).filter { !$0.isEmpty }
 
         guard !uniqueIds.isEmpty else {

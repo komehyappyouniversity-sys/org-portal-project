@@ -51,14 +51,19 @@ struct MemberAppRootView: View {
                         .environmentObject(organizationStore)
                         .environmentObject(featureStore)
 
-                } else if !securityStore.isUnlocked {
+                } else if UserDefaults.standard.bool(forKey: "faceIDAutoLoginEnabled"),
+                          memberStore.authUid != nil,
+                          !securityStore.isUnlocked {
                     BiometricLockView()
                         .environmentObject(securityStore)
+                        .environmentObject(memberStore)
                         .onAppear {
                             securityStore.authenticateIfNeededOnFirstEntry()
                         }
 
-                } else if memberStore.profile?.isApproved == true {
+                } else if memberStore.profile?.isApproved == true &&
+                          securityStore.isUnlocked {
+                    
                     MemberPageView()
                         .environmentObject(memberStore)
                         .environmentObject(organizationStore)

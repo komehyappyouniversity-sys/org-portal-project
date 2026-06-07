@@ -126,6 +126,12 @@ private struct VideoSettingRow: View {
     @State private var priceInput: String
     @State private var isSaved = false
     @State private var isEditingAfterSave = true
+    private let productIdOptions = [
+        "video500",
+        "video1000",
+        "video3000",
+        "video5000"
+    ]
 
     init(
         video: AdminManagedVideo,
@@ -274,10 +280,23 @@ private struct VideoSettingRow: View {
             .disabled(!isEditingAfterSave)
 
             TextField("金額を入力 例: 1000", text: $priceInput)
-                .keyboardType(.numberPad)
-                .textFieldStyle(.roundedBorder)
-                .disabled(!isEditingAfterSave)
+            Picker("App Store 商品ID", selection: binding(\.productId)) {
 
+                Text("選択してください")
+                    .tag("")
+
+                ForEach(productIdOptions, id: \.self) { productId in
+                    Text(productId)
+                        .tag(productId)
+                }
+            }
+            .pickerStyle(.menu)
+            .disabled(!isEditingAfterSave)
+
+            Text("App Store Connect に登録した商品IDと完全一致させてください。")
+                .font(.caption)
+                .foregroundColor(.gray)
+                
             Text(editedVideo.priceText.isEmpty ? "表示例: 月額 1,000円" : "表示: \(editedVideo.priceText)")
                 .font(.caption)
                 .foregroundColor(.gray)

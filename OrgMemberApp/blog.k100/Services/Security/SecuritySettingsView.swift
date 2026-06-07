@@ -8,7 +8,7 @@ struct SecuritySettingsView: View {
     @EnvironmentObject private var organizationStore: OrganizationStore
 
     @AppStorage("faceIDAutoLoginEnabled")
-    private var faceIDAutoLoginEnabled = true
+    private var faceIDAutoLoginEnabled = false
 
     @State private var showClearLoginAlert = false
     @State private var showDeleteAccountAlert = false
@@ -63,9 +63,10 @@ struct SecuritySettingsView: View {
                     Text("・会員ページへのログイン情報")
                     Text("・このコミュニティの会員情報")
 
-                    Text("管理者権限を持つアカウントは、この画面から削除できません。")
+                    Text("管理者権限を持つアカウントは、この画面から退会（会員情報削除）することはできません。")
                         .font(.headline)
                         .foregroundColor(.red)
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 6)
 
                     Text("退会後に再度利用する場合は、新しく会員登録が必要です。")

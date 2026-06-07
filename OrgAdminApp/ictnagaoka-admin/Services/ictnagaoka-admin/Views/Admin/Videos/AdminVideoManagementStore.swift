@@ -38,6 +38,10 @@ final class AdminVideoManagementStore: ObservableObject {
         isError = false
 
         do {
+            let savedVideos = try await loadSavedVideos(
+                organizationId: safeOrganizationId
+            )
+
             let token = try await user.getIDToken()
 
             guard let url = URL(
@@ -75,24 +79,35 @@ final class AdminVideoManagementStore: ObservableObject {
             let decoded = try JSONDecoder().decode(VimeoFetchResponse.self, from: data)
 
             let managedVideos = decoded.videos.map { item in
-                AdminManagedVideo(
+                let saved = savedVideos[item.id]
+
+                return AdminManagedVideo(
                     id: item.id,
                     title: item.title,
                     description: item.description,
                     vimeoVideoId: item.id,
-                    thumbnailUrl: item.thumbnailUrl,
+                    thumbnailUrl: item.thumbnailUrl.isEmpty
+                        ? (saved?.thumbnailUrl ?? "")
+                        : item.thumbnailUrl,
                     videoUrl: item.link,
-                    isPublished: false,
-                    isMembersOnly: true,
-                    isPremium: false,
-                    price: 0,
-                    priceText: "",
-                    billingType: "monthly",
-                    sortOrder: 0
+                    isPublished: saved?.isPublished ?? false,
+                    isMembersOnly: saved?.isMembersOnly ?? true,
+                    isPremium: saved?.isPremium ?? false,
+                    price: saved?.price ?? 0,
+                    priceText: saved?.priceText ?? "",
+                    billingType: saved?.billingType ?? "monthly",
+                    productId: saved?.productId ?? "",
+                    sortOrder: saved?.sortOrder ?? 0
                 )
             }
 
-            self.videos = managedVideos
+            self.videos = managedVideos.sorted {
+                if $0.sortOrder == $1.sortOrder {
+                    return $0.title < $1.title
+                }
+                return $0.sortOrder < $1.sortOrder
+            }
+
             self.message = "Vimeoから \(managedVideos.count) 件読み込みました"
             self.isError = false
             self.isLoading = false
@@ -102,13 +117,57 @@ final class AdminVideoManagementStore: ObservableObject {
         }
     }
 
+    private func loadSavedVideos(
+        organizationId: String
+    ) async throws -> [String: AdminManagedVideo] {
+
+        let snapshot = try await db.collection("organizations")
+            .document(organizationId)
+            .collection("videos")
+            .getDocuments()
+
+        var result: [String: AdminManagedVideo] = [:]
+
+        for document in snapshot.documents {
+            let data = document.data()
+
+            let vimeoVideoId = data["vimeoVideoId"] as? String ?? document.documentID
+
+            let video = AdminManagedVideo(
+                id: document.documentID,
+                title: data["title"] as? String ?? "",
+                description: data["description"] as? String ?? "",
+                vimeoVideoId: vimeoVideoId,
+                thumbnailUrl: data["thumbnailUrl"] as? String ?? "",
+                videoUrl: data["videoUrl"] as? String ?? "",
+                isPublished: data["isPublished"] as? Bool ?? false,
+                isMembersOnly: data["isMembersOnly"] as? Bool ?? true,
+                isPremium: data["isPremium"] as? Bool ?? false,
+                price: data["price"] as? Int ?? 0,
+                priceText: data["priceText"] as? String ?? "",
+                billingType: data["billingType"] as? String ?? "monthly",
+                productId: data["productId"] as? String ?? "",
+                sortOrder: data["sortOrder"] as? Int ?? 0,
+                createdAt: data["createdAt"] as? Timestamp,
+                updatedAt: data["updatedAt"] as? Timestamp
+            )
+
+            result[vimeoVideoId] = video
+        }
+
+        return result
+    }
+
     func saveVideo(_ video: AdminManagedVideo, organizationId: String) {
         Task {
             await saveVideoAsync(video, organizationId: organizationId)
         }
     }
 
-    private func saveVideoAsync(_ video: AdminManagedVideo, organizationId: String) async {
+    private func saveVideoAsync(
+        _ video: AdminManagedVideo,
+        organizationId: String
+    ) async {
         let safeOrganizationId = organizationId
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -117,7 +176,9 @@ final class AdminVideoManagementStore: ObservableObject {
             return
         }
 
-        let docId = video.vimeoVideoId.isEmpty ? UUID().uuidString : video.vimeoVideoId
+        let docId = video.vimeoVideoId.isEmpty
+            ? UUID().uuidString
+            : video.vimeoVideoId
 
         let data: [String: Any] = [
             "title": video.title,
@@ -131,6 +192,7 @@ final class AdminVideoManagementStore: ObservableObject {
             "price": video.price,
             "priceText": video.priceText,
             "billingType": video.billingType,
+            "productId": video.productId,
             "sortOrder": video.sortOrder,
             "updatedAt": FieldValue.serverTimestamp()
         ]

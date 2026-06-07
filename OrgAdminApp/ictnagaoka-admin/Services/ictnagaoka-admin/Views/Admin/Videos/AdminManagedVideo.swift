@@ -2,6 +2,7 @@ import Foundation
 import FirebaseFirestore
 
 struct AdminManagedVideo: Identifiable, Codable {
+
     @DocumentID var id: String?
 
     var title: String
@@ -14,10 +15,10 @@ struct AdminManagedVideo: Identifiable, Codable {
     var isMembersOnly: Bool
     var isPremium: Bool
 
-    // 🔥 追加（課金）
     var price: Int
     var priceText: String
-    var billingType: String   // "monthly" or "oneTime"
+    var billingType: String
+    var productId: String
 
     var sortOrder: Int
 
@@ -36,7 +37,8 @@ struct AdminManagedVideo: Identifiable, Codable {
         isPremium: Bool = false,
         price: Int = 0,
         priceText: String = "",
-        billingType: String = "monthly", // ← デフォルトは月額
+        billingType: String = "monthly",
+        productId: String = "",
         sortOrder: Int = 0,
         createdAt: Timestamp? = nil,
         updatedAt: Timestamp? = nil
@@ -47,13 +49,18 @@ struct AdminManagedVideo: Identifiable, Codable {
         self.vimeoVideoId = vimeoVideoId
         self.thumbnailUrl = thumbnailUrl
         self.videoUrl = videoUrl
+
         self.isPublished = isPublished
         self.isMembersOnly = isMembersOnly
         self.isPremium = isPremium
+
         self.price = price
         self.priceText = priceText
         self.billingType = billingType
+        self.productId = productId
+
         self.sortOrder = sortOrder
+
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

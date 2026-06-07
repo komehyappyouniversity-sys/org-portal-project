@@ -11,7 +11,7 @@ struct AdminDashboardView: View {
         organizationStore.currentOrganizationId
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
-    
+
     private var resolvedOrganizationName: String {
         let name = organizationStore.currentOrganizationName
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -99,28 +99,16 @@ struct AdminDashboardView: View {
                             AdminVideoManagementView()
                                 .environmentObject(organizationStore)
                         }
+
+                        menuButton(title: "動画質問一覧") {
+                            AdminVideoQuestionListView()
+                                .environmentObject(organizationStore)
+                        }
                     }
 
                     if featureStore.paidVideoEnabled {
                         menuButton(title: "有料動画・課金設定") {
                             AdminSubscriptionManageView()
-                                .environmentObject(organizationStore)
-                        }
-                    }
-                    
-                    if featureStore.videoEnabled {
-                        menuButton(title: "Vimeo連携設定") {
-                            AdminVimeoSettingsView()
-                                .environmentObject(organizationStore)
-                        }
-
-                        menuButton(title: "動画管理") {
-                            AdminVideoManagementView()
-                                .environmentObject(organizationStore)
-                        }
-
-                        menuButton(title: "動画質問一覧") {
-                            AdminVideoQuestionListView()
                                 .environmentObject(organizationStore)
                         }
                     }
