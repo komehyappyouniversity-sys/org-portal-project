@@ -30,6 +30,7 @@ struct SharedManualEditView: View {
     @State private var localErrorMessage = ""
 
     private let storage = Storage.storage()
+    private let workingManualId: String
 
     init(
         store: SharedManualStore,
@@ -37,6 +38,7 @@ struct SharedManualEditView: View {
     ) {
         self.store = store
         self.manual = manual
+        self.workingManualId = manual?.id ?? UUID().uuidString
 
         _title = State(initialValue: manual?.title ?? "")
         _bodyText = State(initialValue: manual?.body ?? "")
@@ -99,7 +101,7 @@ struct SharedManualEditView: View {
                         attachmentRow(attachment)
                     }
                     .onDelete { indexSet in
-                        attachments.remove(atOffsets: indexSet)
+                        deleteAttachments(at: indexSet)
                     }
                 }
             }
@@ -189,6 +191,15 @@ struct SharedManualEditView: View {
                         .font(.caption.bold())
                 }
             }
+
+            Spacer()
+
+            Button(role: .destructive) {
+                deleteAttachment(attachment)
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
         }
         .padding(.vertical, 4)
     }
@@ -207,13 +218,13 @@ struct SharedManualEditView: View {
     }
 
     private func uploadSelectedImage() async {
-        guard let selectedImageItem else { return }
+        guard let imageItem = selectedImageItem else { return }
 
         localErrorMessage = ""
         isUploading = true
 
         do {
-            guard let data = try await selectedImageItem
+            guard let data = try await imageItem
                 .loadTransferable(type: Data.self) else {
 
                 localErrorMessage = "画像データを読み込めませんでした。"
@@ -230,9 +241,8 @@ struct SharedManualEditView: View {
             }
 
             let attachmentId = UUID().uuidString
-            let manualId = manual?.id ?? "new"
             let path =
-                "sharedManuals/\(manualId)/attachments/\(attachmentId).png"
+                "sharedManuals/\(workingManualId)/attachments/\(attachmentId).png"
 
             let ref = storage.reference().child(path)
 
@@ -297,10 +307,9 @@ struct SharedManualEditView: View {
             let data = try Data(contentsOf: url)
 
             let attachmentId = UUID().uuidString
-            let manualId = manual?.id ?? "new"
             let fileName = url.lastPathComponent
             let path =
-                "sharedManuals/\(manualId)/attachments/\(attachmentId)-\(fileName)"
+                "sharedManuals/\(workingManualId)/attachments/\(attachmentId)-\(fileName)"
 
             let ref = storage.reference().child(path)
 
@@ -376,6 +385,7 @@ struct SharedManualEditView: View {
                 )
             } else {
                 await store.createManual(
+                    manualId: workingManualId,
                     title: title,
                     body: bodyText,
                     sortOrder: sortOrder,
@@ -386,6 +396,41 @@ struct SharedManualEditView: View {
 
             if store.errorMessage.isEmpty {
                 dismiss()
+            }
+        }
+    }
+
+    private func deleteAttachments(at indexSet: IndexSet) {
+        let targets = indexSet.compactMap { index in
+            attachments.indices.contains(index) ? attachments[index] : nil
+        }
+
+        attachments.remove(atOffsets: indexSet)
+
+        for attachment in targets {
+            deleteStoredFileIfNeeded(for: attachment)
+        }
+    }
+
+    private func deleteAttachment(_ attachment: SharedManualAttachment) {
+        attachments.removeAll { $0.id == attachment.id }
+        deleteStoredFileIfNeeded(for: attachment)
+    }
+
+    private func deleteStoredFileIfNeeded(
+        for attachment: SharedManualAttachment
+    ) {
+        guard attachment.type == "image" || attachment.type == "pdf" else {
+            return
+        }
+
+        Task {
+            do {
+                let ref = storage.reference(forURL: attachment.url)
+                try await ref.delete()
+            } catch {
+                localErrorMessage =
+                    "添付ファイルの削除に失敗しました: \(error.localizedDescription)"
             }
         }
     }

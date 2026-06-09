@@ -1,0 +1,35 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn()
+        && firestore.exists(/databases/(default)/documents/superAdmins/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/superAdmins/$(request.auth.uid)).data.isActive == true;
+    }
+
+    function isSharedManualAttachment() {
+      return request.resource != null
+        && request.resource.size < 25 * 1024 * 1024
+        && (
+          request.resource.contentType.matches('image/.*')
+          || request.resource.contentType == 'application/pdf'
+        );
+    }
+
+    match /sharedManuals/{manualId}/attachments/{fileName} {
+      allow read: if isSignedIn();
+      allow create, update: if isSuperAdmin() && isSharedManualAttachment();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

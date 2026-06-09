@@ -113,6 +113,7 @@ final class SharedManualStore: ObservableObject {
     }
 
     func createManual(
+        manualId: String,
         title: String,
         body: String,
         sortOrder: Int,
@@ -135,7 +136,9 @@ final class SharedManualStore: ObservableObject {
         }
 
         do {
-            try await db.collection("sharedManuals").addDocument(data: [
+            try await db.collection("sharedManuals")
+                .document(manualId)
+                .setData([
                 "title": trimmedTitle,
                 "body": trimmedBody,
                 "sortOrder": sortOrder,

@@ -32,8 +32,40 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/organizations/$(organizationId)).data.isActive == true;
     }
 
+    function isSharedManualData(data) {
+      return data.keys().hasOnly([
+          "title",
+          "body",
+          "sortOrder",
+          "isPublished",
+          "attachments",
+          "createdAt",
+          "updatedAt"
+        ])
+        && data.keys().hasAll([
+          "title",
+          "body",
+          "sortOrder",
+          "isPublished",
+          "attachments"
+        ])
+        && data.title is string
+        && data.body is string
+        && data.sortOrder is int
+        && data.isPublished is bool
+        && data.attachments is list;
+    }
+
     match /superAdmins/{uid} {
       allow read, create, update, delete: if isSuperAdmin();
+    }
+
+    match /sharedManuals/{manualId} {
+      allow read: if isSignedIn()
+        && (resource.data.isPublished == true || isSuperAdmin());
+      allow create, update: if isSuperAdmin()
+        && isSharedManualData(request.resource.data);
+      allow delete: if isSuperAdmin();
     }
 
     match /organizations/{organizationId} {
