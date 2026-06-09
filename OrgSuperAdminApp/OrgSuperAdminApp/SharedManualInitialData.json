@@ -1,0 +1,122 @@
+[
+  {
+    "id": "shared_manual_001_member_page",
+    "title": "会員ページの使い方",
+    "body": "会員ページでは、お知らせの確認、動画の視聴、予約、投稿などができます。まずは画面の一番上にある「お知らせ」を確認してください。よく使う機能は大きなボタンで表示されています。使いたい項目を1回タップすると、それぞれの画面に進みます。",
+    "sortOrder": 1,
+    "isPublished": true,
+    "attachments": [
+      {
+        "id": "manual_001_image",
+        "type": "image",
+        "name": "会員ページ全体の案内イラスト",
+        "url": ""
+      }
+    ]
+  },
+  {
+    "id": "shared_manual_002_announcements",
+    "title": "お知らせの確認方法",
+    "body": "大切な連絡は「お知らせ」に届きます。会員ページを開いたら、最初にお知らせを確認してください。新しい連絡、行事の変更、持ち物、注意事項などが掲載されます。内容を読んだら、必要に応じて家族や担当者にも共有してください。",
+    "sortOrder": 2,
+    "isPublished": true,
+    "attachments": [
+      {
+        "id": "manual_002_image",
+        "type": "image",
+        "name": "お知らせ確認のイラスト",
+        "url": ""
+      }
+    ]
+  },
+  {
+    "id": "shared_manual_003_video",
+    "title": "動画を見る方法",
+    "body": "「動画」ボタンをタップすると、登録されている動画の一覧が表示されます。見たい動画を選ぶと再生できます。音が聞こえない場合は、端末の音量やマナーモードを確認してください。途中で分からなくなった場合は、画面を戻ってもう一度動画を選び直してください。",
+    "sortOrder": 3,
+    "isPublished": true,
+    "attachments": [
+      {
+        "id": "manual_003_image",
+        "type": "image",
+        "name": "動画再生ボタンのイラスト",
+        "url": ""
+      }
+    ]
+  },
+  {
+    "id": "shared_manual_004_booking",
+    "title": "予約の方法",
+    "body": "「予約」ボタンをタップすると、予約できる行事や予定が表示されます。参加したい項目を選び、内容を確認してから予約してください。予約を取り消したい場合や内容が分からない場合は、担当者へ連絡してください。",
+    "sortOrder": 4,
+    "isPublished": true,
+    "attachments": [
+      {
+        "id": "manual_004_image",
+        "type": "image",
+        "name": "予約操作のイラスト",
+        "url": ""
+      }
+    ]
+  },
+  {
+    "id": "shared_manual_005_post",
+    "title": "投稿の方法",
+    "body": "「投稿」ボタンから、近況や連絡したい内容を送ることができます。入力した内容を確認してから送信してください。個人情報や他の人が困る内容は投稿しないようにしましょう。送った投稿の確認は「投稿履歴」から行えます。",
+    "sortOrder": 5,
+    "isPublished": true,
+    "attachments": [
+      {
+        "id": "manual_005_image",
+        "type": "image",
+        "name": "投稿入力のイラスト",
+        "url": ""
+      }
+    ]
+  },
+  {
+    "id": "shared_manual_006_schedule",
+    "title": "今日の予定とスケジュール",
+    "body": "「今日の予定」では、本日の予定を確認できます。「スケジュール」では、これからの予定を一覧で見ることができます。日付や時間を確認し、必要な持ち物や集合場所がある場合は忘れないようにしてください。",
+    "sortOrder": 6,
+    "isPublished": true,
+    "attachments": [
+      {
+        "id": "manual_006_image",
+        "type": "image",
+        "name": "カレンダー確認のイラスト",
+        "url": ""
+      }
+    ]
+  },
+  {
+    "id": "shared_manual_007_security",
+    "title": "セキュリティ設定について",
+    "body": "パスワードやログイン情報は、本人確認のために大切なものです。他の人に教えないようにしてください。設定を変更したい場合は、画面下の「セキュリティ設定」から確認できます。不安なことがある場合は、無理に操作せず担当者へ相談してください。",
+    "sortOrder": 7,
+    "isPublished": true,
+    "attachments": [
+      {
+        "id": "manual_007_image",
+        "type": "image",
+        "name": "鍵とスマートフォンのイラスト",
+        "url": ""
+      }
+    ]
+  },
+  {
+    "id": "shared_manual_008_help",
+    "title": "困ったときの連絡方法",
+    "body": "画面の操作で困ったとき、予約や投稿の内容が分からないとき、ログインできないときは、担当者へ連絡してください。エラー画面が出ている場合は、表示されている内容をそのまま伝えると確認がしやすくなります。",
+    "sortOrder": 8,
+    "isPublished": true,
+    "attachments": [
+      {
+        "id": "manual_008_image",
+        "type": "image",
+        "name": "相談する人のイラスト",
+        "url": ""
+      }
+    ]
+  }
+]

@@ -48,11 +48,37 @@ struct SharedManualItem: Identifiable {
     var updatedAt: Date?
 }
 
+private struct SharedManualSeedItem: Decodable {
+    let id: String
+    let title: String
+    let body: String
+    let sortOrder: Int
+    let isPublished: Bool
+    let attachments: [SharedManualSeedAttachment]
+}
+
+private struct SharedManualSeedAttachment: Decodable {
+    let id: String
+    let type: String
+    let name: String
+    let url: String
+
+    var dictionary: [String: Any] {
+        [
+            "id": id,
+            "type": type,
+            "name": name,
+            "url": url
+        ]
+    }
+}
+
 @MainActor
 final class SharedManualStore: ObservableObject {
     @Published var manuals: [SharedManualItem] = []
     @Published var isLoading = false
     @Published var errorMessage = ""
+    @Published var importMessage = ""
 
     private let db = Firestore.firestore()
     private var listener: ListenerRegistration?
@@ -200,6 +226,51 @@ final class SharedManualStore: ObservableObject {
                 .delete()
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    func importInitialManuals() async {
+        errorMessage = ""
+        importMessage = ""
+
+        guard let url = Bundle.main.url(
+            forResource: "SharedManualInitialData",
+            withExtension: "json"
+        ) else {
+            errorMessage = "初期データファイルが見つかりません。"
+            return
+        }
+
+        do {
+            let data = try Data(contentsOf: url)
+            let seedItems = try JSONDecoder().decode(
+                [SharedManualSeedItem].self,
+                from: data
+            )
+
+            let batch = db.batch()
+            let collection = db.collection("sharedManuals")
+
+            for item in seedItems {
+                let document = collection.document(item.id)
+                batch.setData(
+                    [
+                        "title": item.title,
+                        "body": item.body,
+                        "sortOrder": item.sortOrder,
+                        "isPublished": item.isPublished,
+                        "attachments": item.attachments.map { $0.dictionary },
+                        "createdAt": FieldValue.serverTimestamp(),
+                        "updatedAt": FieldValue.serverTimestamp()
+                    ],
+                    forDocument: document
+                )
+            }
+
+            try await batch.commit()
+            importMessage = "初期データ\(seedItems.count)件を保存しました。"
+        } catch {
+            errorMessage = "初期データの保存に失敗しました: \(error.localizedDescription)"
         }
     }
 }

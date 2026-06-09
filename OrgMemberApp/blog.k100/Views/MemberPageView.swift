@@ -13,6 +13,10 @@ struct MemberPageView: View {
     @StateObject private var postStore = MemberPostStore()
     
     private let logoDisplayHeight: CGFloat = 220
+    private let menuColumns = [
+        GridItem(.flexible(), spacing: 14),
+        GridItem(.flexible(), spacing: 14)
+    ]
 
     var body: some View {
 
@@ -26,9 +30,11 @@ struct MemberPageView: View {
             ScrollView {
 
                 VStack(spacing: 24) {
-                    organizationHeader
+                    announcementSection
                     headerCard
+                    organizationHeader
                     menuSection
+                    settingsSection
                     logoutSection
                 }
                 .padding(20)
@@ -88,6 +94,29 @@ struct MemberPageView: View {
             }
             .padding()
             .navigationTitle("会員認証")
+        }
+    }
+
+    @ViewBuilder
+    private var announcementSection: some View {
+        if featureStore.settings.memberMessageEnabled {
+
+            NavigationLink {
+                MemberMessageListView(
+                    titleText: "お知らせ",
+                    visibility: "member"
+                )
+                .environmentObject(memberStore)
+                .environmentObject(organizationStore)
+
+            } label: {
+                topActionButton(
+                    title: "お知らせ",
+                    subtitle: "大切な連絡を見る",
+                    systemImage: "bell.fill",
+                    color: .orange
+                )
+            }
         }
     }
 
@@ -159,133 +188,167 @@ struct MemberPageView: View {
     }
 
     private var menuSection: some View {
-        VStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: 18) {
 
-            if featureStore.settings.scheduleEnabled {
+            LazyVGrid(columns: menuColumns, spacing: 14) {
 
-                NavigationLink {
-                    ScheduleView()
+                if featureStore.videoEnabled {
+
+                    NavigationLink {
+                        MemberVideoListView()
+                            .environmentObject(memberStore)
+                            .environmentObject(organizationStore)
+
+                    } label: {
+                        largeMenuButton(
+                            title: "動画",
+                            systemImage: "play.rectangle.fill",
+                            color: .blue
+                        )
+                    }
+                }
+
+                if featureStore.bookingEnabled {
+
+                    NavigationLink {
+                        MemberBookingEventListView(
+                            organizationId: organizationStore.organizationId
+                        )
                         .environmentObject(memberStore)
                         .environmentObject(organizationStore)
 
-                } label: {
-                    menuButton(title: "スケジュール")
+                    } label: {
+                        largeMenuButton(
+                            title: "予約",
+                            systemImage: "calendar.badge.plus",
+                            color: .green
+                        )
+                    }
+                }
+
+                if featureStore.settings.memberPostEnabled {
+
+                    NavigationLink {
+                        MemberPostView()
+                            .environmentObject(memberStore)
+                            .environmentObject(organizationStore)
+
+                    } label: {
+                        largeMenuButton(
+                            title: "投稿",
+                            systemImage: "square.and.pencil",
+                            color: .purple
+                        )
+                    }
                 }
             }
 
-            if featureStore.bookingEnabled {
+            LazyVGrid(columns: menuColumns, spacing: 14) {
+
+                if featureStore.settings.scheduleEnabled {
+
+                    NavigationLink {
+                        ScheduleView()
+                            .environmentObject(memberStore)
+                            .environmentObject(organizationStore)
+
+                    } label: {
+                        gridMenuButton(
+                            title: "スケジュール",
+                            systemImage: "calendar",
+                            color: .teal
+                        )
+                    }
+                }
 
                 NavigationLink {
-                    MemberBookingEventListView(
+                    TodayScheduleView()
+                } label: {
+                    gridMenuButton(
+                        title: "今日の予定",
+                        systemImage: "sun.max.fill",
+                        color: .yellow
+                    )
+                }
+
+                NavigationLink {
+                    MemberDiaryListView(
                         organizationId: organizationStore.organizationId
                     )
-                    .environmentObject(memberStore)
-                    .environmentObject(organizationStore)
-
                 } label: {
-                    menuButton(title: "講座予約")
-                }
-            }
-            
-            NavigationLink {
-                TodayScheduleView()
-            } label: {
-                menuButton(title: "今日の予定")
-            }
-            
-            NavigationLink {
-                MemberDiaryListView(
-                    organizationId: organizationStore.organizationId
-                )
-            } label: {
-                menuButton(title: "日記")
-            }
-
-            NavigationLink {
-                SNSPostMenuView()
-            } label: {
-                menuButton(title: "SNSに投稿")
-            }
-            
-            NavigationLink {
-                SecuritySettingsView()
-            } label: {
-                menuButton(title: "セキュリティ設定")
-            }
-
-            if featureStore.settings.memberMessageEnabled {
-                
-
-                NavigationLink {
-                    MemberMessageListView(
-                        titleText: "お知らせ",
-                        visibility: "member"
+                    gridMenuButton(
+                        title: "日記",
+                        systemImage: "book.closed.fill",
+                        color: .indigo
                     )
-                    .environmentObject(memberStore)
-                    .environmentObject(organizationStore)
-
-                } label: {
-                    menuButton(title: "お知らせ")
-                }
-            }
-
-            if featureStore.videoEnabled {
-
-                NavigationLink {
-                    MemberVideoListView()
-                        .environmentObject(memberStore)
-                        .environmentObject(organizationStore)
-
-                } label: {
-                    menuButton(title: "動画コンテンツ")
-                }
-                NavigationLink {
-                    MemberVideoQuestionListView()
-                        .environmentObject(memberStore)
-                        .environmentObject(organizationStore)
-
-                } label: {
-                    menuButton(title: "動画質問・回答")
-                }
-            }
-
-            if featureStore.settings.memberPostEnabled {
-
-                NavigationLink {
-                    MemberPostView()
-                        .environmentObject(memberStore)
-                        .environmentObject(organizationStore)
-
-                } label: {
-                    menuButton(title: "管理者へ投稿")
                 }
 
                 NavigationLink {
-                    MemberPostHistoryView()
-                        .environmentObject(memberStore)
-                        .environmentObject(organizationStore)
-
+                    SNSPostMenuView()
                 } label: {
+                    gridMenuButton(
+                        title: "SNSに投稿",
+                        systemImage: "square.and.arrow.up.fill",
+                        color: .pink
+                    )
+                }
 
-                    ZStack(alignment: .topTrailing) {
+                if featureStore.videoEnabled {
 
-                        menuButton(title: "投稿履歴")
+                    NavigationLink {
+                        MemberVideoQuestionListView()
+                            .environmentObject(memberStore)
+                            .environmentObject(organizationStore)
 
-                        if unreadReplyCount > 0 {
+                    } label: {
+                        gridMenuButton(
+                            title: "動画質問・回答",
+                            systemImage: "questionmark.bubble.fill",
+                            color: .cyan
+                        )
+                    }
+                }
 
-                            Text("\(unreadReplyCount)")
-                                .font(.caption.bold())
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.red)
-                                .clipShape(Capsule())
-                                .offset(x: -10, y: 8)
+                if featureStore.settings.memberPostEnabled {
+
+                    NavigationLink {
+                        MemberPostHistoryView()
+                            .environmentObject(memberStore)
+                            .environmentObject(organizationStore)
+
+                    } label: {
+
+                        ZStack(alignment: .topTrailing) {
+
+                            gridMenuButton(
+                                title: "投稿履歴",
+                                systemImage: "tray.full.fill",
+                                color: .brown
+                            )
+
+                            if unreadReplyCount > 0 {
+                                unreadBadge
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    private var settingsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+
+            NavigationLink {
+                SecuritySettingsView()
+            } label: {
+                settingsButton(
+                    title: "セキュリティ設定",
+                    systemImage: "lock.shield.fill"
+                )
+            }
+        }
+        .padding(.top, 6)
     }
 
 private var logoutSection: some View {
@@ -298,13 +361,12 @@ private var logoutSection: some View {
 
         } label: {
 
-            Text("会員ページを閉じる")
-                .font(.headline)
-                .foregroundColor(.red)
-                .frame(maxWidth: .infinity)
-                .frame(height: 50)
-                .background(Color(.systemGray6))
-                .cornerRadius(14)
+            settingsButton(
+                title: "会員ページを閉じる",
+                systemImage: "xmark.circle.fill",
+                foregroundColor: .red,
+                backgroundColor: Color(.systemGray6)
+            )
         }
 
         Button {
@@ -313,17 +375,140 @@ private var logoutSection: some View {
 
         } label: {
 
-            Text("完全ログアウト")
-                .font(.headline)
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 50)
-                .background(Color.red)
-                .cornerRadius(14)
+            settingsButton(
+                title: "完全ログアウト",
+                systemImage: "rectangle.portrait.and.arrow.right",
+                foregroundColor: .white,
+                backgroundColor: .red
+            )
         }
     }
-    .padding(.top, 8)
+    .padding(.top, 4)
 }
+
+    private func topActionButton(
+        title: String,
+        subtitle: String,
+        systemImage: String,
+        color: Color
+    ) -> some View {
+
+        HStack(spacing: 16) {
+
+            Image(systemName: systemImage)
+                .font(.system(size: 34, weight: .bold))
+                .frame(width: 54, height: 54)
+                .background(Color.white.opacity(0.22))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.title2.bold())
+                    .lineLimit(1)
+
+                Text(subtitle)
+                    .font(.headline)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.headline.bold())
+        }
+        .foregroundColor(.white)
+        .padding(20)
+        .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
+        .background(color)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func largeMenuButton(
+        title: String,
+        systemImage: String,
+        color: Color
+    ) -> some View {
+
+        VStack(spacing: 12) {
+
+            Image(systemName: systemImage)
+                .font(.system(size: 36, weight: .bold))
+
+            Text(title)
+                .font(.title2.bold())
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+        }
+        .foregroundColor(.white)
+        .frame(maxWidth: .infinity)
+        .frame(height: 124)
+        .background(color)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func gridMenuButton(
+        title: String,
+        systemImage: String,
+        color: Color
+    ) -> some View {
+
+        VStack(spacing: 10) {
+
+            Image(systemName: systemImage)
+                .font(.system(size: 28, weight: .semibold))
+
+            Text(title)
+                .font(.headline.bold())
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.78)
+        }
+        .foregroundColor(.white)
+        .frame(maxWidth: .infinity)
+        .frame(height: 100)
+        .background(color)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func settingsButton(
+        title: String,
+        systemImage: String,
+        foregroundColor: Color = .primary,
+        backgroundColor: Color = Color(.secondarySystemBackground)
+    ) -> some View {
+
+        HStack(spacing: 12) {
+
+            Image(systemName: systemImage)
+                .font(.title3.weight(.semibold))
+                .frame(width: 30)
+
+            Text(title)
+                .font(.headline)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+
+            Spacer()
+        }
+        .foregroundColor(foregroundColor)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
+        .frame(height: 58)
+        .background(backgroundColor)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var unreadBadge: some View {
+        Text("\(unreadReplyCount)")
+            .font(.caption.bold())
+            .foregroundColor(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.red)
+            .clipShape(Capsule())
+            .offset(x: -10, y: 8)
+    }
 
     private var organizationName: String {
 
