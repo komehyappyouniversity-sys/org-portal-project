@@ -8,9 +8,10 @@ struct MemberPageView: View {
     @EnvironmentObject private var organizationStore: OrganizationStore
     @EnvironmentObject private var featureStore: MemberFeatureStore
 
-    @State private var showLogoutAlert = false
+    @State private var showCloseAlert = false
+    @State private var showFullLogoutAlert = false
     @StateObject private var postStore = MemberPostStore()
-
+    
     private let logoDisplayHeight: CGFloat = 220
 
     var body: some View {
@@ -34,17 +35,30 @@ struct MemberPageView: View {
             }
             .navigationTitle("会員ページ")
             .navigationBarTitleDisplayMode(.inline)
-            .alert("ログアウトしますか？", isPresented: $showLogoutAlert) {
+            .alert("会員ページを閉じますか？", isPresented: $showCloseAlert) {
 
                 Button("キャンセル", role: .cancel) { }
 
-                Button("ログアウト", role: .destructive) {
-                    logout()
+                Button("閉じる", role: .destructive) {
+                    closeMemberPage()
                 }
 
             } message: {
-                Text("この端末の会員ページ認証を解除します。")
+                Text("Face ID認証画面に戻ります。メールアドレスとパスワードは保存されたままです。")
             }
+            .alert("完全ログアウトしますか？", isPresented: $showFullLogoutAlert) {
+
+                Button("キャンセル", role: .cancel) { }
+
+                Button("完全ログアウト", role: .destructive) {
+                    fullLogout()
+                }
+
+            } message: {
+                Text("保存されたログイン情報を削除し、次回はメールアドレスとパスワードの入力が必要になります。")
+            }
+            
+                
             .onAppear {
                 startPostListeningIfPossible()
             }
@@ -67,8 +81,9 @@ struct MemberPageView: View {
                     .multilineTextAlignment(.center)
 
                 Button("閉じる") {
-                    logout()
+                    closeMemberPage()
                 }
+                
                 .buttonStyle(.borderedProminent)
             }
             .padding()
@@ -273,11 +288,13 @@ struct MemberPageView: View {
         }
     }
 
-    private var logoutSection: some View {
+private var logoutSection: some View {
+
+    VStack(spacing: 12) {
 
         Button {
 
-            showLogoutAlert = true
+            showCloseAlert = true
 
         } label: {
 
@@ -289,8 +306,24 @@ struct MemberPageView: View {
                 .background(Color(.systemGray6))
                 .cornerRadius(14)
         }
-        .padding(.top, 8)
+
+        Button {
+
+            showFullLogoutAlert = true
+
+        } label: {
+
+            Text("完全ログアウト")
+                .font(.headline)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .background(Color.red)
+                .cornerRadius(14)
+        }
     }
+    .padding(.top, 8)
+}
 
     private var organizationName: String {
 
@@ -403,8 +436,21 @@ struct MemberPageView: View {
         )
     }
 
-    private func logout() {
+private func closeMemberPage() {
 
-        securityStore.lockNow()
+    securityStore.lockNow()
+}
+
+private func fullLogout() {
+
+    MemberSavedLoginStore.shared.clear()
+
+    do {
+        try Auth.auth().signOut()
+    } catch {
+        print("❌ 完全ログアウト失敗:", error.localizedDescription)
     }
+
+    securityStore.lockNow()
+}
 }

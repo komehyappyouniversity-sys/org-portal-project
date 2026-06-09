@@ -35,6 +35,18 @@ struct OrganizationDetailView: View {
                 }
             }
 
+            Section("共通コンテンツ") {
+
+                NavigationLink {
+                    SharedManualListView()
+                } label: {
+                    Label(
+                        "共通マニュアル管理",
+                        systemImage: "book.closed"
+                    )
+                }
+            }
+
             Section("登録用QRコード") {
 
                 NavigationLink {

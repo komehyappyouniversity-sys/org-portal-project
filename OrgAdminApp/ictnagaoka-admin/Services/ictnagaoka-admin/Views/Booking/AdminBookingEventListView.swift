@@ -29,52 +29,26 @@ struct AdminBookingEventListView: View {
             }
 
             ForEach(store.events) { event in
-                NavigationLink {
-                    AdminBookingSlotListView(event: event)
-                        .environmentObject(organizationStore)
-                } label: {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text(event.title.isEmpty ? "無題の予約イベント" : event.title)
-                                .font(.headline)
-
-                            Spacer()
-
-                            Button {
-                                selectedEvent = event
-                                showEditor = true
-                            } label: {
-                                Image(systemName: "pencil")
-                                    .foregroundColor(.blue)
-                            }
-                            .buttonStyle(.plain)
-                        }
-
-                        Text(
-                            event.eventDate.formatted(
-                                date: .abbreviated,
-                                time: .omitted
-                            )
-                        )
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-
-                        HStack {
-                            Text(event.isPublished ? "公開中" : "非公開")
-                                .font(.caption)
-                                .foregroundColor(
-                                    event.isPublished ? .green : .gray
-                                )
-
-                            Spacer()
-
-                            Text("¥\(event.feeAmount)")
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                        }
+                HStack(alignment: .center, spacing: 12) {
+                    NavigationLink {
+                        AdminBookingSlotListView(event: event)
+                            .environmentObject(organizationStore)
+                    } label: {
+                        eventRow(event)
                     }
-                    .padding(.vertical, 4)
+
+                    Button {
+                        selectedEvent = event
+                        showEditor = true
+                    } label: {
+                        Image(systemName: "pencil")
+                            .font(.title3)
+                            .foregroundColor(.blue)
+                            .padding(8)
+                    }
+                    .buttonStyle(.plain)
                 }
+                .padding(.vertical, 4)
             }
             .onDelete(perform: delete)
         }
@@ -98,6 +72,36 @@ struct AdminBookingEventListView: View {
             NavigationStack {
                 AdminBookingEventEditorView(event: selectedEvent)
                     .environmentObject(organizationStore)
+            }
+        }
+    }
+
+    private func eventRow(_ event: AdminBookingEvent) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(event.title.isEmpty ? "無題の予約イベント" : event.title)
+                .font(.headline)
+
+            Text(
+                event.eventDate.formatted(
+                    date: .abbreviated,
+                    time: .omitted
+                )
+            )
+            .font(.subheadline)
+            .foregroundColor(.secondary)
+
+            HStack {
+                Text(event.isPublished ? "公開中" : "非公開")
+                    .font(.caption)
+                    .foregroundColor(
+                        event.isPublished ? .green : .gray
+                    )
+
+                Spacer()
+
+                Text(event.feeAmount == 0 ? "無料" : "¥\(event.feeAmount)")
+                    .font(.caption)
+                    .foregroundColor(event.feeAmount == 0 ? .green : .blue)
             }
         }
     }

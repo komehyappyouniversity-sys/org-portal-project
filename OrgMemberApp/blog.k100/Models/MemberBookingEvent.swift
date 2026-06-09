@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct MemberBookingEvent: Identifiable {
+struct MemberBookingEvent: Identifiable, Equatable {
     var id: String?
 
     var title: String

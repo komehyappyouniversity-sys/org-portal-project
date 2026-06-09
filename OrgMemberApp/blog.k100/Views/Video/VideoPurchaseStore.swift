@@ -66,6 +66,37 @@ final class VideoPurchaseStore: ObservableObject {
             print("❌ 購入失敗:", error.localizedDescription)
         }
     }
+    
+    func purchaseAndReturnProductId(product: Product) async -> String? {
+        do {
+            let result = try await product.purchase()
+
+            switch result {
+            case .success(let verification):
+                let transaction = try checkVerified(verification)
+                purchasedProductIds.insert(transaction.productID)
+                await transaction.finish()
+                print("✅ 購入成功:", transaction.productID)
+                return transaction.productID
+
+            case .userCancelled:
+                print("⚠️ 購入キャンセル")
+                return nil
+
+            case .pending:
+                print("⏳ 購入保留中")
+                return nil
+
+            @unknown default:
+                print("⚠️ 不明な購入結果")
+                return nil
+            }
+
+        } catch {
+            print("❌ 購入失敗:", error.localizedDescription)
+            return nil
+        }
+    }
 
     func updatePurchasedProducts() async {
         purchasedProductIds.removeAll()

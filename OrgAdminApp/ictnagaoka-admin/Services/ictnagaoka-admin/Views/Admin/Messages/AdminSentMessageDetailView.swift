@@ -1,5 +1,6 @@
 import SwiftUI
 import FirebaseFirestore
+import UIKit
 
 struct AdminSentMessageDetailView: View {
     let message: AdminSentMessage
@@ -36,6 +37,34 @@ struct AdminSentMessageDetailView: View {
 
                 Text(message.body)
                     .font(.body)
+
+                Button {
+                    UIPasteboard.general.string = message.title
+                } label: {
+                    Label(
+                        "タイトルをコピー",
+                        systemImage: "text.quote"
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.orange)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+                }
+                
+                Button {
+                    UIPasteboard.general.string = message.body
+                } label: {
+                    Label(
+                        "本文をコピー",
+                        systemImage: "doc.on.doc"
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.green)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+                }
 
                 if !message.attachments.isEmpty {
                     Divider()

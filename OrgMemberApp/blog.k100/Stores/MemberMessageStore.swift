@@ -123,23 +123,25 @@ final class MemberMessageStore: ObservableObject {
 
         let messageType = data["messageType"] as? String ?? ""
         let targetType = data["targetType"] as? String ?? ""
+        let visibility = data["visibility"] as? String ?? ""
         let isBroadcast = data["isBroadcast"] as? Bool ?? false
-
         if mode == "public" {
             let isPublic =
+                visibility == "public" ||
                 messageType == "publicAnnouncement" ||
                 messageType == "announcement" ||
                 targetType == "public"
-
+            
             guard isPublic else { return nil }
         }
 
         if mode == "member" {
             let isPublic =
+                visibility == "public" ||
                 messageType == "publicAnnouncement" ||
                 messageType == "announcement" ||
                 targetType == "public"
-
+            
             let targetMemberUids =
                 data["targetMemberUids"] as? [String] ?? []
             
@@ -152,6 +154,7 @@ final class MemberMessageStore: ObservableObject {
                 toUids.contains(uid)
 
             let isMemberMessage =
+                visibility == "member" ||
                 messageType == "memberMessage" ||
                 targetType == "members" ||
                 isBroadcast ||

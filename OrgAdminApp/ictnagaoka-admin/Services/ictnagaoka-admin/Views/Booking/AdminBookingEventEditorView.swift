@@ -16,18 +16,37 @@ struct AdminBookingEventEditorView: View {
     @State private var title: String
     @State private var description: String
     @State private var eventDate: Date
-    @State private var feeAmountText: String
-    @State private var appStoreProductId: String
-    @State private var paymentRequired: Bool
+    @State private var selectedFeeAmount: Int
     @State private var zoomURL: String
     @State private var isPublished: Bool
 
     @State private var isSaving = false
     @State private var errorMessage = ""
 
+    private let feeOptions: [Int] = [0, 500, 1000, 3000, 5000]
+
     private var organizationId: String {
         organizationStore.currentOrganizationId
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var paymentRequired: Bool {
+        selectedFeeAmount > 0
+    }
+
+    private var appStoreProductId: String {
+        switch selectedFeeAmount {
+        case 500:
+            return "booking500"
+        case 1000:
+            return "booking1000"
+        case 3000:
+            return "booking3000"
+        case 5000:
+            return "booking5000"
+        default:
+            return ""
+        }
     }
 
     init(event: AdminBookingEvent?) {
@@ -36,15 +55,14 @@ struct AdminBookingEventEditorView: View {
         _title = State(initialValue: event?.title ?? "")
         _description = State(initialValue: event?.description ?? "")
         _eventDate = State(initialValue: event?.eventDate ?? Date())
-        _feeAmountText = State(
-            initialValue: event.map { String($0.feeAmount) } ?? ""
-        )
-        _appStoreProductId = State(
-            initialValue: event?.appStoreProductId ?? ""
-        )
-        _paymentRequired = State(
-            initialValue: event?.paymentRequired ?? true
-        )
+
+        let initialFee = event?.feeAmount ?? 0
+        if [0, 500, 1000, 3000, 5000].contains(initialFee) {
+            _selectedFeeAmount = State(initialValue: initialFee)
+        } else {
+            _selectedFeeAmount = State(initialValue: 0)
+        }
+
         _zoomURL = State(initialValue: event?.zoomURL ?? "")
         _isPublished = State(initialValue: event?.isPublished ?? false)
     }
@@ -64,25 +82,27 @@ struct AdminBookingEventEditorView: View {
                 )
             }
 
-            Section("参加費・App内課金") {
-                TextField("参加費 例：3000", text: $feeAmountText)
-                    .keyboardType(.numberPad)
+            Section("参加費") {
+                Picker("価格", selection: $selectedFeeAmount) {
+                    Text("無料").tag(0)
+                    Text("500円").tag(500)
+                    Text("1,000円").tag(1000)
+                    Text("3,000円").tag(3000)
+                    Text("5,000円").tag(5000)
+                }
 
-                TextField(
-                    "App Store Product ID",
-                    text: $appStoreProductId
-                )
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-
-                Toggle(
-                    "参加費の決済を必要にする",
-                    isOn: $paymentRequired
-                )
-
-                Text("例：zoom_lesson_3000")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                if paymentRequired {
+                    HStack {
+                        Text("App内課金商品")
+                        Spacer()
+                        Text(appStoreProductId)
+                            .foregroundColor(.secondary)
+                    }
+                } else {
+                    Text("無料講座として保存されます。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
 
             Section("Zoom") {
@@ -143,25 +163,11 @@ struct AdminBookingEventEditorView: View {
         let trimmedTitle = title
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        let trimmedProductId = appStoreProductId
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
         let trimmedZoomURL = zoomURL
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !trimmedTitle.isEmpty else {
             errorMessage = "イベント名を入力してください。"
-            return
-        }
-
-        guard let feeAmount = Int(feeAmountText),
-              feeAmount >= 0 else {
-            errorMessage = "参加費は数字で入力してください。"
-            return
-        }
-
-        if paymentRequired && trimmedProductId.isEmpty {
-            errorMessage = "App Store Product ID を入力してください。"
             return
         }
 
@@ -179,8 +185,8 @@ struct AdminBookingEventEditorView: View {
             description: description
                 .trimmingCharacters(in: .whitespacesAndNewlines),
             eventDate: eventDate,
-            feeAmount: feeAmount,
-            appStoreProductId: trimmedProductId,
+            feeAmount: selectedFeeAmount,
+            appStoreProductId: appStoreProductId,
             paymentRequired: paymentRequired,
             zoomURL: trimmedZoomURL,
             isPublished: isPublished,

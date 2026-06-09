@@ -69,8 +69,6 @@ struct SuperAdminLoginView: View {
 
 // MARK: - Model
 
-// MARK: - Model
-
 struct OrganizationItem: Identifiable {
 
     let id: String
@@ -114,7 +112,6 @@ final class OrganizationListStore: ObservableObject {
                         return
                     }
 
-                    // 成功した時点で、過去の赤エラーを消す
                     self.errorMessage = ""
 
                     self.organizations = snapshot?.documents.map { doc in
@@ -187,17 +184,17 @@ final class OrganizationListStore: ObservableObject {
             }
 
             try await ref.setData([
-    "name": trimmedName,
-    "organizationCode": trimmedId,
+                "name": trimmedName,
+                "organizationCode": trimmedId,
 
-    "isActive": true,
+                "isActive": true,
 
-    "createdByUid": Auth.auth().currentUser?.uid ?? "",
-    "createdByEmail": Auth.auth().currentUser?.email ?? "",
+                "createdByUid": Auth.auth().currentUser?.uid ?? "",
+                "createdByEmail": Auth.auth().currentUser?.email ?? "",
 
-    "createdAt": FieldValue.serverTimestamp(),
-    "updatedAt": FieldValue.serverTimestamp()
-])
+                "createdAt": FieldValue.serverTimestamp(),
+                "updatedAt": FieldValue.serverTimestamp()
+            ])
 
             errorMessage = ""
             successMessage = "組織を作成しました。"
@@ -233,43 +230,58 @@ struct OrganizationListView: View {
     var body: some View {
         NavigationStack {
             List {
-                if store.isLoading {
-                    ProgressView("読み込み中...")
-                }
 
-                if !store.errorMessage.isEmpty {
-                    Text(store.errorMessage)
-                        .foregroundColor(.red)
-                }
-
-                if !store.successMessage.isEmpty {
-                    Text(store.successMessage)
-                        .foregroundColor(.green)
-                }
-
-                ForEach(store.organizations) { org in
+                Section("共通コンテンツ") {
                     NavigationLink {
-                        OrganizationDetailView(organization: org)
+                        SharedManualListView()
                     } label: {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(org.name)
-                                .font(.headline)
-
-                            Text("organizationId: \(org.id)")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-
-                            Text(org.isActive ? "有効" : "停止中")
-                                .font(.caption)
-                                .foregroundColor(org.isActive ? .green : .red)
-                        }
-                        .padding(.vertical, 6)
+                        Label(
+                            "共通マニュアル管理",
+                            systemImage: "book.closed"
+                        )
                     }
                 }
 
-                if !store.isLoading && store.organizations.isEmpty {
-                    Text("組織がまだ登録されていません")
-                        .foregroundColor(.gray)
+                Section("組織一覧") {
+
+                    if store.isLoading {
+                        ProgressView("読み込み中...")
+                    }
+
+                    if !store.errorMessage.isEmpty {
+                        Text(store.errorMessage)
+                            .foregroundColor(.red)
+                    }
+
+                    if !store.successMessage.isEmpty {
+                        Text(store.successMessage)
+                            .foregroundColor(.green)
+                    }
+
+                    ForEach(store.organizations) { org in
+                        NavigationLink {
+                            OrganizationDetailView(organization: org)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(org.name)
+                                    .font(.headline)
+
+                                Text("organizationId: \(org.id)")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+
+                                Text(org.isActive ? "有効" : "停止中")
+                                    .font(.caption)
+                                    .foregroundColor(org.isActive ? .green : .red)
+                            }
+                            .padding(.vertical, 6)
+                        }
+                    }
+
+                    if !store.isLoading && store.organizations.isEmpty {
+                        Text("組織がまだ登録されていません")
+                            .foregroundColor(.gray)
+                    }
                 }
             }
             .navigationTitle("組織一覧")
@@ -294,6 +306,9 @@ struct OrganizationListView: View {
             }
             .onAppear {
                 store.startListening()
+            }
+            .onDisappear {
+                store.stopListening()
             }
         }
     }
