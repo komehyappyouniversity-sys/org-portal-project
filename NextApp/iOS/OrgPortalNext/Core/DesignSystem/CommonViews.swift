@@ -4,15 +4,18 @@ public struct FeatureCard: View {
     private let title: LocalizedStringKey
     private let subtitle: LocalizedStringKey?
     private let systemImage: String
+    private let status: LocalizedStringKey?
 
     public init(
         _ title: LocalizedStringKey,
         subtitle: LocalizedStringKey? = nil,
-        systemImage: String
+        systemImage: String,
+        status: LocalizedStringKey? = nil
     ) {
         self.title = title
         self.subtitle = subtitle
         self.systemImage = systemImage
+        self.status = status
     }
 
     public var body: some View {
@@ -30,9 +33,13 @@ public struct FeatureCard: View {
                 }
             }
             Spacer()
-            Image(systemName: "chevron.right")
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
+            if let status {
+                StatusBadge(status, systemImage: "clock")
+            } else {
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
         }
         .padding()
         .background(.background)

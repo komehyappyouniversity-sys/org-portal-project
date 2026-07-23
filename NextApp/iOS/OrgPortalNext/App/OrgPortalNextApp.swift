@@ -54,7 +54,7 @@ private struct AppBootstrapView: View {
 
     var body: some View {
         AppShellView(
-            home: TodayScheduleView(model: scheduleModel),
+            home: GuestHomeView(model: scheduleModel),
             tools: ScheduleListView(model: scheduleModel),
             community: PlaceholderTabView(
                 titleKey: "tab.community",
