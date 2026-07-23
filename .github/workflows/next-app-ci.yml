@@ -1,0 +1,85 @@
+name: Next App CI
+
+on:
+  pull_request:
+    paths:
+      - "NextApp/**"
+      - "docs/**"
+      - "scripts/generate_ios_project.rb"
+      - ".github/workflows/next-app-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "NextApp/**"
+      - "docs/**"
+      - "scripts/generate_ios_project.rb"
+      - ".github/workflows/next-app-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: next-app-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Android / build-test-lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: NextApp/Android
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+      - name: Build, unit test, and lint
+        run: ./gradlew :app:assembleDebug test lintDebug --stacktrace
+
+  iphone:
+    name: iPhone / build-test
+    runs-on: macos-26
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v6
+      - name: Confirm pinned Xcode
+        run: xcodebuild -version
+      - name: Build and unit test
+        run: >-
+          xcodebuild
+          -project NextApp/iOS/OrgPortalNext/OrgPortalNext.xcodeproj
+          -scheme OrgPortalNext
+          -configuration Debug
+          -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest'
+          -derivedDataPath "${RUNNER_TEMP}/OrgPortalNextDerivedData"
+          test
+
+  firebase-emulator:
+    name: Firebase Emulator / smoke
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: NextApp/firebase
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Start Emulator Suite without production credentials
+        run: >-
+          npx --yes firebase-tools@15.24.0
+          emulators:exec
+          --project demo-org-portal-next
+          --only auth,firestore,storage
+          'node -e "process.exit(0)"'
