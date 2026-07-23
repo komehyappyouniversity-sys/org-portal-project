@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // タスク1〜3ではFirebaseへ書き込まない。後続タスクでEmulator専用ルールを追加する。
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
