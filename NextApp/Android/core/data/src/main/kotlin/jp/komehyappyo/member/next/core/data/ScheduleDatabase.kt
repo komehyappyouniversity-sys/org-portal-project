@@ -22,6 +22,7 @@ import jp.komehyappyo.member.next.core.model.ReminderSetting
 import jp.komehyappyo.member.next.core.model.Schedule
 import jp.komehyappyo.member.next.core.model.ScheduleCategory
 import jp.komehyappyo.member.next.core.model.ScheduleTimeOfDay
+import jp.komehyappyo.member.next.core.model.SnsCustomLink
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.Instant
@@ -90,6 +91,15 @@ data class MeetingMinutesEntity(
     val updatedAtEpochMillis: Long,
 )
 
+@Entity(tableName = "sns_custom_links")
+data class SnsCustomLinkEntity(
+    @PrimaryKey val id: String,
+    val userId: String,
+    val title: String,
+    val url: String,
+    val sortOrder: Int,
+)
+
 @Dao
 interface ScheduleDao {
     @Query("SELECT * FROM schedules ORDER BY startEpochMillis, title")
@@ -150,14 +160,27 @@ interface MeetingMinutesDao {
     suspend fun delete(id: String)
 }
 
+@Dao
+interface SnsCustomLinkDao {
+    @Query("SELECT * FROM sns_custom_links ORDER BY sortOrder, title")
+    fun observeAll(): Flow<List<SnsCustomLinkEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(link: SnsCustomLinkEntity)
+
+    @Query("DELETE FROM sns_custom_links WHERE id = :id")
+    suspend fun delete(id: String)
+}
+
 @Database(
     entities = [
         ScheduleEntity::class,
         DiaryEntity::class,
         CashDistributionEntity::class,
         MeetingMinutesEntity::class,
+        SnsCustomLinkEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class OrgPortalDatabase : RoomDatabase() {
@@ -165,6 +188,7 @@ abstract class OrgPortalDatabase : RoomDatabase() {
     abstract fun diaryDao(): DiaryDao
     abstract fun cashDistributionDao(): CashDistributionDao
     abstract fun meetingMinutesDao(): MeetingMinutesDao
+    abstract fun snsCustomLinkDao(): SnsCustomLinkDao
 
     companion object {
         val migration1To2 = object : Migration(1, 2) {
@@ -229,12 +253,34 @@ abstract class OrgPortalDatabase : RoomDatabase() {
             }
         }
 
+        val migration4To5 = object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `sns_custom_links` (
+                        `id` TEXT NOT NULL,
+                        `userId` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `url` TEXT NOT NULL,
+                        `sortOrder` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         fun create(context: Context): OrgPortalDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 OrgPortalDatabase::class.java,
                 "org-portal-next.db",
-            ).addMigrations(migration1To2, migration2To3, migration3To4).build()
+            ).addMigrations(
+                migration1To2,
+                migration2To3,
+                migration3To4,
+                migration4To5,
+            ).build()
     }
 }
 
@@ -451,4 +497,35 @@ private fun MeetingMinutesEntity.toDomain() = MeetingMinutes(
     pdfFileLocalPath = pdfFileLocalPath,
     createdAt = Instant.ofEpochMilli(createdAtEpochMillis),
     updatedAt = Instant.ofEpochMilli(updatedAtEpochMillis),
+)
+
+class RoomSnsCustomLinkRepository(
+    private val dao: SnsCustomLinkDao,
+) : SnsCustomLinkRepository {
+    override fun observeAll(): Flow<List<SnsCustomLink>> =
+        dao.observeAll().map { values -> values.map(SnsCustomLinkEntity::toDomain) }
+
+    override suspend fun save(link: SnsCustomLink) {
+        dao.upsert(link.validated().toEntity())
+    }
+
+    override suspend fun delete(id: UUID) {
+        dao.delete(id.toString())
+    }
+}
+
+private fun SnsCustomLink.toEntity() = SnsCustomLinkEntity(
+    id = id.toString(),
+    userId = userId,
+    title = title,
+    url = url,
+    sortOrder = sortOrder,
+)
+
+private fun SnsCustomLinkEntity.toDomain() = SnsCustomLink(
+    id = UUID.fromString(id),
+    userId = userId,
+    title = title,
+    url = url,
+    sortOrder = sortOrder,
 )

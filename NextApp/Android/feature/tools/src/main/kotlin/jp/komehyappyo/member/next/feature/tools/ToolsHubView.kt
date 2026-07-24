@@ -10,6 +10,7 @@ import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Calculate
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -28,6 +29,7 @@ private enum class ToolsDestination {
     Diary,
     Denomination,
     MeetingMinutes,
+    SnsPostingAssistant,
 }
 
 @Composable
@@ -36,6 +38,7 @@ fun ToolsHubRoot(
     diaryModel: DiaryFeatureModel,
     cashDistributionModel: CashDistributionFeatureModel,
     meetingMinutesModel: MeetingMinutesFeatureModel,
+    snsPostingAssistantModel: SnsPostingAssistantFeatureModel,
 ) {
     var destination by remember { mutableStateOf<ToolsDestination?>(null) }
     when (destination) {
@@ -58,6 +61,11 @@ fun ToolsHubRoot(
             onBack = { destination = null },
         ) {
             MeetingMinutesRoot(meetingMinutesModel)
+        }
+        ToolsDestination.SnsPostingAssistant -> ToolDestinationContainer(
+            onBack = { destination = null },
+        ) {
+            SnsPostingAssistantRoot(snsPostingAssistantModel)
         }
         null -> Column(
             modifier = Modifier
@@ -92,6 +100,13 @@ fun ToolsHubRoot(
                     title = "会議録音・議事録",
                     description = "録音と文字起こしを端末内に保存します。",
                     icon = Icons.Outlined.Mic,
+                )
+            }
+            Button(onClick = { destination = ToolsDestination.SnsPostingAssistant }) {
+                FeatureCard(
+                    title = "SNS投稿補助",
+                    description = "文章をコピーして外部SNSを開きます。",
+                    icon = Icons.Outlined.Share,
                 )
             }
         }

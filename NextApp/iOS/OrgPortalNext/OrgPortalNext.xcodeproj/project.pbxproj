@@ -11,6 +11,13 @@
 		01665442964E66C4F4420EB5 /* Model.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 315F19C84B0EA3B8EAF98FA5 /* Model.framework */; };
 		0AD6CA2C331DAF1B9CD28A4A /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 97C21614ADE58582126E6986 /* Foundation.framework */; };
 		0B0D87F2823B3B158C6F7F91 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 97C21614ADE58582126E6986 /* Foundation.framework */; };
+		A10000000000000000000001 /* SnsCustomLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* SnsCustomLink.swift */; };
+		A10000000000000000000002 /* SnsCustomLinkRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* SnsCustomLinkRepository.swift */; };
+		A10000000000000000000003 /* SwiftDataSnsCustomLinkRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003 /* SwiftDataSnsCustomLinkRepository.swift */; };
+		A10000000000000000000004 /* SnsPostingAssistantFeatureModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000004 /* SnsPostingAssistantFeatureModel.swift */; };
+		A10000000000000000000005 /* SnsPostingAssistantViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000005 /* SnsPostingAssistantViews.swift */; };
+		A10000000000000000000006 /* SnsCustomLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000006 /* SnsCustomLinkTests.swift */; };
+		A10000000000000000000007 /* SwiftDataSnsCustomLinkRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000007 /* SwiftDataSnsCustomLinkRepositoryTests.swift */; };
 		0C1434468C6B94E13210D9A8 /* Model.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 315F19C84B0EA3B8EAF98FA5 /* Model.framework */; };
 		0E6718C10EA9ECA71954A987 /* ScheduleCsvExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA99363D421648080CCE525C /* ScheduleCsvExporter.swift */; };
 		0FBC1322E05151E47A47216D /* Notifications.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 64831007C2FB6AE85732B412 /* Notifications.framework */; };
@@ -327,6 +334,13 @@
 		AD1A55F260669C4A79065AB5 /* DiaryBackupDocument.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DiaryBackupDocument.swift; sourceTree = "<group>"; };
 		AEAB6BCC78FD2468A94BB92A /* Session.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Session.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B12A1F80916EF380B5CF717C /* DiaryViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DiaryViews.swift; sourceTree = "<group>"; };
+		B10000000000000000000001 /* SnsCustomLink.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SnsCustomLink.swift; sourceTree = "<group>"; };
+		B10000000000000000000002 /* SnsCustomLinkRepository.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SnsCustomLinkRepository.swift; sourceTree = "<group>"; };
+		B10000000000000000000003 /* SwiftDataSnsCustomLinkRepository.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SwiftDataSnsCustomLinkRepository.swift; sourceTree = "<group>"; };
+		B10000000000000000000004 /* SnsPostingAssistantFeatureModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SnsPostingAssistantFeatureModel.swift; sourceTree = "<group>"; };
+		B10000000000000000000005 /* SnsPostingAssistantViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SnsPostingAssistantViews.swift; sourceTree = "<group>"; };
+		B10000000000000000000006 /* SnsCustomLinkTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SnsCustomLinkTests.swift; sourceTree = "<group>"; };
+		B10000000000000000000007 /* SwiftDataSnsCustomLinkRepositoryTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SwiftDataSnsCustomLinkRepositoryTests.swift; sourceTree = "<group>"; };
 		B1FD61D647545C6EE7F718E0 /* DataLayer.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = DataLayer.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B686DD19957127A5539D422B /* SampleData.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SampleData.swift; sourceTree = "<group>"; };
 		BC7EA3F55C9D73F42B03A7FB /* CashDistributionViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CashDistributionViews.swift; sourceTree = "<group>"; };
@@ -473,6 +487,7 @@
 				77F2A02198DB6824FBDFDB31 /* DiaryTests.swift */,
 				5AF4340D5D4B721305517F78 /* MeetingMinutesTests.swift */,
 				20BFA0AE43BDF07B6627F63E /* ScheduleTests.swift */,
+				B10000000000000000000006 /* SnsCustomLinkTests.swift */,
 			);
 			name = "Tests ModelTests";
 			path = Tests/ModelTests;
@@ -516,6 +531,7 @@
 				7B58732CEC3A960E0B73EB3A /* SwiftDataDiaryRepositoryTests.swift */,
 				1AD8D900A3471EBF89940C9C /* SwiftDataMeetingMinutesRepositoryTests.swift */,
 				4D2E3D4CC91475F08EF79AE2 /* SwiftDataScheduleRepositoryTests.swift */,
+				B10000000000000000000007 /* SwiftDataSnsCustomLinkRepositoryTests.swift */,
 			);
 			name = "Tests DataLayerTests";
 			path = Tests/DataLayerTests;
@@ -581,10 +597,12 @@
 				D69CF8FA718DB75560F4697A /* LocalDiaryPhotoStore.swift */,
 				1C4471B42185217D44305565 /* MeetingMinutesRepository.swift */,
 				4AB342FB73A0C5ECD7CDC6CD /* ScheduleRepository.swift */,
+				B10000000000000000000002 /* SnsCustomLinkRepository.swift */,
 				F4A75590EF96883F048F1BF4 /* SwiftDataCashDistributionRepository.swift */,
 				F36B5563796E2877F4E4839E /* SwiftDataDiaryRepository.swift */,
 				72B85A930980CE2DE7137B86 /* SwiftDataMeetingMinutesRepository.swift */,
 				96A1595C6EB7BC4C6CCEAB5B /* SwiftDataScheduleRepository.swift */,
+				B10000000000000000000003 /* SwiftDataSnsCustomLinkRepository.swift */,
 			);
 			name = "Core DataLayer";
 			path = Core/DataLayer;
@@ -618,6 +636,8 @@
 				CA99363D421648080CCE525C /* ScheduleCsvExporter.swift */,
 				1502D02F7C5FFE0C0401EC3E /* ScheduleFeatureModel.swift */,
 				D1F4E43781614AB732CC42FC /* ScheduleViews.swift */,
+				B10000000000000000000004 /* SnsPostingAssistantFeatureModel.swift */,
+				B10000000000000000000005 /* SnsPostingAssistantViews.swift */,
 				D235F042131E05FA966D09A4 /* ToolsHubView.swift */,
 			);
 			name = "Feature Tools";
@@ -657,6 +677,7 @@
 				0E7B8433B210D656DB875765 /* Diary.swift */,
 				6BE6F8B1ABFB8BD8F693078B /* MeetingMinutes.swift */,
 				A269DE5BC8B8496CAC6701E5 /* Schedule.swift */,
+				B10000000000000000000001 /* SnsCustomLink.swift */,
 				39B965DABDAAA6D52CDF88E2 /* UserStage.swift */,
 			);
 			name = "Core Model";
@@ -1114,6 +1135,7 @@
 				232162A25BC2A017B5ABC68E /* Diary.swift in Sources */,
 				AF413834C9353A4FEABBBDBD /* MeetingMinutes.swift in Sources */,
 				1BB3E6D64A074EB02D8C4501 /* Schedule.swift in Sources */,
+				A10000000000000000000001 /* SnsCustomLink.swift in Sources */,
 				1AC8DA31C7301AFA2A25FF97 /* UserStage.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1130,10 +1152,12 @@
 				14F9D01F3801BB66E3A52C3F /* LocalDiaryPhotoStore.swift in Sources */,
 				C6BC042AF72AC605CC4D2142 /* MeetingMinutesRepository.swift in Sources */,
 				25FEEE81D69CFA546D7396C3 /* ScheduleRepository.swift in Sources */,
+				A10000000000000000000002 /* SnsCustomLinkRepository.swift in Sources */,
 				7D751D1FBE7C8CDC393F8842 /* SwiftDataCashDistributionRepository.swift in Sources */,
 				EF9CDC9E98467A3B045F7331 /* SwiftDataDiaryRepository.swift in Sources */,
 				59428CF94ACFD3004867EC9B /* SwiftDataMeetingMinutesRepository.swift in Sources */,
 				191AE94D62AAF62DED87212E /* SwiftDataScheduleRepository.swift in Sources */,
+				A10000000000000000000003 /* SwiftDataSnsCustomLinkRepository.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1147,6 +1171,7 @@
 				F08CC284FC5A60B945B0A5AF /* SwiftDataDiaryRepositoryTests.swift in Sources */,
 				FA3C7E44D8C01CAA21FBF6B1 /* SwiftDataMeetingMinutesRepositoryTests.swift in Sources */,
 				6387DA4E661A0AF2D787EFB9 /* SwiftDataScheduleRepositoryTests.swift in Sources */,
+				A10000000000000000000007 /* SwiftDataSnsCustomLinkRepositoryTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1217,6 +1242,7 @@
 				54B342F2CFA1CE63A5487716 /* DiaryTests.swift in Sources */,
 				87E3480A87B78C113C1C41B4 /* MeetingMinutesTests.swift in Sources */,
 				DFEC8CFA7CCA265927C09ED3 /* ScheduleTests.swift in Sources */,
+				A10000000000000000000006 /* SnsCustomLinkTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1240,6 +1266,8 @@
 				0E6718C10EA9ECA71954A987 /* ScheduleCsvExporter.swift in Sources */,
 				1DBA5DBD53451BF73991266E /* ScheduleFeatureModel.swift in Sources */,
 				526CAE659DCE61865AFE8AB0 /* ScheduleViews.swift in Sources */,
+				A10000000000000000000004 /* SnsPostingAssistantFeatureModel.swift in Sources */,
+				A10000000000000000000005 /* SnsPostingAssistantViews.swift in Sources */,
 				718714658A2AD3726DB8B8FC /* ToolsHubView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
