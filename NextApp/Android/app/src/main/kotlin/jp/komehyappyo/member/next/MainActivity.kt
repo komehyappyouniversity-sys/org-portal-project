@@ -10,14 +10,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
 import jp.komehyappyo.member.next.core.data.FirebaseEnvironmentGuard
-import jp.komehyappyo.member.next.core.data.ScheduleRepositories
+import jp.komehyappyo.member.next.core.data.LocalDiaryPhotoStore
+import jp.komehyappyo.member.next.core.data.OrgPortalDatabase
+import jp.komehyappyo.member.next.core.data.RoomDiaryRepository
+import jp.komehyappyo.member.next.core.data.RoomScheduleRepository
 import jp.komehyappyo.member.next.core.designsystem.EmptyState
 import jp.komehyappyo.member.next.core.designsystem.OrgPortalTheme
 import jp.komehyappyo.member.next.core.navigation.AppShell
 import jp.komehyappyo.member.next.core.notifications.NotificationService
+import jp.komehyappyo.member.next.feature.tools.DiaryFeatureModel
 import jp.komehyappyo.member.next.feature.tools.GuestHomeView
 import jp.komehyappyo.member.next.feature.tools.ScheduleFeatureModel
-import jp.komehyappyo.member.next.feature.tools.ScheduleRoot
+import jp.komehyappyo.member.next.feature.tools.ToolsHubRoot
 
 class MainActivity : ComponentActivity() {
     private val notificationPermission =
@@ -42,18 +46,28 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun NextApp() {
-        val repository = remember { ScheduleRepositories.createLocal(applicationContext) }
-        val factory = remember {
+        val database = remember { OrgPortalDatabase.create(applicationContext) }
+        val scheduleRepository = remember { RoomScheduleRepository(database.scheduleDao()) }
+        val scheduleFactory = remember {
             ScheduleFeatureModel.Factory(
-                repository,
+                scheduleRepository,
                 NotificationService(applicationContext),
             )
         }
-        val scheduleModel: ScheduleFeatureModel = viewModel(factory = factory)
+        val scheduleModel: ScheduleFeatureModel = viewModel(factory = scheduleFactory)
+        val diaryRepository = remember { RoomDiaryRepository(database.diaryDao()) }
+        val diaryPhotoStore = remember { LocalDiaryPhotoStore(applicationContext) }
+        val diaryFactory = remember {
+            DiaryFeatureModel.Factory(
+                diaryRepository,
+                diaryPhotoStore,
+            )
+        }
+        val diaryModel: DiaryFeatureModel = viewModel(factory = diaryFactory)
 
         AppShell(
-            home = { GuestHomeView(scheduleModel) },
-            tools = { ScheduleRoot(scheduleModel) },
+            home = { GuestHomeView(scheduleModel, diaryModel) },
+            tools = { ToolsHubRoot(scheduleModel, diaryModel) },
             connect = {
                 EmptyState(
                     title = "つながる",

@@ -17,7 +17,7 @@ public enum GuestHomeTool: String, CaseIterable, Identifiable, Sendable {
     ]
 
     public var isAvailable: Bool {
-        self == .schedule
+        self == .schedule || self == .diary
     }
 
     var title: LocalizedStringKey {
@@ -49,11 +49,17 @@ public enum GuestHomeTool: String, CaseIterable, Identifiable, Sendable {
 }
 
 public struct GuestHomeView: View {
-    @ObservedObject private var model: ScheduleFeatureModel
+    @ObservedObject private var scheduleModel: ScheduleFeatureModel
+    @ObservedObject private var diaryModel: DiaryFeatureModel
     @State private var isShowingTodaySchedule = false
+    @State private var isShowingDiary = false
 
-    public init(model: ScheduleFeatureModel) {
-        self.model = model
+    public init(
+        scheduleModel: ScheduleFeatureModel,
+        diaryModel: DiaryFeatureModel
+    ) {
+        self.scheduleModel = scheduleModel
+        self.diaryModel = diaryModel
     }
 
     public var body: some View {
@@ -83,6 +89,18 @@ public struct GuestHomeView: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityHint("home.schedule.accessibility_hint")
+                        } else if tool == .diary {
+                            Button {
+                                isShowingDiary = true
+                            } label: {
+                                FeatureCard(
+                                    tool.title,
+                                    subtitle: tool.subtitle,
+                                    systemImage: tool.systemImage
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityHint("home.diary.accessibility_hint")
                         } else {
                             FeatureCard(
                                 tool.title,
@@ -98,7 +116,10 @@ public struct GuestHomeView: View {
             .navigationTitle("tab.home")
         }
         .sheet(isPresented: $isShowingTodaySchedule) {
-            TodayScheduleView(model: model)
+            TodayScheduleView(model: scheduleModel)
+        }
+        .sheet(isPresented: $isShowingDiary) {
+            DiaryRootView(model: diaryModel)
         }
     }
 }

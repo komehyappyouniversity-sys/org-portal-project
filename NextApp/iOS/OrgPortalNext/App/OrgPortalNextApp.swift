@@ -24,7 +24,10 @@ struct OrgPortalNextApp: App {
         }
 
         do {
-            modelContainer = try ModelContainer(for: ScheduleRecord.self)
+            modelContainer = try ModelContainer(
+                for: ScheduleRecord.self,
+                DiaryRecord.self
+            )
         } catch {
             fatalError("Unable to initialize local storage: \(error)")
         }
@@ -40,22 +43,41 @@ struct OrgPortalNextApp: App {
 
 private struct AppBootstrapView: View {
     @StateObject private var scheduleModel: ScheduleFeatureModel
+    @StateObject private var diaryModel: DiaryFeatureModel
 
     init(modelContainer: ModelContainer) {
-        let repository = SwiftDataScheduleRepository(modelContainer: modelContainer)
+        let scheduleRepository = SwiftDataScheduleRepository(
+            modelContainer: modelContainer
+        )
         let notifications = UserNotificationScheduler()
         _scheduleModel = StateObject(
             wrappedValue: ScheduleFeatureModel(
-                repository: repository,
+                repository: scheduleRepository,
                 notificationScheduler: notifications
+            )
+        )
+        let diaryRepository = SwiftDataDiaryRepository(
+            modelContainer: modelContainer
+        )
+        let photoStore = LocalDiaryPhotoStore()
+        _diaryModel = StateObject(
+            wrappedValue: DiaryFeatureModel(
+                repository: diaryRepository,
+                photoStore: photoStore
             )
         )
     }
 
     var body: some View {
         AppShellView(
-            home: GuestHomeView(model: scheduleModel),
-            tools: ScheduleListView(model: scheduleModel),
+            home: GuestHomeView(
+                scheduleModel: scheduleModel,
+                diaryModel: diaryModel
+            ),
+            tools: ToolsHubView(
+                scheduleModel: scheduleModel,
+                diaryModel: diaryModel
+            ),
             community: PlaceholderTabView(
                 titleKey: "tab.community",
                 messageKey: "placeholder.community"
