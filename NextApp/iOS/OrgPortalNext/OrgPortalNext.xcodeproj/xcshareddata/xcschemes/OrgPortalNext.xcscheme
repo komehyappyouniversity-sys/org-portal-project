@@ -14,7 +14,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "CA85A76F861E86F664CACC8E"
+               BlueprintIdentifier = "E8D454C47CFB414A96EF3D83"
                BuildableName = "OrgPortalNext.app"
                BlueprintName = "OrgPortalNext"
                ReferencedContainer = "container:OrgPortalNext.xcodeproj">
@@ -30,7 +30,7 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "CA85A76F861E86F664CACC8E"
+            BlueprintIdentifier = "E8D454C47CFB414A96EF3D83"
             BuildableName = "OrgPortalNext.app"
             BlueprintName = "OrgPortalNext"
             ReferencedContainer = "container:OrgPortalNext.xcodeproj">
@@ -41,7 +41,7 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "E96F2FE7BDC688955FD7DB97"
+               BlueprintIdentifier = "CA3ACFAE3B5569BE70D07FAC"
                BuildableName = "ModelTests.xctest"
                BlueprintName = "ModelTests"
                ReferencedContainer = "container:OrgPortalNext.xcodeproj">
@@ -51,7 +51,7 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "749CBCDB192E6D34E1C30B18"
+               BlueprintIdentifier = "0037DE4215B68230F520A636"
                BuildableName = "DataLayerTests.xctest"
                BlueprintName = "DataLayerTests"
                ReferencedContainer = "container:OrgPortalNext.xcodeproj">
@@ -61,7 +61,7 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "D046204310097F81D28B9DD6"
+               BlueprintIdentifier = "137AC67CFC4D36DC828902D7"
                BuildableName = "FeatureToolsTests.xctest"
                BlueprintName = "FeatureToolsTests"
                ReferencedContainer = "container:OrgPortalNext.xcodeproj">
@@ -83,7 +83,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "CA85A76F861E86F664CACC8E"
+            BlueprintIdentifier = "E8D454C47CFB414A96EF3D83"
             BuildableName = "OrgPortalNext.app"
             BlueprintName = "OrgPortalNext"
             ReferencedContainer = "container:OrgPortalNext.xcodeproj">
@@ -100,7 +100,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "CA85A76F861E86F664CACC8E"
+            BlueprintIdentifier = "E8D454C47CFB414A96EF3D83"
             BuildableName = "OrgPortalNext.app"
             BlueprintName = "OrgPortalNext"
             ReferencedContainer = "container:OrgPortalNext.xcodeproj">

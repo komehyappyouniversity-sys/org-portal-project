@@ -32,6 +32,7 @@ private enum class ToolsDestination {
 fun ToolsHubRoot(
     scheduleModel: ScheduleFeatureModel,
     diaryModel: DiaryFeatureModel,
+    cashDistributionModel: CashDistributionFeatureModel,
 ) {
     var destination by remember { mutableStateOf<ToolsDestination?>(null) }
     when (destination) {
@@ -48,7 +49,7 @@ fun ToolsHubRoot(
         ToolsDestination.Denomination -> ToolDestinationContainer(
             onBack = { destination = null },
         ) {
-            DenominationCalculatorView()
+            DenominationToolRoot(cashDistributionModel)
         }
         null -> Column(
             modifier = Modifier
@@ -74,7 +75,7 @@ fun ToolsHubRoot(
             Button(onClick = { destination = ToolsDestination.Denomination }) {
                 FeatureCard(
                     title = "金種計算",
-                    description = "紙幣・硬貨の枚数から合計金額を計算します。",
+                    description = "配布額から必要な金種を計算し、現金の集計もできます。",
                     icon = Icons.Outlined.Calculate,
                 )
             }

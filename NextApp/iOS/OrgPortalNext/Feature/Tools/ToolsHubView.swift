@@ -18,14 +18,17 @@ public struct ToolsHubView: View {
 
     @ObservedObject private var scheduleModel: ScheduleFeatureModel
     @ObservedObject private var diaryModel: DiaryFeatureModel
+    @ObservedObject private var cashDistributionModel: CashDistributionFeatureModel
     @State private var destination: Destination?
 
     public init(
         scheduleModel: ScheduleFeatureModel,
-        diaryModel: DiaryFeatureModel
+        diaryModel: DiaryFeatureModel,
+        cashDistributionModel: CashDistributionFeatureModel
     ) {
         self.scheduleModel = scheduleModel
         self.diaryModel = diaryModel
+        self.cashDistributionModel = cashDistributionModel
     }
 
     public var body: some View {
@@ -73,7 +76,7 @@ public struct ToolsHubView: View {
                 case .diary:
                     DiaryRootView(model: diaryModel)
                 case .denomination:
-                    DenominationCalculatorView()
+                    DenominationToolView(model: cashDistributionModel)
                 }
                 Button {
                     self.destination = nil

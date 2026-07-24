@@ -51,4 +51,56 @@ final class DenominationTests: XCTestCase {
             )
         }
     }
+
+    func testCashDistributionDecomposesEachRecipientSeparately() throws {
+        let entries = [
+            CashDistributionEntry(
+                recipientName1: "A",
+                amount1: 6_000,
+                recipientName2: "B",
+                amount2: 6_000
+            )
+        ]
+
+        let counts = try CashDistributionCalculator.requiredCounts(for: entries)
+
+        XCTAssertEqual(counts[.fiveThousand], 2)
+        XCTAssertEqual(counts[.oneThousand], 2)
+        XCTAssertEqual(counts[.tenThousand], 0)
+        XCTAssertEqual(counts[.twoThousand], 0)
+    }
+
+    func testCashDistributionUsesTwoThousandYenBanknote() throws {
+        let counts = try CashDistributionCalculator.requiredCounts(for: 12_000)
+
+        XCTAssertEqual(counts[.tenThousand], 1)
+        XCTAssertEqual(counts[.twoThousand], 1)
+    }
+
+    func testCashDistributionRequiresTitleAndRecipientName() {
+        XCTAssertThrowsError(
+            try CashDistribution(
+                title: "",
+                entries: [
+                    CashDistributionEntry(recipientName1: "A", amount1: 1_000)
+                ]
+            ).validated()
+        ) { error in
+            XCTAssertEqual(error as? CashDistributionValidationError, .titleRequired)
+        }
+
+        XCTAssertThrowsError(
+            try CashDistribution(
+                title: "配布",
+                entries: [
+                    CashDistributionEntry(recipientName1: "", amount1: 1_000)
+                ]
+            ).validated()
+        ) { error in
+            XCTAssertEqual(
+                error as? CashDistributionValidationError,
+                .recipientNameRequired
+            )
+        }
+    }
 }

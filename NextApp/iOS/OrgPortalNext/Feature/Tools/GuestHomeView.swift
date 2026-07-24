@@ -51,16 +51,19 @@ public enum GuestHomeTool: String, CaseIterable, Identifiable, Sendable {
 public struct GuestHomeView: View {
     @ObservedObject private var scheduleModel: ScheduleFeatureModel
     @ObservedObject private var diaryModel: DiaryFeatureModel
+    @ObservedObject private var cashDistributionModel: CashDistributionFeatureModel
     @State private var isShowingTodaySchedule = false
     @State private var isShowingDiary = false
     @State private var isShowingDenomination = false
 
     public init(
         scheduleModel: ScheduleFeatureModel,
-        diaryModel: DiaryFeatureModel
+        diaryModel: DiaryFeatureModel,
+        cashDistributionModel: CashDistributionFeatureModel
     ) {
         self.scheduleModel = scheduleModel
         self.diaryModel = diaryModel
+        self.cashDistributionModel = cashDistributionModel
     }
 
     public var body: some View {
@@ -135,7 +138,7 @@ public struct GuestHomeView: View {
             DiaryRootView(model: diaryModel)
         }
         .sheet(isPresented: $isShowingDenomination) {
-            DenominationCalculatorView()
+            DenominationToolView(model: cashDistributionModel)
         }
     }
 }

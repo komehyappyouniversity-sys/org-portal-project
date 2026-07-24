@@ -21,7 +21,7 @@
     "error.schedule.date_order" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "終了日時は開始日時以降にしてください" } } } },
     "error.schedule.reminder" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "通知時間を正しく入力してください" } } } },
     "error.schedule.title_required" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "タイトルを入力してください" } } } },
-    "home.denomination.subtitle" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "紙幣・硬貨の枚数から合計金額を計算します。" } } } },
+    "home.denomination.subtitle" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "配布額から必要な金種を計算し、現金の集計もできます。" } } } },
     "home.denomination.title" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "金種計算" } } } },
     "home.denomination.accessibility_hint" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "金種計算を開きます" } } } },
     "home.diary.subtitle" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "できごとや写真を自分専用に残します。" } } } },

@@ -50,7 +50,7 @@ enum class GuestHomeTool(
     ),
     Denomination(
         title = "金種計算",
-        description = "紙幣・硬貨の枚数から合計金額を計算します。",
+        description = "配布額から必要な金種を計算し、現金の集計もできます。",
         icon = Icons.Outlined.Calculate,
         isAvailable = true,
     ),
@@ -77,6 +77,7 @@ private enum class GuestHomeDestination {
 fun GuestHomeView(
     scheduleModel: ScheduleFeatureModel,
     diaryModel: DiaryFeatureModel,
+    cashDistributionModel: CashDistributionFeatureModel,
 ) {
     var destination by rememberSaveable { mutableStateOf<GuestHomeDestination?>(null) }
 
@@ -89,7 +90,8 @@ fun GuestHomeView(
                 when (destination) {
                     GuestHomeDestination.TodaySchedule -> TodayScheduleView(model = scheduleModel)
                     GuestHomeDestination.Diary -> DiaryRoot(model = diaryModel)
-                    GuestHomeDestination.Denomination -> DenominationCalculatorView()
+                    GuestHomeDestination.Denomination ->
+                        DenominationToolRoot(cashDistributionModel)
                     null -> Unit
                 }
             }

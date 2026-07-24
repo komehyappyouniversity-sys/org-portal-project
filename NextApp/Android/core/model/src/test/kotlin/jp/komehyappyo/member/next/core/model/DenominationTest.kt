@@ -46,4 +46,52 @@ class DenominationTest {
             DenominationCalculator.total(mapOf(Denomination.TenThousand to Long.MAX_VALUE))
         }
     }
+
+    @Test
+    fun cashDistributionDecomposesEachRecipientSeparately() {
+        val counts = CashDistributionCalculator.requiredCounts(
+            listOf(
+                CashDistributionEntry(
+                    recipientName1 = "A",
+                    amount1 = 6_000,
+                    recipientName2 = "B",
+                    amount2 = 6_000,
+                ),
+            ),
+        )
+
+        assertEquals(2L, counts[Denomination.FiveThousand])
+        assertEquals(2L, counts[Denomination.OneThousand])
+        assertEquals(0L, counts[Denomination.TenThousand])
+        assertEquals(0L, counts[Denomination.TwoThousand])
+    }
+
+    @Test
+    fun cashDistributionUsesTwoThousandYenBanknote() {
+        val counts = CashDistributionCalculator.requiredCounts(12_000)
+
+        assertEquals(1L, counts[Denomination.TenThousand])
+        assertEquals(1L, counts[Denomination.TwoThousand])
+    }
+
+    @Test
+    fun cashDistributionRequiresTitleAndRecipientName() {
+        assertFailsWith<CashDistributionValidationException.TitleRequired> {
+            CashDistribution(
+                title = "",
+                entries = listOf(
+                    CashDistributionEntry(recipientName1 = "A", amount1 = 1_000),
+                ),
+            ).validated()
+        }
+
+        assertFailsWith<CashDistributionValidationException.RecipientNameRequired> {
+            CashDistribution(
+                title = "配布",
+                entries = listOf(
+                    CashDistributionEntry(recipientName1 = "", amount1 = 1_000),
+                ),
+            ).validated()
+        }
+    }
 }
