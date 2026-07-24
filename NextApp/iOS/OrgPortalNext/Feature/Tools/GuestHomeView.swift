@@ -17,7 +17,7 @@ public enum GuestHomeTool: String, CaseIterable, Identifiable, Sendable {
     ]
 
     public var isAvailable: Bool {
-        self == .schedule || self == .diary
+        self == .schedule || self == .diary || self == .denomination
     }
 
     var title: LocalizedStringKey {
@@ -53,6 +53,7 @@ public struct GuestHomeView: View {
     @ObservedObject private var diaryModel: DiaryFeatureModel
     @State private var isShowingTodaySchedule = false
     @State private var isShowingDiary = false
+    @State private var isShowingDenomination = false
 
     public init(
         scheduleModel: ScheduleFeatureModel,
@@ -101,6 +102,18 @@ public struct GuestHomeView: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityHint("home.diary.accessibility_hint")
+                        } else if tool == .denomination {
+                            Button {
+                                isShowingDenomination = true
+                            } label: {
+                                FeatureCard(
+                                    tool.title,
+                                    subtitle: tool.subtitle,
+                                    systemImage: tool.systemImage
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityHint("home.denomination.accessibility_hint")
                         } else {
                             FeatureCard(
                                 tool.title,
@@ -120,6 +133,9 @@ public struct GuestHomeView: View {
         }
         .sheet(isPresented: $isShowingDiary) {
             DiaryRootView(model: diaryModel)
+        }
+        .sheet(isPresented: $isShowingDenomination) {
+            DenominationCalculatorView()
         }
     }
 }

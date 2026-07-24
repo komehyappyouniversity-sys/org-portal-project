@@ -5,11 +5,13 @@ public struct ToolsHubView: View {
     private enum Destination: Identifiable {
         case schedule
         case diary
+        case denomination
 
         var id: String {
             switch self {
             case .schedule: "schedule"
             case .diary: "diary"
+            case .denomination: "denomination"
             }
         }
     }
@@ -49,6 +51,16 @@ public struct ToolsHubView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                Button {
+                    destination = .denomination
+                } label: {
+                    FeatureCard(
+                        "home.denomination.title",
+                        subtitle: "home.denomination.subtitle",
+                        systemImage: "yensign.circle"
+                    )
+                }
+                .buttonStyle(.plain)
             }
             .listStyle(.plain)
             .navigationTitle("tab.tools")
@@ -60,6 +72,8 @@ public struct ToolsHubView: View {
                     ScheduleListView(model: scheduleModel)
                 case .diary:
                     DiaryRootView(model: diaryModel)
+                case .denomination:
+                    DenominationCalculatorView()
                 }
                 Button {
                     self.destination = nil

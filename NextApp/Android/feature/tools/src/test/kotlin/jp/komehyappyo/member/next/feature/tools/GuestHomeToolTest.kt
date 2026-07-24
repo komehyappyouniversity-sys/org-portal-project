@@ -23,7 +23,7 @@ class GuestHomeToolTest {
     fun implementedToolsAreAvailable() {
         assertTrue(GuestHomeTool.Schedule.isAvailable)
         assertTrue(GuestHomeTool.Diary.isAvailable)
-        assertFalse(GuestHomeTool.Denomination.isAvailable)
+        assertTrue(GuestHomeTool.Denomination.isAvailable)
         assertFalse(GuestHomeTool.MeetingMinutes.isAvailable)
     }
 }

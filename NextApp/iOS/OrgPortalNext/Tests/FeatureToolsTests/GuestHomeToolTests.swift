@@ -12,7 +12,7 @@ final class GuestHomeToolTests: XCTestCase {
     func testImplementedToolsAreAvailable() {
         XCTAssertTrue(GuestHomeTool.schedule.isAvailable)
         XCTAssertTrue(GuestHomeTool.diary.isAvailable)
-        XCTAssertFalse(GuestHomeTool.denomination.isAvailable)
+        XCTAssertTrue(GuestHomeTool.denomination.isAvailable)
         XCTAssertFalse(GuestHomeTool.meetingMinutes.isAvailable)
     }
 }
