@@ -28,7 +28,8 @@ struct OrgPortalNextApp: App {
                 for: ScheduleRecord.self,
                 DiaryRecord.self,
                 CashDistributionRecord.self,
-                MeetingMinutesRecord.self
+                MeetingMinutesRecord.self,
+                SnsCustomLinkRecord.self
             )
         } catch {
             fatalError("Unable to initialize local storage: \(error)")
@@ -48,6 +49,7 @@ private struct AppBootstrapView: View {
     @StateObject private var diaryModel: DiaryFeatureModel
     @StateObject private var cashDistributionModel: CashDistributionFeatureModel
     @StateObject private var meetingMinutesModel: MeetingMinutesFeatureModel
+    @StateObject private var snsPostingAssistantModel: SnsPostingAssistantFeatureModel
 
     init(modelContainer: ModelContainer) {
         let scheduleRepository = SwiftDataScheduleRepository(
@@ -87,6 +89,13 @@ private struct AppBootstrapView: View {
                 recordingStore: meetingRecordingStore
             )
         )
+        _snsPostingAssistantModel = StateObject(
+            wrappedValue: SnsPostingAssistantFeatureModel(
+                repository: SwiftDataSnsCustomLinkRepository(
+                    modelContainer: modelContainer
+                )
+            )
+        )
     }
 
     var body: some View {
@@ -101,7 +110,8 @@ private struct AppBootstrapView: View {
                 scheduleModel: scheduleModel,
                 diaryModel: diaryModel,
                 cashDistributionModel: cashDistributionModel,
-                meetingMinutesModel: meetingMinutesModel
+                meetingMinutesModel: meetingMinutesModel,
+                snsPostingAssistantModel: snsPostingAssistantModel
             ),
             community: PlaceholderTabView(
                 titleKey: "tab.community",

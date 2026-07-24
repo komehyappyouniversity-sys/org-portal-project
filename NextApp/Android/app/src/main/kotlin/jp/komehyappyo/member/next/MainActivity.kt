@@ -17,6 +17,7 @@ import jp.komehyappyo.member.next.core.data.RoomCashDistributionRepository
 import jp.komehyappyo.member.next.core.data.RoomScheduleRepository
 import jp.komehyappyo.member.next.core.data.LocalMeetingRecordingStore
 import jp.komehyappyo.member.next.core.data.RoomMeetingMinutesRepository
+import jp.komehyappyo.member.next.core.data.RoomSnsCustomLinkRepository
 import jp.komehyappyo.member.next.core.designsystem.EmptyState
 import jp.komehyappyo.member.next.core.designsystem.OrgPortalTheme
 import jp.komehyappyo.member.next.core.navigation.AppShell
@@ -28,6 +29,7 @@ import jp.komehyappyo.member.next.feature.tools.ScheduleFeatureModel
 import jp.komehyappyo.member.next.feature.tools.ToolsHubRoot
 import jp.komehyappyo.member.next.feature.tools.MeetingMinutesFeatureModel
 import jp.komehyappyo.member.next.feature.tools.MeetingRecordingService
+import jp.komehyappyo.member.next.feature.tools.SnsPostingAssistantFeatureModel
 
 class MainActivity : ComponentActivity() {
     private val notificationPermission =
@@ -92,6 +94,14 @@ class MainActivity : ComponentActivity() {
         val meetingMinutesModel: MeetingMinutesFeatureModel = viewModel(
             factory = meetingMinutesFactory,
         )
+        val snsPostingAssistantFactory = remember {
+            SnsPostingAssistantFeatureModel.Factory(
+                RoomSnsCustomLinkRepository(database.snsCustomLinkDao()),
+            )
+        }
+        val snsPostingAssistantModel: SnsPostingAssistantFeatureModel = viewModel(
+            factory = snsPostingAssistantFactory,
+        )
 
         AppShell(
             home = {
@@ -108,6 +118,7 @@ class MainActivity : ComponentActivity() {
                     diaryModel,
                     cashDistributionModel,
                     meetingMinutesModel,
+                    snsPostingAssistantModel,
                 )
             },
             connect = {

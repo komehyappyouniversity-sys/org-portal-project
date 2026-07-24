@@ -7,6 +7,7 @@ public struct ToolsHubView: View {
         case diary
         case denomination
         case meetingMinutes
+        case snsPostingAssistant
 
         var id: String {
             switch self {
@@ -14,6 +15,7 @@ public struct ToolsHubView: View {
             case .diary: "diary"
             case .denomination: "denomination"
             case .meetingMinutes: "meetingMinutes"
+            case .snsPostingAssistant: "snsPostingAssistant"
             }
         }
     }
@@ -22,18 +24,21 @@ public struct ToolsHubView: View {
     @ObservedObject private var diaryModel: DiaryFeatureModel
     @ObservedObject private var cashDistributionModel: CashDistributionFeatureModel
     @ObservedObject private var meetingMinutesModel: MeetingMinutesFeatureModel
+    @ObservedObject private var snsPostingAssistantModel: SnsPostingAssistantFeatureModel
     @State private var destination: Destination?
 
     public init(
         scheduleModel: ScheduleFeatureModel,
         diaryModel: DiaryFeatureModel,
         cashDistributionModel: CashDistributionFeatureModel,
-        meetingMinutesModel: MeetingMinutesFeatureModel
+        meetingMinutesModel: MeetingMinutesFeatureModel,
+        snsPostingAssistantModel: SnsPostingAssistantFeatureModel
     ) {
         self.scheduleModel = scheduleModel
         self.diaryModel = diaryModel
         self.cashDistributionModel = cashDistributionModel
         self.meetingMinutesModel = meetingMinutesModel
+        self.snsPostingAssistantModel = snsPostingAssistantModel
     }
 
     public var body: some View {
@@ -79,6 +84,16 @@ public struct ToolsHubView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                Button {
+                    destination = .snsPostingAssistant
+                } label: {
+                    FeatureCard(
+                        "SNS投稿補助",
+                        subtitle: "文章をコピーして外部SNSを開きます。",
+                        systemImage: "square.and.arrow.up"
+                    )
+                }
+                .buttonStyle(.plain)
             }
             .listStyle(.plain)
             .navigationTitle("tab.tools")
@@ -94,6 +109,8 @@ public struct ToolsHubView: View {
                     DenominationToolView(model: cashDistributionModel)
                 case .meetingMinutes:
                     MeetingMinutesRootView(model: meetingMinutesModel)
+                case .snsPostingAssistant:
+                    SnsPostingAssistantView(model: snsPostingAssistantModel)
                 }
                 Button {
                     self.destination = nil
