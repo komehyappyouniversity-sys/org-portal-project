@@ -99,7 +99,21 @@ public struct ToolsHubView: View {
             .navigationTitle("tab.tools")
         }
         .sheet(item: $destination) { destination in
-            ZStack(alignment: .topTrailing) {
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    Button {
+                        self.destination = nil
+                    } label: {
+                        Label("action.close", systemImage: "xmark.circle.fill")
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+
+                Divider()
+
                 switch destination {
                 case .schedule:
                     ScheduleListView(model: scheduleModel)
@@ -112,14 +126,6 @@ public struct ToolsHubView: View {
                 case .snsPostingAssistant:
                     SnsPostingAssistantView(model: snsPostingAssistantModel)
                 }
-                Button {
-                    self.destination = nil
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title)
-                }
-                .padding()
-                .accessibilityLabel("action.close")
             }
         }
     }
