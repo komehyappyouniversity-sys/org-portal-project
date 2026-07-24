@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -177,6 +179,11 @@ private fun MeetingRecorderScreen(
     var showExplanation by rememberSaveable { mutableStateOf(false) }
     var player by remember { mutableStateOf<MediaPlayer?>(null) }
     DisposableEffect(Unit) { onDispose { player?.release() } }
+    LaunchedEffect(state.liveTranscript, state.isTranscribing) {
+        if (state.isTranscribing || state.liveTranscript.isNotBlank()) {
+            transcript = state.liveTranscript
+        }
+    }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -198,8 +205,11 @@ private fun MeetingRecorderScreen(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(onClick = onBack, enabled = !state.isRecording) { Text("戻る") }
             Text(
-                if (state.isRecording) "● 録音中 ${duration(state.elapsedSeconds)}"
-                else "停止中",
+                when {
+                    state.isRecording -> "● 録音中 ${duration(state.elapsedSeconds)}"
+                    state.isTranscribing -> "文字起こし中"
+                    else -> "停止中"
+                },
                 color = if (state.isRecording) MaterialTheme.colorScheme.error
                 else MaterialTheme.colorScheme.onSurface,
             )
@@ -223,6 +233,7 @@ private fun MeetingRecorderScreen(
             if (!state.isRecording) {
                 Button(
                     modifier = Modifier.fillMaxWidth(),
+                    enabled = !state.isTranscribing,
                     onClick = {
                         val audioPath = draftAudioPath ?: return@Button
                         player?.release()
@@ -247,8 +258,17 @@ private fun MeetingRecorderScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                enabled = !state.isRecording,
+                enabled = !state.isRecording && !state.isTranscribing,
             )
+            if (state.isTranscribing) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    CircularProgressIndicator()
+                    Text("録音停止後の音声を端末内で文字起こししています…")
+                }
+            }
             Text(
                 "文字起こしには誤りが含まれる場合があります。保存前に確認・編集してください。",
                 style = MaterialTheme.typography.bodySmall,
@@ -256,9 +276,19 @@ private fun MeetingRecorderScreen(
             state.notice?.let {
                 Text(it, color = MaterialTheme.colorScheme.tertiary)
             }
+            if (!state.isRecording && !state.isTranscribing) {
+                TextButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        transcript = ""
+                        model.retryTranscription()
+                    },
+                ) { Text("文字起こしを再実行") }
+            }
             Button(
                 modifier = Modifier.fillMaxWidth(),
-                enabled = title.isNotBlank() && !state.isRecording,
+                enabled =
+                    title.isNotBlank() && !state.isRecording && !state.isTranscribing,
                 onClick = {
                     model.saveDraft(title, transcript) { result ->
                         if (result.isSuccess) onBack()
@@ -267,7 +297,7 @@ private fun MeetingRecorderScreen(
             ) { Text("名前を付けて保存") }
             TextButton(
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !state.isRecording,
+                enabled = !state.isRecording && !state.isTranscribing,
                 onClick = {
                     model.discardDraft()
                     onBack()
