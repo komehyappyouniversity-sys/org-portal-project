@@ -27,7 +27,8 @@ struct OrgPortalNextApp: App {
             modelContainer = try ModelContainer(
                 for: ScheduleRecord.self,
                 DiaryRecord.self,
-                CashDistributionRecord.self
+                CashDistributionRecord.self,
+                MeetingMinutesRecord.self
             )
         } catch {
             fatalError("Unable to initialize local storage: \(error)")
@@ -46,6 +47,7 @@ private struct AppBootstrapView: View {
     @StateObject private var scheduleModel: ScheduleFeatureModel
     @StateObject private var diaryModel: DiaryFeatureModel
     @StateObject private var cashDistributionModel: CashDistributionFeatureModel
+    @StateObject private var meetingMinutesModel: MeetingMinutesFeatureModel
 
     init(modelContainer: ModelContainer) {
         let scheduleRepository = SwiftDataScheduleRepository(
@@ -76,6 +78,15 @@ private struct AppBootstrapView: View {
                 repository: cashDistributionRepository
             )
         )
+        let meetingRecordingStore = LocalMeetingRecordingStore()
+        _meetingMinutesModel = StateObject(
+            wrappedValue: MeetingMinutesFeatureModel(
+                repository: SwiftDataMeetingMinutesRepository(
+                    modelContainer: modelContainer
+                ),
+                recordingStore: meetingRecordingStore
+            )
+        )
     }
 
     var body: some View {
@@ -83,12 +94,14 @@ private struct AppBootstrapView: View {
             home: GuestHomeView(
                 scheduleModel: scheduleModel,
                 diaryModel: diaryModel,
-                cashDistributionModel: cashDistributionModel
+                cashDistributionModel: cashDistributionModel,
+                meetingMinutesModel: meetingMinutesModel
             ),
             tools: ToolsHubView(
                 scheduleModel: scheduleModel,
                 diaryModel: diaryModel,
-                cashDistributionModel: cashDistributionModel
+                cashDistributionModel: cashDistributionModel,
+                meetingMinutesModel: meetingMinutesModel
             ),
             community: PlaceholderTabView(
                 titleKey: "tab.community",

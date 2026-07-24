@@ -15,6 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import jp.komehyappyo.member.next.core.model.Diary
 import jp.komehyappyo.member.next.core.model.DiaryMood
 import jp.komehyappyo.member.next.core.model.CashDistribution
+import jp.komehyappyo.member.next.core.model.MeetingMinutes
 import jp.komehyappyo.member.next.core.model.RecurrenceFrequency
 import jp.komehyappyo.member.next.core.model.RecurrenceRule
 import jp.komehyappyo.member.next.core.model.ReminderSetting
@@ -74,6 +75,21 @@ data class CashDistributionEntity(
     val updatedAtEpochMillis: Long,
 )
 
+@Entity(tableName = "meeting_minutes")
+data class MeetingMinutesEntity(
+    @PrimaryKey val id: String,
+    val userId: String,
+    val title: String,
+    val recordingStartAtEpochMillis: Long,
+    val recordingEndAtEpochMillis: Long,
+    val recordingDurationSeconds: Int,
+    val audioFileLocalPath: String,
+    val transcriptText: String,
+    val pdfFileLocalPath: String?,
+    val createdAtEpochMillis: Long,
+    val updatedAtEpochMillis: Long,
+)
+
 @Dao
 interface ScheduleDao {
     @Query("SELECT * FROM schedules ORDER BY startEpochMillis, title")
@@ -119,19 +135,36 @@ interface CashDistributionDao {
     suspend fun delete(id: String)
 }
 
+@Dao
+interface MeetingMinutesDao {
+    @Query("SELECT * FROM meeting_minutes ORDER BY recordingStartAtEpochMillis DESC")
+    fun observeAll(): Flow<List<MeetingMinutesEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(minutes: MeetingMinutesEntity)
+
+    @Query("SELECT * FROM meeting_minutes WHERE id = :id LIMIT 1")
+    suspend fun find(id: String): MeetingMinutesEntity?
+
+    @Query("DELETE FROM meeting_minutes WHERE id = :id")
+    suspend fun delete(id: String)
+}
+
 @Database(
     entities = [
         ScheduleEntity::class,
         DiaryEntity::class,
         CashDistributionEntity::class,
+        MeetingMinutesEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class OrgPortalDatabase : RoomDatabase() {
     abstract fun scheduleDao(): ScheduleDao
     abstract fun diaryDao(): DiaryDao
     abstract fun cashDistributionDao(): CashDistributionDao
+    abstract fun meetingMinutesDao(): MeetingMinutesDao
 
     companion object {
         val migration1To2 = object : Migration(1, 2) {
@@ -173,12 +206,35 @@ abstract class OrgPortalDatabase : RoomDatabase() {
             }
         }
 
+        val migration3To4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `meeting_minutes` (
+                        `id` TEXT NOT NULL,
+                        `userId` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `recordingStartAtEpochMillis` INTEGER NOT NULL,
+                        `recordingEndAtEpochMillis` INTEGER NOT NULL,
+                        `recordingDurationSeconds` INTEGER NOT NULL,
+                        `audioFileLocalPath` TEXT NOT NULL,
+                        `transcriptText` TEXT NOT NULL,
+                        `pdfFileLocalPath` TEXT,
+                        `createdAtEpochMillis` INTEGER NOT NULL,
+                        `updatedAtEpochMillis` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         fun create(context: Context): OrgPortalDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 OrgPortalDatabase::class.java,
                 "org-portal-next.db",
-            ).addMigrations(migration1To2, migration2To3).build()
+            ).addMigrations(migration1To2, migration2To3, migration3To4).build()
     }
 }
 
@@ -343,6 +399,56 @@ private fun DiaryEntity.toDomain() = Diary(
     body = body,
     mood = runCatching { DiaryMood.valueOf(mood) }.getOrDefault(DiaryMood.Neutral),
     photoUrls = photoUrlsJson.lines().filter(String::isNotBlank),
+    createdAt = Instant.ofEpochMilli(createdAtEpochMillis),
+    updatedAt = Instant.ofEpochMilli(updatedAtEpochMillis),
+)
+
+class RoomMeetingMinutesRepository(
+    private val dao: MeetingMinutesDao,
+) : MeetingMinutesRepository {
+    override fun observeAll(): Flow<List<MeetingMinutes>> =
+        dao.observeAll().map { values -> values.map(MeetingMinutesEntity::toDomain) }
+
+    override suspend fun save(minutes: MeetingMinutes) {
+        dao.upsert(minutes.validated(now = minutes.updatedAt).toEntity())
+    }
+
+    override suspend fun delete(id: UUID) {
+        val existing = dao.find(id.toString())
+        existing?.audioFileLocalPath?.let {
+            runCatching { java.io.File(it).delete() }
+        }
+        existing?.pdfFileLocalPath?.let {
+            runCatching { java.io.File(it).delete() }
+        }
+        dao.delete(id.toString())
+    }
+}
+
+private fun MeetingMinutes.toEntity() = MeetingMinutesEntity(
+    id = id.toString(),
+    userId = userId,
+    title = title,
+    recordingStartAtEpochMillis = recordingStartAt.toEpochMilli(),
+    recordingEndAtEpochMillis = recordingEndAt.toEpochMilli(),
+    recordingDurationSeconds = recordingDurationSeconds,
+    audioFileLocalPath = audioFileLocalPath,
+    transcriptText = transcriptText,
+    pdfFileLocalPath = pdfFileLocalPath,
+    createdAtEpochMillis = createdAt.toEpochMilli(),
+    updatedAtEpochMillis = updatedAt.toEpochMilli(),
+)
+
+private fun MeetingMinutesEntity.toDomain() = MeetingMinutes(
+    id = UUID.fromString(id),
+    userId = userId,
+    title = title,
+    recordingStartAt = Instant.ofEpochMilli(recordingStartAtEpochMillis),
+    recordingEndAt = Instant.ofEpochMilli(recordingEndAtEpochMillis),
+    recordingDurationSeconds = recordingDurationSeconds,
+    audioFileLocalPath = audioFileLocalPath,
+    transcriptText = transcriptText,
+    pdfFileLocalPath = pdfFileLocalPath,
     createdAt = Instant.ofEpochMilli(createdAtEpochMillis),
     updatedAt = Instant.ofEpochMilli(updatedAtEpochMillis),
 )

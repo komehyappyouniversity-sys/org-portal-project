@@ -13,6 +13,6 @@ final class GuestHomeToolTests: XCTestCase {
         XCTAssertTrue(GuestHomeTool.schedule.isAvailable)
         XCTAssertTrue(GuestHomeTool.diary.isAvailable)
         XCTAssertTrue(GuestHomeTool.denomination.isAvailable)
-        XCTAssertFalse(GuestHomeTool.meetingMinutes.isAvailable)
+        XCTAssertTrue(GuestHomeTool.meetingMinutes.isAvailable)
     }
 }

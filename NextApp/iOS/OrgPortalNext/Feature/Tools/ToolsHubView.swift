@@ -6,12 +6,14 @@ public struct ToolsHubView: View {
         case schedule
         case diary
         case denomination
+        case meetingMinutes
 
         var id: String {
             switch self {
             case .schedule: "schedule"
             case .diary: "diary"
             case .denomination: "denomination"
+            case .meetingMinutes: "meetingMinutes"
             }
         }
     }
@@ -19,16 +21,19 @@ public struct ToolsHubView: View {
     @ObservedObject private var scheduleModel: ScheduleFeatureModel
     @ObservedObject private var diaryModel: DiaryFeatureModel
     @ObservedObject private var cashDistributionModel: CashDistributionFeatureModel
+    @ObservedObject private var meetingMinutesModel: MeetingMinutesFeatureModel
     @State private var destination: Destination?
 
     public init(
         scheduleModel: ScheduleFeatureModel,
         diaryModel: DiaryFeatureModel,
-        cashDistributionModel: CashDistributionFeatureModel
+        cashDistributionModel: CashDistributionFeatureModel,
+        meetingMinutesModel: MeetingMinutesFeatureModel
     ) {
         self.scheduleModel = scheduleModel
         self.diaryModel = diaryModel
         self.cashDistributionModel = cashDistributionModel
+        self.meetingMinutesModel = meetingMinutesModel
     }
 
     public var body: some View {
@@ -41,6 +46,16 @@ public struct ToolsHubView: View {
                         "screen.schedule.list",
                         subtitle: "home.schedule.subtitle",
                         systemImage: "calendar"
+                    )
+                }
+                .buttonStyle(.plain)
+                Button {
+                    destination = .meetingMinutes
+                } label: {
+                    FeatureCard(
+                        "home.meeting_minutes.title",
+                        subtitle: "home.meeting_minutes.subtitle",
+                        systemImage: "mic"
                     )
                 }
                 .buttonStyle(.plain)
@@ -77,6 +92,8 @@ public struct ToolsHubView: View {
                     DiaryRootView(model: diaryModel)
                 case .denomination:
                     DenominationToolView(model: cashDistributionModel)
+                case .meetingMinutes:
+                    MeetingMinutesRootView(model: meetingMinutesModel)
                 }
                 Button {
                     self.destination = nil
