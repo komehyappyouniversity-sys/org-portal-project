@@ -121,7 +121,10 @@ public final class MeetingRecordingService: NSObject, ObservableObject {
         }
     }
 
-    public static func requestPermissions() async -> MeetingRecordingPermissions {
+    /// Permission callbacks are delivered by the system on an arbitrary queue.
+    /// Keep this method nonisolated so the Speech callback does not inherit
+    /// `MeetingRecordingService`'s main-actor isolation and trap at runtime.
+    public nonisolated static func requestPermissions() async -> MeetingRecordingPermissions {
         let microphone = await AVAudioApplication.requestRecordPermission()
         guard microphone else {
             return MeetingRecordingPermissions(
