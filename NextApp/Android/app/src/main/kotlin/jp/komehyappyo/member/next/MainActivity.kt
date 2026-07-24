@@ -15,6 +15,8 @@ import jp.komehyappyo.member.next.core.data.OrgPortalDatabase
 import jp.komehyappyo.member.next.core.data.RoomDiaryRepository
 import jp.komehyappyo.member.next.core.data.RoomCashDistributionRepository
 import jp.komehyappyo.member.next.core.data.RoomScheduleRepository
+import jp.komehyappyo.member.next.core.data.LocalMeetingRecordingStore
+import jp.komehyappyo.member.next.core.data.RoomMeetingMinutesRepository
 import jp.komehyappyo.member.next.core.designsystem.EmptyState
 import jp.komehyappyo.member.next.core.designsystem.OrgPortalTheme
 import jp.komehyappyo.member.next.core.navigation.AppShell
@@ -24,6 +26,8 @@ import jp.komehyappyo.member.next.feature.tools.CashDistributionFeatureModel
 import jp.komehyappyo.member.next.feature.tools.GuestHomeView
 import jp.komehyappyo.member.next.feature.tools.ScheduleFeatureModel
 import jp.komehyappyo.member.next.feature.tools.ToolsHubRoot
+import jp.komehyappyo.member.next.feature.tools.MeetingMinutesFeatureModel
+import jp.komehyappyo.member.next.feature.tools.MeetingRecordingService
 
 class MainActivity : ComponentActivity() {
     private val notificationPermission =
@@ -75,10 +79,37 @@ class MainActivity : ComponentActivity() {
         val cashDistributionModel: CashDistributionFeatureModel = viewModel(
             factory = cashDistributionFactory,
         )
+        val meetingRecordingStore = remember {
+            LocalMeetingRecordingStore(applicationContext)
+        }
+        val meetingMinutesFactory = remember {
+            MeetingMinutesFeatureModel.Factory(
+                RoomMeetingMinutesRepository(database.meetingMinutesDao()),
+                meetingRecordingStore,
+                MeetingRecordingService(applicationContext),
+            )
+        }
+        val meetingMinutesModel: MeetingMinutesFeatureModel = viewModel(
+            factory = meetingMinutesFactory,
+        )
 
         AppShell(
-            home = { GuestHomeView(scheduleModel, diaryModel, cashDistributionModel) },
-            tools = { ToolsHubRoot(scheduleModel, diaryModel, cashDistributionModel) },
+            home = {
+                GuestHomeView(
+                    scheduleModel,
+                    diaryModel,
+                    cashDistributionModel,
+                    meetingMinutesModel,
+                )
+            },
+            tools = {
+                ToolsHubRoot(
+                    scheduleModel,
+                    diaryModel,
+                    cashDistributionModel,
+                    meetingMinutesModel,
+                )
+            },
             connect = {
                 EmptyState(
                     title = "つながる",

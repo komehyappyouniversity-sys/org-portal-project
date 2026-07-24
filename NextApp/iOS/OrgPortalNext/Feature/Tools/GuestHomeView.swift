@@ -17,7 +17,7 @@ public enum GuestHomeTool: String, CaseIterable, Identifiable, Sendable {
     ]
 
     public var isAvailable: Bool {
-        self == .schedule || self == .diary || self == .denomination
+        true
     }
 
     var title: LocalizedStringKey {
@@ -52,18 +52,22 @@ public struct GuestHomeView: View {
     @ObservedObject private var scheduleModel: ScheduleFeatureModel
     @ObservedObject private var diaryModel: DiaryFeatureModel
     @ObservedObject private var cashDistributionModel: CashDistributionFeatureModel
+    @ObservedObject private var meetingMinutesModel: MeetingMinutesFeatureModel
     @State private var isShowingTodaySchedule = false
     @State private var isShowingDiary = false
     @State private var isShowingDenomination = false
+    @State private var isShowingMeetingMinutes = false
 
     public init(
         scheduleModel: ScheduleFeatureModel,
         diaryModel: DiaryFeatureModel,
-        cashDistributionModel: CashDistributionFeatureModel
+        cashDistributionModel: CashDistributionFeatureModel,
+        meetingMinutesModel: MeetingMinutesFeatureModel
     ) {
         self.scheduleModel = scheduleModel
         self.diaryModel = diaryModel
         self.cashDistributionModel = cashDistributionModel
+        self.meetingMinutesModel = meetingMinutesModel
     }
 
     public var body: some View {
@@ -118,12 +122,16 @@ public struct GuestHomeView: View {
                             .buttonStyle(.plain)
                             .accessibilityHint("home.denomination.accessibility_hint")
                         } else {
-                            FeatureCard(
-                                tool.title,
-                                subtitle: tool.subtitle,
-                                systemImage: tool.systemImage,
-                                status: "home.status.coming_soon"
-                            )
+                            Button {
+                                isShowingMeetingMinutes = true
+                            } label: {
+                                FeatureCard(
+                                    tool.title,
+                                    subtitle: tool.subtitle,
+                                    systemImage: tool.systemImage
+                                )
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -139,6 +147,9 @@ public struct GuestHomeView: View {
         }
         .sheet(isPresented: $isShowingDenomination) {
             DenominationToolView(model: cashDistributionModel)
+        }
+        .sheet(isPresented: $isShowingMeetingMinutes) {
+            MeetingMinutesRootView(model: meetingMinutesModel)
         }
     }
 }

@@ -58,7 +58,7 @@ enum class GuestHomeTool(
         title = "会議録音・議事録",
         description = "録音と文字起こしを端末内に保存します。",
         icon = Icons.Outlined.Mic,
-        isAvailable = false,
+        isAvailable = true,
     ),
     ;
 
@@ -71,6 +71,7 @@ private enum class GuestHomeDestination {
     TodaySchedule,
     Diary,
     Denomination,
+    MeetingMinutes,
 }
 
 @Composable
@@ -78,6 +79,7 @@ fun GuestHomeView(
     scheduleModel: ScheduleFeatureModel,
     diaryModel: DiaryFeatureModel,
     cashDistributionModel: CashDistributionFeatureModel,
+    meetingMinutesModel: MeetingMinutesFeatureModel,
 ) {
     var destination by rememberSaveable { mutableStateOf<GuestHomeDestination?>(null) }
 
@@ -92,6 +94,8 @@ fun GuestHomeView(
                     GuestHomeDestination.Diary -> DiaryRoot(model = diaryModel)
                     GuestHomeDestination.Denomination ->
                         DenominationToolRoot(cashDistributionModel)
+                    GuestHomeDestination.MeetingMinutes ->
+                        MeetingMinutesRoot(meetingMinutesModel)
                     null -> Unit
                 }
             }
@@ -163,7 +167,14 @@ fun GuestHomeView(
                             Text("金種計算を開く")
                         }
                     }
-                    else -> Unit
+                    GuestHomeTool.MeetingMinutes -> {
+                        TextButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { destination = GuestHomeDestination.MeetingMinutes },
+                        ) {
+                            Text("会議録音を開く")
+                        }
+                    }
                 }
             }
         }

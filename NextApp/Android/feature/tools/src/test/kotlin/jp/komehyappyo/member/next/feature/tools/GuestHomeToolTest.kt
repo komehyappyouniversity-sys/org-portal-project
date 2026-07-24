@@ -2,7 +2,6 @@ package jp.komehyappyo.member.next.feature.tools
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class GuestHomeToolTest {
@@ -24,6 +23,6 @@ class GuestHomeToolTest {
         assertTrue(GuestHomeTool.Schedule.isAvailable)
         assertTrue(GuestHomeTool.Diary.isAvailable)
         assertTrue(GuestHomeTool.Denomination.isAvailable)
-        assertFalse(GuestHomeTool.MeetingMinutes.isAvailable)
+        assertTrue(GuestHomeTool.MeetingMinutes.isAvailable)
     }
 }

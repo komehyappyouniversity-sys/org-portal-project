@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Calculate
+import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,6 +27,7 @@ private enum class ToolsDestination {
     Schedule,
     Diary,
     Denomination,
+    MeetingMinutes,
 }
 
 @Composable
@@ -33,6 +35,7 @@ fun ToolsHubRoot(
     scheduleModel: ScheduleFeatureModel,
     diaryModel: DiaryFeatureModel,
     cashDistributionModel: CashDistributionFeatureModel,
+    meetingMinutesModel: MeetingMinutesFeatureModel,
 ) {
     var destination by remember { mutableStateOf<ToolsDestination?>(null) }
     when (destination) {
@@ -50,6 +53,11 @@ fun ToolsHubRoot(
             onBack = { destination = null },
         ) {
             DenominationToolRoot(cashDistributionModel)
+        }
+        ToolsDestination.MeetingMinutes -> ToolDestinationContainer(
+            onBack = { destination = null },
+        ) {
+            MeetingMinutesRoot(meetingMinutesModel)
         }
         null -> Column(
             modifier = Modifier
@@ -77,6 +85,13 @@ fun ToolsHubRoot(
                     title = "金種計算",
                     description = "配布額から必要な金種を計算し、現金の集計もできます。",
                     icon = Icons.Outlined.Calculate,
+                )
+            }
+            Button(onClick = { destination = ToolsDestination.MeetingMinutes }) {
+                FeatureCard(
+                    title = "会議録音・議事録",
+                    description = "録音と文字起こしを端末内に保存します。",
+                    icon = Icons.Outlined.Mic,
                 )
             }
         }

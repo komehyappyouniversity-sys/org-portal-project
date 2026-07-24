@@ -38,7 +38,7 @@ final class CashDistributionBackupServiceTests: XCTestCase {
         )
         XCTAssertEqual(
             exportedDistributions.first?["distributionDateEpochMillis"] as? Int,
-            Int(sourceItem.distributionDate.timeIntervalSince1970 * 1_000)
+            Int((sourceItem.distributionDate.timeIntervalSince1970 * 1_000).rounded())
         )
         XCTAssertEqual(
             exportedDistributions.first?["createdAtEpochMillis"] as? Int,
