@@ -60,6 +60,12 @@ jobs:
           -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest'
           -derivedDataPath "${RUNNER_TEMP}/OrgPortalNextDerivedData"
           test
+      - name: Verify internal frameworks are embedded
+        run: |
+          app_path="${RUNNER_TEMP}/OrgPortalNextDerivedData/Build/Products/Debug-iphonesimulator/OrgPortalNext.app"
+          for framework in Model DesignSystem Navigation Session DataLayer Notifications FeatureTools; do
+            test -f "${app_path}/Frameworks/${framework}.framework/${framework}"
+          done
 
   firebase-emulator:
     name: Firebase Emulator / smoke

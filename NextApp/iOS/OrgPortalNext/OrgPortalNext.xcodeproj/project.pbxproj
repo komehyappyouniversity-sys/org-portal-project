@@ -40,6 +40,13 @@
 		8DA4D4F46812996524C73885 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E935CF54711E2305698A25F3 /* Foundation.framework */; };
 		9512614443E4A38CA06CF1CC /* UserStage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B3776D17B284491262E49AD /* UserStage.swift */; };
 		95A6503CF60827EB58C283D5 /* DesignSystem.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7837E3B5985A2015A56239D7 /* DesignSystem.framework */; };
+		A10000000000000000000001 /* Model.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 4D7BCC18471B2ECF72975284 /* Model.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A10000000000000000000002 /* DesignSystem.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 7837E3B5985A2015A56239D7 /* DesignSystem.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A10000000000000000000003 /* Navigation.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = AAE38C61A466C57E4ED6314B /* Navigation.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A10000000000000000000004 /* Session.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 1952048B0FBACBEBB1637A57 /* Session.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A10000000000000000000005 /* DataLayer.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 15C9E7A41C464DDD73A1E2B0 /* DataLayer.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A10000000000000000000006 /* Notifications.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 05FE8438D47AA08B1F3ED74A /* Notifications.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A10000000000000000000007 /* FeatureTools.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2FFD8AAEFDCFB5C40D2F4B4D /* FeatureTools.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		A46947C64E8586A6F8FE5C8B /* AppSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52B483E3D33ADAA9422B3FB2 /* AppSession.swift */; };
 		A54AAE9BC88C74047A72F039 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 19082684F85272AA99010E17 /* Localizable.xcstrings */; };
 		AA1A119F7CBE0A15C216900D /* Model.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D7BCC18471B2ECF72975284 /* Model.framework */; };
@@ -215,6 +222,26 @@
 			remoteInfo = Model;
 		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A10000000000000000000008 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				A10000000000000000000001 /* Model.framework in Embed Frameworks */,
+				A10000000000000000000002 /* DesignSystem.framework in Embed Frameworks */,
+				A10000000000000000000003 /* Navigation.framework in Embed Frameworks */,
+				A10000000000000000000004 /* Session.framework in Embed Frameworks */,
+				A10000000000000000000005 /* DataLayer.framework in Embed Frameworks */,
+				A10000000000000000000006 /* Notifications.framework in Embed Frameworks */,
+				A10000000000000000000007 /* FeatureTools.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		05FE8438D47AA08B1F3ED74A /* Notifications.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Notifications.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -819,6 +846,7 @@
 			buildPhases = (
 				881316417A980B6B01D6B781 /* Sources */,
 				0FDC9823F37C2E046CFC9B22 /* Frameworks */,
+				A10000000000000000000008 /* Embed Frameworks */,
 				AE3FA5D8AC97284396641629 /* Resources */,
 			);
 			buildRules = (
