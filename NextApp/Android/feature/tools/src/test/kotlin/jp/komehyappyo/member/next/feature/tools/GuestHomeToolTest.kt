@@ -20,10 +20,10 @@ class GuestHomeToolTest {
     }
 
     @Test
-    fun onlyImplementedToolIsAvailable() {
+    fun implementedToolsAreAvailable() {
         assertTrue(GuestHomeTool.Schedule.isAvailable)
-        GuestHomeTool.ordered.drop(1).forEach { tool ->
-            assertFalse(tool.isAvailable)
-        }
+        assertTrue(GuestHomeTool.Diary.isAvailable)
+        assertFalse(GuestHomeTool.Denomination.isAvailable)
+        assertFalse(GuestHomeTool.MeetingMinutes.isAvailable)
     }
 }

@@ -12,6 +12,7 @@ project.root_object.attributes["LastSwiftUpdateCheck"] = "2620"
 project.root_object.attributes["LastUpgradeCheck"] = "2620"
 
 def configure_target(target, product_bundle_identifier: nil)
+  development_team = ENV.fetch("DEVELOPMENT_TEAM", "")
   target.build_configurations.each do |configuration|
     settings = configuration.build_settings
     settings["IPHONEOS_DEPLOYMENT_TARGET"] = "17.0"
@@ -20,7 +21,7 @@ def configure_target(target, product_bundle_identifier: nil)
     settings["CODE_SIGN_STYLE"] = "Automatic"
     settings["ENABLE_USER_SCRIPT_SANDBOXING"] = "YES"
     settings["PRODUCT_BUNDLE_IDENTIFIER"] = product_bundle_identifier if product_bundle_identifier
-    settings["DEVELOPMENT_TEAM"] = ""
+    settings["DEVELOPMENT_TEAM"] = development_team
   end
 end
 

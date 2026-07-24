@@ -46,7 +46,7 @@ enum class GuestHomeTool(
         title = "日記・写真日記",
         description = "できごとや写真を自分専用に残します。",
         icon = Icons.AutoMirrored.Outlined.MenuBook,
-        isAvailable = false,
+        isAvailable = true,
     ),
     Denomination(
         title = "金種計算",
@@ -67,23 +67,35 @@ enum class GuestHomeTool(
     }
 }
 
-@Composable
-fun GuestHomeView(model: ScheduleFeatureModel) {
-    var isShowingTodaySchedule by rememberSaveable { mutableStateOf(false) }
+private enum class GuestHomeDestination {
+    TodaySchedule,
+    Diary,
+}
 
-    if (isShowingTodaySchedule) {
+@Composable
+fun GuestHomeView(
+    scheduleModel: ScheduleFeatureModel,
+    diaryModel: DiaryFeatureModel,
+) {
+    var destination by rememberSaveable { mutableStateOf<GuestHomeDestination?>(null) }
+
+    if (destination != null) {
         Column(modifier = Modifier.fillMaxSize()) {
-            TextButton(onClick = { isShowingTodaySchedule = false }) {
+            TextButton(onClick = { destination = null }) {
                 Text("ホームに戻る")
             }
             Box(modifier = Modifier.weight(1f)) {
-                TodayScheduleView(model = model)
+                when (destination) {
+                    GuestHomeDestination.TodaySchedule -> TodayScheduleView(model = scheduleModel)
+                    GuestHomeDestination.Diary -> DiaryRoot(model = diaryModel)
+                    null -> Unit
+                }
             }
         }
         return
     }
 
-    val scheduleState by model.state.collectAsStateWithLifecycle()
+    val scheduleState by scheduleModel.state.collectAsStateWithLifecycle()
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
@@ -113,7 +125,8 @@ fun GuestHomeView(model: ScheduleFeatureModel) {
                 icon = tool.icon,
                 statusLabel = if (tool.isAvailable) null else "準備中",
             ) {
-                if (tool == GuestHomeTool.Schedule) {
+                when (tool) {
+                    GuestHomeTool.Schedule -> {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -123,10 +136,22 @@ fun GuestHomeView(model: ScheduleFeatureModel) {
                             "今日 ${scheduleState.todaySchedules.size}件",
                             style = MaterialTheme.typography.labelLarge,
                         )
-                        TextButton(onClick = { isShowingTodaySchedule = true }) {
+                        TextButton(
+                            onClick = { destination = GuestHomeDestination.TodaySchedule },
+                        ) {
                             Text("確認する")
                         }
                     }
+                    }
+                    GuestHomeTool.Diary -> {
+                        TextButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { destination = GuestHomeDestination.Diary },
+                        ) {
+                            Text("日記を開く")
+                        }
+                    }
+                    else -> Unit
                 }
             }
         }

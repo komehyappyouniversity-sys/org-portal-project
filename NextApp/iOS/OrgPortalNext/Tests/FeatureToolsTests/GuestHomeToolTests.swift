@@ -9,10 +9,10 @@ final class GuestHomeToolTests: XCTestCase {
         )
     }
 
-    func testOnlyImplementedToolIsAvailable() {
+    func testImplementedToolsAreAvailable() {
         XCTAssertTrue(GuestHomeTool.schedule.isAvailable)
-        GuestHomeTool.ordered.dropFirst().forEach { tool in
-            XCTAssertFalse(tool.isAvailable)
-        }
+        XCTAssertTrue(GuestHomeTool.diary.isAvailable)
+        XCTAssertFalse(GuestHomeTool.denomination.isAvailable)
+        XCTAssertFalse(GuestHomeTool.meetingMinutes.isAvailable)
     }
 }

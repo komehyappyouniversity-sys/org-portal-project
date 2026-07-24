@@ -10,6 +10,10 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
+import jp.komehyappyo.member.next.core.model.Diary
+import jp.komehyappyo.member.next.core.model.DiaryMood
 import jp.komehyappyo.member.next.core.model.RecurrenceFrequency
 import jp.komehyappyo.member.next.core.model.RecurrenceRule
 import jp.komehyappyo.member.next.core.model.ReminderSetting
@@ -46,6 +50,18 @@ data class ScheduleEntity(
     val updatedAtEpochMillis: Long,
 )
 
+@Entity(tableName = "diaries")
+data class DiaryEntity(
+    @PrimaryKey val id: String,
+    val userId: String,
+    val title: String,
+    val body: String,
+    val mood: String,
+    val photoUrlsJson: String,
+    val createdAtEpochMillis: Long,
+    val updatedAtEpochMillis: Long,
+)
+
 @Dao
 interface ScheduleDao {
     @Query("SELECT * FROM schedules ORDER BY startEpochMillis, title")
@@ -64,17 +80,54 @@ interface ScheduleDao {
     suspend fun delete(id: String)
 }
 
-@Database(entities = [ScheduleEntity::class], version = 1, exportSchema = true)
+@Dao
+interface DiaryDao {
+    @Query("SELECT * FROM diaries ORDER BY createdAtEpochMillis DESC, title")
+    fun observeAll(): Flow<List<DiaryEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(diary: DiaryEntity)
+
+    @Query("DELETE FROM diaries WHERE id = :id")
+    suspend fun delete(id: String)
+}
+
+@Database(
+    entities = [ScheduleEntity::class, DiaryEntity::class],
+    version = 2,
+    exportSchema = true,
+)
 abstract class OrgPortalDatabase : RoomDatabase() {
     abstract fun scheduleDao(): ScheduleDao
+    abstract fun diaryDao(): DiaryDao
 
     companion object {
+        val migration1To2 = object : Migration(1, 2) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `diaries` (
+                        `id` TEXT NOT NULL,
+                        `userId` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `body` TEXT NOT NULL,
+                        `mood` TEXT NOT NULL,
+                        `photoUrlsJson` TEXT NOT NULL,
+                        `createdAtEpochMillis` INTEGER NOT NULL,
+                        `updatedAtEpochMillis` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         fun create(context: Context): OrgPortalDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 OrgPortalDatabase::class.java,
                 "org-portal-next.db",
-            ).build()
+            ).addMigrations(migration1To2).build()
     }
 }
 
@@ -82,6 +135,13 @@ object ScheduleRepositories {
     fun createLocal(context: Context): ScheduleRepository {
         val database = OrgPortalDatabase.create(context)
         return RoomScheduleRepository(database.scheduleDao())
+    }
+}
+
+object DiaryRepositories {
+    fun createLocal(context: Context): DiaryRepository {
+        val database = OrgPortalDatabase.create(context)
+        return RoomDiaryRepository(database.diaryDao())
     }
 }
 
@@ -159,6 +219,43 @@ private fun ScheduleEntity.toDomain() = Schedule(
     } else {
         null
     },
+    createdAt = Instant.ofEpochMilli(createdAtEpochMillis),
+    updatedAt = Instant.ofEpochMilli(updatedAtEpochMillis),
+)
+
+class RoomDiaryRepository(
+    private val dao: DiaryDao,
+) : DiaryRepository {
+    override fun observeAll(): Flow<List<Diary>> =
+        dao.observeAll().map { diaries -> diaries.map(DiaryEntity::toDomain) }
+
+    override suspend fun save(diary: Diary) {
+        dao.upsert(diary.validated(now = diary.updatedAt).toEntity())
+    }
+
+    override suspend fun delete(id: UUID) {
+        dao.delete(id.toString())
+    }
+}
+
+private fun Diary.toEntity() = DiaryEntity(
+    id = id.toString(),
+    userId = userId,
+    title = title,
+    body = body,
+    mood = mood.name,
+    photoUrlsJson = photoUrls.joinToString(separator = "\n"),
+    createdAtEpochMillis = createdAt.toEpochMilli(),
+    updatedAtEpochMillis = updatedAt.toEpochMilli(),
+)
+
+private fun DiaryEntity.toDomain() = Diary(
+    id = UUID.fromString(id),
+    userId = userId,
+    title = title,
+    body = body,
+    mood = runCatching { DiaryMood.valueOf(mood) }.getOrDefault(DiaryMood.Neutral),
+    photoUrls = photoUrlsJson.lines().filter(String::isNotBlank),
     createdAt = Instant.ofEpochMilli(createdAtEpochMillis),
     updatedAt = Instant.ofEpochMilli(updatedAtEpochMillis),
 )
