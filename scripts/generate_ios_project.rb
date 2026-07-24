@@ -38,6 +38,13 @@ def link(target, dependency)
   target.frameworks_build_phase.add_file_reference(dependency.product_reference)
 end
 
+def embed(dependency, phase)
+  build_file = phase.add_file_reference(dependency.product_reference, true)
+  build_file.settings = {
+    "ATTRIBUTES" => ["CodeSignOnCopy", "RemoveHeadersOnCopy"]
+  }
+end
+
 platform = :ios
 deployment_target = "17.0"
 
@@ -86,8 +93,11 @@ Dir.glob(ios_root.join("App", "Resources", "*").to_s).sort.each do |path|
   file = resources_group.new_file(Pathname.new(path).basename.to_s)
   app.resources_build_phase.add_file_reference(file)
 end
+embed_frameworks_phase = app.new_copy_files_build_phase("Embed Frameworks")
+embed_frameworks_phase.dst_subfolder_spec = "10"
 %w[Model DesignSystem Navigation Session DataLayer Notifications FeatureTools].each do |name|
   link(app, targets[name])
+  embed(targets[name], embed_frameworks_phase)
 end
 
 {

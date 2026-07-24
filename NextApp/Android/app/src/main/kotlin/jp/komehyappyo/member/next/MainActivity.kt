@@ -15,9 +15,9 @@ import jp.komehyappyo.member.next.core.designsystem.EmptyState
 import jp.komehyappyo.member.next.core.designsystem.OrgPortalTheme
 import jp.komehyappyo.member.next.core.navigation.AppShell
 import jp.komehyappyo.member.next.core.notifications.NotificationService
+import jp.komehyappyo.member.next.feature.tools.GuestHomeView
 import jp.komehyappyo.member.next.feature.tools.ScheduleFeatureModel
 import jp.komehyappyo.member.next.feature.tools.ScheduleRoot
-import jp.komehyappyo.member.next.feature.tools.TodayScheduleView
 
 class MainActivity : ComponentActivity() {
     private val notificationPermission =
@@ -52,7 +52,7 @@ class MainActivity : ComponentActivity() {
         val scheduleModel: ScheduleFeatureModel = viewModel(factory = factory)
 
         AppShell(
-            home = { TodayScheduleView(scheduleModel) },
+            home = { GuestHomeView(scheduleModel) },
             tools = { ScheduleRoot(scheduleModel) },
             connect = {
                 EmptyState(

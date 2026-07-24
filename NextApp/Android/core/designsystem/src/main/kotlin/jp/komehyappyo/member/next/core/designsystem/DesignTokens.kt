@@ -1,5 +1,7 @@
 package jp.komehyappyo.member.next.core.designsystem
 
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -19,10 +21,21 @@ private val OrgPortalColorScheme = lightColorScheme(
     error = BrandColors.Error,
 )
 
+private val OrgPortalDarkColorScheme = darkColorScheme(
+    primary = Color(0xFF9FD5AE),
+    secondary = Color(0xFFB8CCB7),
+    tertiary = Color(0xFFFFB68C),
+    error = Color(0xFFFFB4AB),
+)
+
 @Composable
 fun OrgPortalTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = OrgPortalColorScheme,
+        colorScheme = if (isSystemInDarkTheme()) {
+            OrgPortalDarkColorScheme
+        } else {
+            OrgPortalColorScheme
+        },
         content = content,
     )
 }
