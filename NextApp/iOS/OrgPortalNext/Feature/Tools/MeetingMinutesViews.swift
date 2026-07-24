@@ -5,6 +5,98 @@ import QuickLook
 import SwiftUI
 import UIKit
 
+@MainActor
+private final class MeetingAudioPlaybackController: ObservableObject {
+    @Published private(set) var isPlaying = false
+
+    private var player: AVAudioPlayer?
+    private var playbackTimer: Timer?
+
+    func toggle(audioFileLocalPath: String) throws {
+        if isPlaying {
+            stop()
+            return
+        }
+
+        stop()
+        let url = URL(fileURLWithPath: audioFileLocalPath)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw MeetingAudioPlaybackError.fileNotFound
+        }
+        let attributes = try FileManager.default.attributesOfItem(
+            atPath: url.path
+        )
+        guard (attributes[.size] as? NSNumber)?.intValue ?? 0 > 0 else {
+            throw MeetingAudioPlaybackError.emptyFile
+        }
+
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playback, mode: .spokenAudio)
+            try session.setActive(true)
+
+            let newPlayer = try AVAudioPlayer(contentsOf: url)
+            newPlayer.prepareToPlay()
+            guard newPlayer.play() else {
+                throw MeetingAudioPlaybackError.couldNotStart
+            }
+            player = newPlayer
+            isPlaying = true
+            playbackTimer = Timer.scheduledTimer(
+                withTimeInterval: 0.25,
+                repeats: true
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    self?.refreshPlaybackState()
+                }
+            }
+        } catch {
+            finishPlayback()
+            throw error
+        }
+    }
+
+    func stop() {
+        player?.stop()
+        finishPlayback()
+    }
+
+    private func refreshPlaybackState() {
+        guard player?.isPlaying == true else {
+            finishPlayback()
+            return
+        }
+    }
+
+    private func finishPlayback() {
+        playbackTimer?.invalidate()
+        playbackTimer = nil
+        player = nil
+        isPlaying = false
+        try? AVAudioSession.sharedInstance().setActive(
+            false,
+            options: .notifyOthersOnDeactivation
+        )
+    }
+}
+
+private enum MeetingAudioPlaybackError: LocalizedError {
+    case fileNotFound
+    case emptyFile
+    case couldNotStart
+
+    var errorDescription: String? {
+        switch self {
+        case .fileNotFound:
+            "録音ファイルが見つかりませんでした。"
+        case .emptyFile:
+            "録音ファイルに音声データがありません。"
+        case .couldNotStart:
+            "録音の再生を開始できませんでした。"
+        }
+    }
+}
+
 public struct MeetingMinutesRootView: View {
     @ObservedObject private var model: MeetingMinutesFeatureModel
     @State private var isShowingRecorder = false
@@ -87,7 +179,7 @@ private struct MeetingRecorderView: View {
     @State private var transcript = ""
     @State private var showPermissionExplanation = false
     @State private var isSaving = false
-    @State private var player: AVAudioPlayer?
+    @StateObject private var playback = MeetingAudioPlaybackController()
 
     var body: some View {
         NavigationStack {
@@ -118,17 +210,10 @@ private struct MeetingRecorderView: View {
                 if model.draft != nil {
                     Section("保存内容") {
                         if !model.isRecording, let draft = model.draft {
-                            Button(player?.isPlaying == true ? "停止" : "未保存の録音を再生") {
-                                if player?.isPlaying == true {
-                                    player?.stop()
-                                } else {
-                                    player = try? AVAudioPlayer(
-                                        contentsOf: URL(
-                                            fileURLWithPath: draft.audioFileLocalPath
-                                        )
-                                    )
-                                    player?.play()
-                                }
+                            Button(playback.isPlaying ? "停止" : "未保存の録音を再生") {
+                                togglePlayback(
+                                    audioFileLocalPath: draft.audioFileLocalPath
+                                )
                             }
                         }
                         TextField("会議名（必須）", text: $title)
@@ -174,7 +259,7 @@ private struct MeetingRecorderView: View {
             .onAppear {
                 transcript = model.draft?.transcriptText ?? model.liveTranscript
             }
-            .onDisappear { player?.stop() }
+            .onDisappear { playback.stop() }
             .onChange(of: model.liveTranscript) { _, value in
                 if model.isRecording { transcript = value }
             }
@@ -191,7 +276,7 @@ private struct MeetingRecorderView: View {
                 Text("会議音声を端末内へ保存し、対応端末では端末内だけで文字起こしします。外部へ送信しません。")
             }
             .alert(
-                "録音できません",
+                "操作できません",
                 isPresented: Binding(
                     get: { model.errorMessage != nil },
                     set: { if !$0 { model.clearError() } }
@@ -203,13 +288,21 @@ private struct MeetingRecorderView: View {
             }
         }
     }
+
+    private func togglePlayback(audioFileLocalPath: String) {
+        do {
+            try playback.toggle(audioFileLocalPath: audioFileLocalPath)
+        } catch {
+            model.report(error)
+        }
+    }
 }
 
 private struct MeetingMinutesDetailView: View {
     @ObservedObject var model: MeetingMinutesFeatureModel
     @Environment(\.dismiss) private var dismiss
     @State var minutes: MeetingMinutes
-    @State private var player: AVAudioPlayer?
+    @StateObject private var playback = MeetingAudioPlaybackController()
     @State private var shareItems: [Any]?
     @State private var previewURL: URL?
 
@@ -223,7 +316,7 @@ private struct MeetingMinutesDetailView: View {
                         "録音時間",
                         value: MeetingMinutesRootView.duration(minutes.recordingDurationSeconds)
                     )
-                    Button(player?.isPlaying == true ? "停止" : "録音を再生") {
+                    Button(playback.isPlaying ? "停止" : "録音を再生") {
                         togglePlayback()
                     }
                 }
@@ -296,17 +389,28 @@ private struct MeetingMinutesDetailView: View {
                 MeetingMinutesPDFPreview(url: previewURL)
             }
         }
+        .onDisappear { playback.stop() }
+        .alert(
+            "再生できません",
+            isPresented: Binding(
+                get: { model.errorMessage != nil },
+                set: { if !$0 { model.clearError() } }
+            )
+        ) {
+            Button("OK") { model.clearError() }
+        } message: {
+            Text(model.errorMessage ?? "")
+        }
     }
 
     private func togglePlayback() {
-        if player?.isPlaying == true {
-            player?.stop()
-            return
+        do {
+            try playback.toggle(
+                audioFileLocalPath: minutes.audioFileLocalPath
+            )
+        } catch {
+            model.report(error)
         }
-        player = try? AVAudioPlayer(
-            contentsOf: URL(fileURLWithPath: minutes.audioFileLocalPath)
-        )
-        player?.play()
     }
 
     private func createPDF() throws -> URL {
