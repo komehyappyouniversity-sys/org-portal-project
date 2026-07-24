@@ -15,6 +15,7 @@ import android.speech.RecognitionSupport
 import android.speech.RecognitionSupportCallback
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import androidx.annotation.RequiresApi
 import java.io.File
 import java.util.Locale
 
@@ -203,6 +204,7 @@ class AndroidOnDeviceTranscriptionProvider(
             putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
         }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun checkJapaneseModelAndStart(speech: SpeechRecognizer, file: File) {
         val intent = recognitionIntent()
         speech.checkRecognitionSupport(
@@ -257,6 +259,7 @@ class AndroidOnDeviceTranscriptionProvider(
         )
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun downloadJapaneseModel(
         speech: SpeechRecognizer,
         intent: Intent,
