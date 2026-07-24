@@ -23,6 +23,7 @@ data class MeetingMinutesUiState(
     val minutes: List<MeetingMinutes> = emptyList(),
     val draft: MeetingRecordingDraft? = null,
     val isRecording: Boolean = false,
+    val isTranscribing: Boolean = false,
     val elapsedSeconds: Int = 0,
     val liveTranscript: String = "",
     val notice: String? = null,
@@ -49,6 +50,16 @@ class MeetingMinutesFeatureModel(
     init {
         recorder.onTranscriptChanged = { value ->
             mutableState.update { it.copy(liveTranscript = value) }
+        }
+        recorder.onTranscriptionStateChanged = { value ->
+            mutableState.update {
+                it.copy(
+                    isTranscribing = value,
+                    liveTranscript = recorder.transcript,
+                    notice = recorder.transcriptionNotice,
+                )
+            }
+            if (!value) persistDraft()
         }
         recorder.onInterrupted = {
             stopRecording(interrupted = true)
@@ -96,21 +107,40 @@ class MeetingMinutesFeatureModel(
     }
 
     fun stopRecording(interrupted: Boolean = false) {
-        val text = recorder.stop()
+        val text = recorder.stopAndTranscribe()
         timerJob?.cancel()
         timerJob = null
         mutableState.update {
             it.copy(
                 isRecording = false,
+                isTranscribing = recorder.isTranscribing,
                 liveTranscript = text,
                 notice = if (interrupted) {
-                    "録音が中断されました。未保存の録音として復旧できます。"
+                    "録音が中断されました。録音を保存し、文字起こしを試みています。"
                 } else {
                     recorder.transcriptionNotice
                 },
             )
         }
         persistDraft()
+    }
+
+    fun retryTranscription() {
+        val draft = mutableState.value.draft ?: return
+        val file = File(draft.audioFileLocalPath)
+        if (!file.exists()) {
+            reportError("文字起こしする録音ファイルが見つかりません。")
+            return
+        }
+        mutableState.update {
+            it.copy(
+                isTranscribing = true,
+                liveTranscript = "",
+                notice = "保存した録音の文字起こしを再実行します。",
+                errorMessage = null,
+            )
+        }
+        recorder.transcribe(file)
     }
 
     fun saveDraft(title: String, transcript: String, onComplete: (Result<Unit>) -> Unit) {
@@ -144,6 +174,7 @@ class MeetingMinutesFeatureModel(
                 mutableState.update {
                     it.copy(
                         draft = null,
+                        isTranscribing = false,
                         liveTranscript = "",
                         elapsedSeconds = 0,
                     )
@@ -171,7 +202,12 @@ class MeetingMinutesFeatureModel(
     fun discardDraft() {
         mutableState.value.draft?.let(recordingStore::discard)
         mutableState.update {
-            it.copy(draft = null, liveTranscript = "", elapsedSeconds = 0)
+            it.copy(
+                draft = null,
+                isTranscribing = false,
+                liveTranscript = "",
+                elapsedSeconds = 0,
+            )
         }
     }
 
@@ -199,7 +235,10 @@ class MeetingMinutesFeatureModel(
     }
 
     override fun onCleared() {
-        if (recorder.isRecording) stopRecording(interrupted = true)
+        if (recorder.isRecording) {
+            timerJob?.cancel()
+            persistDraft()
+        }
         recorder.release()
     }
 
