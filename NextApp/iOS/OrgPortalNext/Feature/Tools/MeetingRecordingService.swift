@@ -79,6 +79,59 @@ public final class iOSOnDeviceTranscriptionProvider:
     }
 }
 
+/// Owns the real-time audio callback without inheriting the UI's main-actor
+/// isolation. AVAudioEngine invokes its tap on an internal audio queue.
+private final class MeetingAudioTapProcessor: @unchecked Sendable {
+    private let audioFile: AVAudioFile
+    private let transcriptionProvider: SpeechTranscriptionProvider
+    private let transcriptionEnabled: Bool
+    private let onWriteFailure: @MainActor @Sendable () -> Void
+    private let failureLock = NSLock()
+    private var didReportWriteFailure = false
+
+    init(
+        audioFile: AVAudioFile,
+        transcriptionProvider: SpeechTranscriptionProvider,
+        transcriptionEnabled: Bool,
+        onWriteFailure: @escaping @MainActor @Sendable () -> Void
+    ) {
+        self.audioFile = audioFile
+        self.transcriptionProvider = transcriptionProvider
+        self.transcriptionEnabled = transcriptionEnabled
+        self.onWriteFailure = onWriteFailure
+    }
+
+    func makeTapBlock() -> AVAudioNodeTapBlock {
+        { [weak self] buffer, _ in
+            self?.process(buffer)
+        }
+    }
+
+    private func process(_ buffer: AVAudioPCMBuffer) {
+        do {
+            try audioFile.write(from: buffer)
+        } catch {
+            reportWriteFailureOnce()
+            return
+        }
+        if transcriptionEnabled {
+            transcriptionProvider.append(buffer)
+        }
+    }
+
+    private func reportWriteFailureOnce() {
+        let shouldReport = failureLock.withLock {
+            guard !didReportWriteFailure else { return false }
+            didReportWriteFailure = true
+            return true
+        }
+        guard shouldReport else { return }
+        Task { @MainActor [onWriteFailure] in
+            onWriteFailure()
+        }
+    }
+}
+
 @MainActor
 public final class MeetingRecordingService: NSObject, ObservableObject {
     @Published public private(set) var isRecording = false
@@ -90,7 +143,7 @@ public final class MeetingRecordingService: NSObject, ObservableObject {
     public var onInterruption: (() -> Void)?
 
     private let audioEngine = AVAudioEngine()
-    private var audioFile: AVAudioFile?
+    private var audioTapProcessor: MeetingAudioTapProcessor?
     private let transcriptionProvider: SpeechTranscriptionProvider
     private var manualTranscriptionNotice: String?
     private nonisolated(unsafe) var interruptionObserver: NSObjectProtocol?
@@ -157,7 +210,7 @@ public final class MeetingRecordingService: NSObject, ObservableObject {
 
         let input = audioEngine.inputNode
         let format = input.outputFormat(forBus: 0)
-        audioFile = try AVAudioFile(forWriting: url, settings: format.settings)
+        let audioFile = try AVAudioFile(forWriting: url, settings: format.settings)
 
         if transcriptionEnabled {
             transcriptionProvider.start(locale: locale)
@@ -167,35 +220,54 @@ public final class MeetingRecordingService: NSObject, ObservableObject {
                 "音声認識は許可されていません。録音後に議事録を手入力できます。"
         }
 
-        input.installTap(onBus: 0, bufferSize: 1_024, format: format) {
-            [weak self] buffer, _ in
+        let processor = MeetingAudioTapProcessor(
+            audioFile: audioFile,
+            transcriptionProvider: transcriptionProvider,
+            transcriptionEnabled: transcriptionEnabled
+        ) { [weak self] in
             guard let self else { return }
-            do {
-                try self.audioFile?.write(from: buffer)
-            } catch {
-                Task { @MainActor in
-                    self.manualTranscriptionNotice =
-                        "録音ファイルへの書き込みに失敗しました。"
-                    _ = self.stop()
-                    self.onInterruption?()
-                }
-            }
-            if transcriptionEnabled {
-                self.transcriptionProvider.append(buffer)
-            }
+            self.manualTranscriptionNotice =
+                "録音ファイルへの書き込みに失敗しました。"
+            _ = self.stop()
+            self.onInterruption?()
         }
+        audioTapProcessor = processor
+        input.installTap(
+            onBus: 0,
+            bufferSize: 1_024,
+            format: format,
+            block: processor.makeTapBlock()
+        )
         audioEngine.prepare()
-        try audioEngine.start()
+        do {
+            try audioEngine.start()
+        } catch {
+            input.removeTap(onBus: 0)
+            audioTapProcessor = nil
+            transcriptionProvider.stop()
+            try? session.setActive(
+                false,
+                options: .notifyOthersOnDeactivation
+            )
+            throw error
+        }
         isRecording = true
     }
 
     @discardableResult
     public func stop() -> String {
-        guard isRecording else { return transcript }
+        guard isRecording else {
+            if audioTapProcessor != nil {
+                audioEngine.inputNode.removeTap(onBus: 0)
+                audioTapProcessor = nil
+                transcriptionProvider.stop()
+            }
+            return transcript
+        }
         audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()
         transcriptionProvider.stop()
-        audioFile = nil
+        audioTapProcessor = nil
         try? AVAudioSession.sharedInstance().setActive(
             false,
             options: .notifyOthersOnDeactivation
