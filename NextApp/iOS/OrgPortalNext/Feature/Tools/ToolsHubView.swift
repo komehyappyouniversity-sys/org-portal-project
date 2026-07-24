@@ -5,25 +5,30 @@ public struct ToolsHubView: View {
     private enum Destination: Identifiable {
         case schedule
         case diary
+        case denomination
 
         var id: String {
             switch self {
             case .schedule: "schedule"
             case .diary: "diary"
+            case .denomination: "denomination"
             }
         }
     }
 
     @ObservedObject private var scheduleModel: ScheduleFeatureModel
     @ObservedObject private var diaryModel: DiaryFeatureModel
+    @ObservedObject private var cashDistributionModel: CashDistributionFeatureModel
     @State private var destination: Destination?
 
     public init(
         scheduleModel: ScheduleFeatureModel,
-        diaryModel: DiaryFeatureModel
+        diaryModel: DiaryFeatureModel,
+        cashDistributionModel: CashDistributionFeatureModel
     ) {
         self.scheduleModel = scheduleModel
         self.diaryModel = diaryModel
+        self.cashDistributionModel = cashDistributionModel
     }
 
     public var body: some View {
@@ -49,6 +54,16 @@ public struct ToolsHubView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                Button {
+                    destination = .denomination
+                } label: {
+                    FeatureCard(
+                        "home.denomination.title",
+                        subtitle: "home.denomination.subtitle",
+                        systemImage: "yensign.circle"
+                    )
+                }
+                .buttonStyle(.plain)
             }
             .listStyle(.plain)
             .navigationTitle("tab.tools")
@@ -60,6 +75,8 @@ public struct ToolsHubView: View {
                     ScheduleListView(model: scheduleModel)
                 case .diary:
                     DiaryRootView(model: diaryModel)
+                case .denomination:
+                    DenominationToolView(model: cashDistributionModel)
                 }
                 Button {
                     self.destination = nil

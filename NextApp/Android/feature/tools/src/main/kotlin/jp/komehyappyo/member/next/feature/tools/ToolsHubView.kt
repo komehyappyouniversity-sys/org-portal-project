@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.Calculate
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -24,12 +25,14 @@ import jp.komehyappyo.member.next.core.designsystem.FeatureCard
 private enum class ToolsDestination {
     Schedule,
     Diary,
+    Denomination,
 }
 
 @Composable
 fun ToolsHubRoot(
     scheduleModel: ScheduleFeatureModel,
     diaryModel: DiaryFeatureModel,
+    cashDistributionModel: CashDistributionFeatureModel,
 ) {
     var destination by remember { mutableStateOf<ToolsDestination?>(null) }
     when (destination) {
@@ -42,6 +45,11 @@ fun ToolsHubRoot(
             onBack = { destination = null },
         ) {
             DiaryRoot(diaryModel)
+        }
+        ToolsDestination.Denomination -> ToolDestinationContainer(
+            onBack = { destination = null },
+        ) {
+            DenominationToolRoot(cashDistributionModel)
         }
         null -> Column(
             modifier = Modifier
@@ -62,6 +70,13 @@ fun ToolsHubRoot(
                     title = "日記・写真日記",
                     description = "できごとや写真を自分専用に残します。",
                     icon = Icons.AutoMirrored.Outlined.MenuBook,
+                )
+            }
+            Button(onClick = { destination = ToolsDestination.Denomination }) {
+                FeatureCard(
+                    title = "金種計算",
+                    description = "配布額から必要な金種を計算し、現金の集計もできます。",
+                    icon = Icons.Outlined.Calculate,
                 )
             }
         }

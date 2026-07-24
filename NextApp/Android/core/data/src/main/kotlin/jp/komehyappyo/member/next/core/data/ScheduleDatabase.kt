@@ -14,6 +14,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import jp.komehyappyo.member.next.core.model.Diary
 import jp.komehyappyo.member.next.core.model.DiaryMood
+import jp.komehyappyo.member.next.core.model.CashDistribution
 import jp.komehyappyo.member.next.core.model.RecurrenceFrequency
 import jp.komehyappyo.member.next.core.model.RecurrenceRule
 import jp.komehyappyo.member.next.core.model.ReminderSetting
@@ -62,6 +63,17 @@ data class DiaryEntity(
     val updatedAtEpochMillis: Long,
 )
 
+@Entity(tableName = "cash_distributions")
+data class CashDistributionEntity(
+    @PrimaryKey val id: String,
+    val userId: String,
+    val distributionDateEpochMillis: Long,
+    val title: String,
+    val entriesJson: String,
+    val createdAtEpochMillis: Long,
+    val updatedAtEpochMillis: Long,
+)
+
 @Dao
 interface ScheduleDao {
     @Query("SELECT * FROM schedules ORDER BY startEpochMillis, title")
@@ -92,14 +104,34 @@ interface DiaryDao {
     suspend fun delete(id: String)
 }
 
+@Dao
+interface CashDistributionDao {
+    @Query(
+        "SELECT * FROM cash_distributions " +
+            "ORDER BY distributionDateEpochMillis DESC, updatedAtEpochMillis DESC",
+    )
+    fun observeAll(): Flow<List<CashDistributionEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(distribution: CashDistributionEntity)
+
+    @Query("DELETE FROM cash_distributions WHERE id = :id")
+    suspend fun delete(id: String)
+}
+
 @Database(
-    entities = [ScheduleEntity::class, DiaryEntity::class],
-    version = 2,
+    entities = [
+        ScheduleEntity::class,
+        DiaryEntity::class,
+        CashDistributionEntity::class,
+    ],
+    version = 3,
     exportSchema = true,
 )
 abstract class OrgPortalDatabase : RoomDatabase() {
     abstract fun scheduleDao(): ScheduleDao
     abstract fun diaryDao(): DiaryDao
+    abstract fun cashDistributionDao(): CashDistributionDao
 
     companion object {
         val migration1To2 = object : Migration(1, 2) {
@@ -122,12 +154,31 @@ abstract class OrgPortalDatabase : RoomDatabase() {
             }
         }
 
+        val migration2To3 = object : Migration(2, 3) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `cash_distributions` (
+                        `id` TEXT NOT NULL,
+                        `userId` TEXT NOT NULL,
+                        `distributionDateEpochMillis` INTEGER NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `entriesJson` TEXT NOT NULL,
+                        `createdAtEpochMillis` INTEGER NOT NULL,
+                        `updatedAtEpochMillis` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         fun create(context: Context): OrgPortalDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 OrgPortalDatabase::class.java,
                 "org-portal-next.db",
-            ).addMigrations(migration1To2).build()
+            ).addMigrations(migration1To2, migration2To3).build()
     }
 }
 
@@ -248,6 +299,42 @@ private fun Diary.toEntity() = DiaryEntity(
     createdAtEpochMillis = createdAt.toEpochMilli(),
     updatedAtEpochMillis = updatedAt.toEpochMilli(),
 )
+
+class RoomCashDistributionRepository(
+    private val dao: CashDistributionDao,
+) : CashDistributionRepository {
+    override fun observeAll(): Flow<List<CashDistribution>> =
+        dao.observeAll().map { values -> values.map(CashDistributionEntity::toDomain) }
+
+    override suspend fun save(distribution: CashDistribution) {
+        dao.upsert(distribution.validated(now = distribution.updatedAt).toEntity())
+    }
+
+    override suspend fun delete(id: UUID) {
+        dao.delete(id.toString())
+    }
+}
+
+private fun CashDistribution.toEntity() = CashDistributionEntity(
+    id = id.toString(),
+    userId = userId,
+    distributionDateEpochMillis = distributionDate.toEpochMilli(),
+    title = title,
+    entriesJson = toJson().getJSONArray("entries").toString(),
+    createdAtEpochMillis = createdAt.toEpochMilli(),
+    updatedAtEpochMillis = updatedAt.toEpochMilli(),
+)
+
+private fun CashDistributionEntity.toDomain(): CashDistribution =
+    org.json.JSONObject()
+        .put("id", id)
+        .put("userId", userId)
+        .put("distributionDateEpochMillis", distributionDateEpochMillis)
+        .put("title", title)
+        .put("entries", org.json.JSONArray(entriesJson))
+        .put("createdAtEpochMillis", createdAtEpochMillis)
+        .put("updatedAtEpochMillis", updatedAtEpochMillis)
+        .toCashDistribution()
 
 private fun DiaryEntity.toDomain() = Diary(
     id = UUID.fromString(id),

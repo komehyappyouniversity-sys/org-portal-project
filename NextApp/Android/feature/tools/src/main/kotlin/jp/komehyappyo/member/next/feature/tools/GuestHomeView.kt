@@ -50,9 +50,9 @@ enum class GuestHomeTool(
     ),
     Denomination(
         title = "金種計算",
-        description = "紙幣・硬貨の枚数から合計金額を計算します。",
+        description = "配布額から必要な金種を計算し、現金の集計もできます。",
         icon = Icons.Outlined.Calculate,
-        isAvailable = false,
+        isAvailable = true,
     ),
     MeetingMinutes(
         title = "会議録音・議事録",
@@ -70,12 +70,14 @@ enum class GuestHomeTool(
 private enum class GuestHomeDestination {
     TodaySchedule,
     Diary,
+    Denomination,
 }
 
 @Composable
 fun GuestHomeView(
     scheduleModel: ScheduleFeatureModel,
     diaryModel: DiaryFeatureModel,
+    cashDistributionModel: CashDistributionFeatureModel,
 ) {
     var destination by rememberSaveable { mutableStateOf<GuestHomeDestination?>(null) }
 
@@ -88,6 +90,8 @@ fun GuestHomeView(
                 when (destination) {
                     GuestHomeDestination.TodaySchedule -> TodayScheduleView(model = scheduleModel)
                     GuestHomeDestination.Diary -> DiaryRoot(model = diaryModel)
+                    GuestHomeDestination.Denomination ->
+                        DenominationToolRoot(cashDistributionModel)
                     null -> Unit
                 }
             }
@@ -149,6 +153,14 @@ fun GuestHomeView(
                             onClick = { destination = GuestHomeDestination.Diary },
                         ) {
                             Text("日記を開く")
+                        }
+                    }
+                    GuestHomeTool.Denomination -> {
+                        TextButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { destination = GuestHomeDestination.Denomination },
+                        ) {
+                            Text("金種計算を開く")
                         }
                     }
                     else -> Unit

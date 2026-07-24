@@ -26,7 +26,8 @@ struct OrgPortalNextApp: App {
         do {
             modelContainer = try ModelContainer(
                 for: ScheduleRecord.self,
-                DiaryRecord.self
+                DiaryRecord.self,
+                CashDistributionRecord.self
             )
         } catch {
             fatalError("Unable to initialize local storage: \(error)")
@@ -44,6 +45,7 @@ struct OrgPortalNextApp: App {
 private struct AppBootstrapView: View {
     @StateObject private var scheduleModel: ScheduleFeatureModel
     @StateObject private var diaryModel: DiaryFeatureModel
+    @StateObject private var cashDistributionModel: CashDistributionFeatureModel
 
     init(modelContainer: ModelContainer) {
         let scheduleRepository = SwiftDataScheduleRepository(
@@ -66,17 +68,27 @@ private struct AppBootstrapView: View {
                 photoStore: photoStore
             )
         )
+        let cashDistributionRepository = SwiftDataCashDistributionRepository(
+            modelContainer: modelContainer
+        )
+        _cashDistributionModel = StateObject(
+            wrappedValue: CashDistributionFeatureModel(
+                repository: cashDistributionRepository
+            )
+        )
     }
 
     var body: some View {
         AppShellView(
             home: GuestHomeView(
                 scheduleModel: scheduleModel,
-                diaryModel: diaryModel
+                diaryModel: diaryModel,
+                cashDistributionModel: cashDistributionModel
             ),
             tools: ToolsHubView(
                 scheduleModel: scheduleModel,
-                diaryModel: diaryModel
+                diaryModel: diaryModel,
+                cashDistributionModel: cashDistributionModel
             ),
             community: PlaceholderTabView(
                 titleKey: "tab.community",

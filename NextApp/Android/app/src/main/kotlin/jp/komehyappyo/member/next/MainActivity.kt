@@ -13,12 +13,14 @@ import jp.komehyappyo.member.next.core.data.FirebaseEnvironmentGuard
 import jp.komehyappyo.member.next.core.data.LocalDiaryPhotoStore
 import jp.komehyappyo.member.next.core.data.OrgPortalDatabase
 import jp.komehyappyo.member.next.core.data.RoomDiaryRepository
+import jp.komehyappyo.member.next.core.data.RoomCashDistributionRepository
 import jp.komehyappyo.member.next.core.data.RoomScheduleRepository
 import jp.komehyappyo.member.next.core.designsystem.EmptyState
 import jp.komehyappyo.member.next.core.designsystem.OrgPortalTheme
 import jp.komehyappyo.member.next.core.navigation.AppShell
 import jp.komehyappyo.member.next.core.notifications.NotificationService
 import jp.komehyappyo.member.next.feature.tools.DiaryFeatureModel
+import jp.komehyappyo.member.next.feature.tools.CashDistributionFeatureModel
 import jp.komehyappyo.member.next.feature.tools.GuestHomeView
 import jp.komehyappyo.member.next.feature.tools.ScheduleFeatureModel
 import jp.komehyappyo.member.next.feature.tools.ToolsHubRoot
@@ -64,10 +66,19 @@ class MainActivity : ComponentActivity() {
             )
         }
         val diaryModel: DiaryFeatureModel = viewModel(factory = diaryFactory)
+        val cashDistributionRepository = remember {
+            RoomCashDistributionRepository(database.cashDistributionDao())
+        }
+        val cashDistributionFactory = remember {
+            CashDistributionFeatureModel.Factory(cashDistributionRepository)
+        }
+        val cashDistributionModel: CashDistributionFeatureModel = viewModel(
+            factory = cashDistributionFactory,
+        )
 
         AppShell(
-            home = { GuestHomeView(scheduleModel, diaryModel) },
-            tools = { ToolsHubRoot(scheduleModel, diaryModel) },
+            home = { GuestHomeView(scheduleModel, diaryModel, cashDistributionModel) },
+            tools = { ToolsHubRoot(scheduleModel, diaryModel, cashDistributionModel) },
             connect = {
                 EmptyState(
                     title = "つながる",
