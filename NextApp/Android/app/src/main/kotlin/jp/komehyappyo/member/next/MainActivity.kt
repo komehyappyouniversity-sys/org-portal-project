@@ -18,6 +18,7 @@ import jp.komehyappyo.member.next.core.data.RoomScheduleRepository
 import jp.komehyappyo.member.next.core.data.LocalMeetingRecordingStore
 import jp.komehyappyo.member.next.core.data.RoomMeetingMinutesRepository
 import jp.komehyappyo.member.next.core.data.RoomSnsCustomLinkRepository
+import jp.komehyappyo.member.next.core.data.RoomFavoriteBookmarkRepository
 import jp.komehyappyo.member.next.core.designsystem.EmptyState
 import jp.komehyappyo.member.next.core.designsystem.OrgPortalTheme
 import jp.komehyappyo.member.next.core.navigation.AppShell
@@ -30,6 +31,7 @@ import jp.komehyappyo.member.next.feature.tools.ToolsHubRoot
 import jp.komehyappyo.member.next.feature.tools.MeetingMinutesFeatureModel
 import jp.komehyappyo.member.next.feature.tools.MeetingRecordingService
 import jp.komehyappyo.member.next.feature.tools.SnsPostingAssistantFeatureModel
+import jp.komehyappyo.member.next.feature.tools.FavoriteBookmarkFeatureModel
 
 class MainActivity : ComponentActivity() {
     private val notificationPermission =
@@ -102,6 +104,14 @@ class MainActivity : ComponentActivity() {
         val snsPostingAssistantModel: SnsPostingAssistantFeatureModel = viewModel(
             factory = snsPostingAssistantFactory,
         )
+        val favoriteBookmarkFactory = remember {
+            FavoriteBookmarkFeatureModel.Factory(
+                RoomFavoriteBookmarkRepository(database.favoriteBookmarkDao()),
+            )
+        }
+        val favoriteBookmarkModel: FavoriteBookmarkFeatureModel = viewModel(
+            factory = favoriteBookmarkFactory,
+        )
 
         AppShell(
             home = {
@@ -110,6 +120,7 @@ class MainActivity : ComponentActivity() {
                     diaryModel,
                     cashDistributionModel,
                     meetingMinutesModel,
+                    favoriteBookmarkModel,
                 )
             },
             tools = {
@@ -119,6 +130,7 @@ class MainActivity : ComponentActivity() {
                     cashDistributionModel,
                     meetingMinutesModel,
                     snsPostingAssistantModel,
+                    favoriteBookmarkModel,
                 )
             },
             connect = {

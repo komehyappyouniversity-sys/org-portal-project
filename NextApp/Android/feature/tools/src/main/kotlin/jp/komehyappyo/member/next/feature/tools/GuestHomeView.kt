@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Calculate
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -60,6 +61,12 @@ enum class GuestHomeTool(
         icon = Icons.Outlined.Mic,
         isAvailable = true,
     ),
+    Favorites(
+        title = "お気に入り",
+        description = "よく見るWebページを自分専用に保存します。",
+        icon = Icons.Outlined.Bookmark,
+        isAvailable = true,
+    ),
     ;
 
     companion object {
@@ -72,6 +79,7 @@ private enum class GuestHomeDestination {
     Diary,
     Denomination,
     MeetingMinutes,
+    Favorites,
 }
 
 @Composable
@@ -80,6 +88,7 @@ fun GuestHomeView(
     diaryModel: DiaryFeatureModel,
     cashDistributionModel: CashDistributionFeatureModel,
     meetingMinutesModel: MeetingMinutesFeatureModel,
+    favoriteBookmarkModel: FavoriteBookmarkFeatureModel,
 ) {
     var destination by rememberSaveable { mutableStateOf<GuestHomeDestination?>(null) }
 
@@ -96,6 +105,8 @@ fun GuestHomeView(
                         DenominationToolRoot(cashDistributionModel)
                     GuestHomeDestination.MeetingMinutes ->
                         MeetingMinutesRoot(meetingMinutesModel)
+                    GuestHomeDestination.Favorites ->
+                        FavoriteBookmarksRoot(favoriteBookmarkModel)
                     null -> Unit
                 }
             }
@@ -173,6 +184,14 @@ fun GuestHomeView(
                             onClick = { destination = GuestHomeDestination.MeetingMinutes },
                         ) {
                             Text("会議録音を開く")
+                        }
+                    }
+                    GuestHomeTool.Favorites -> {
+                        TextButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { destination = GuestHomeDestination.Favorites },
+                        ) {
+                            Text("お気に入りを開く")
                         }
                     }
                 }

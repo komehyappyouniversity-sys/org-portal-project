@@ -15,6 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import jp.komehyappyo.member.next.core.model.Diary
 import jp.komehyappyo.member.next.core.model.DiaryMood
 import jp.komehyappyo.member.next.core.model.CashDistribution
+import jp.komehyappyo.member.next.core.model.FavoriteBookmark
 import jp.komehyappyo.member.next.core.model.MeetingMinutes
 import jp.komehyappyo.member.next.core.model.RecurrenceFrequency
 import jp.komehyappyo.member.next.core.model.RecurrenceRule
@@ -100,6 +101,18 @@ data class SnsCustomLinkEntity(
     val sortOrder: Int,
 )
 
+@Entity(tableName = "favorite_bookmarks")
+data class FavoriteBookmarkEntity(
+    @PrimaryKey val id: String,
+    val userId: String,
+    val title: String,
+    val url: String,
+    val note: String,
+    val category: String,
+    val createdAtEpochMillis: Long,
+    val updatedAtEpochMillis: Long,
+)
+
 @Dao
 interface ScheduleDao {
     @Query("SELECT * FROM schedules ORDER BY startEpochMillis, title")
@@ -172,6 +185,18 @@ interface SnsCustomLinkDao {
     suspend fun delete(id: String)
 }
 
+@Dao
+interface FavoriteBookmarkDao {
+    @Query("SELECT * FROM favorite_bookmarks ORDER BY updatedAtEpochMillis DESC, title")
+    fun observeAll(): Flow<List<FavoriteBookmarkEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(favorite: FavoriteBookmarkEntity)
+
+    @Query("DELETE FROM favorite_bookmarks WHERE id = :id")
+    suspend fun delete(id: String)
+}
+
 @Database(
     entities = [
         ScheduleEntity::class,
@@ -179,8 +204,9 @@ interface SnsCustomLinkDao {
         CashDistributionEntity::class,
         MeetingMinutesEntity::class,
         SnsCustomLinkEntity::class,
+        FavoriteBookmarkEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class OrgPortalDatabase : RoomDatabase() {
@@ -189,6 +215,7 @@ abstract class OrgPortalDatabase : RoomDatabase() {
     abstract fun cashDistributionDao(): CashDistributionDao
     abstract fun meetingMinutesDao(): MeetingMinutesDao
     abstract fun snsCustomLinkDao(): SnsCustomLinkDao
+    abstract fun favoriteBookmarkDao(): FavoriteBookmarkDao
 
     companion object {
         val migration1To2 = object : Migration(1, 2) {
@@ -270,6 +297,26 @@ abstract class OrgPortalDatabase : RoomDatabase() {
             }
         }
 
+        val migration5To6 = object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `favorite_bookmarks` (
+                        `id` TEXT NOT NULL,
+                        `userId` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `url` TEXT NOT NULL,
+                        `note` TEXT NOT NULL,
+                        `category` TEXT NOT NULL,
+                        `createdAtEpochMillis` INTEGER NOT NULL,
+                        `updatedAtEpochMillis` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         fun create(context: Context): OrgPortalDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
@@ -280,6 +327,7 @@ abstract class OrgPortalDatabase : RoomDatabase() {
                 migration2To3,
                 migration3To4,
                 migration4To5,
+                migration5To6,
             ).build()
     }
 }
@@ -528,4 +576,41 @@ private fun SnsCustomLinkEntity.toDomain() = SnsCustomLink(
     title = title,
     url = url,
     sortOrder = sortOrder,
+)
+
+class RoomFavoriteBookmarkRepository(
+    private val dao: FavoriteBookmarkDao,
+) : FavoriteBookmarkRepository {
+    override fun observeAll(): Flow<List<FavoriteBookmark>> =
+        dao.observeAll().map { values -> values.map(FavoriteBookmarkEntity::toDomain) }
+
+    override suspend fun save(favorite: FavoriteBookmark) {
+        dao.upsert(favorite.validated().toEntity())
+    }
+
+    override suspend fun delete(id: UUID) {
+        dao.delete(id.toString())
+    }
+}
+
+private fun FavoriteBookmark.toEntity() = FavoriteBookmarkEntity(
+    id = id.toString(),
+    userId = userId,
+    title = title,
+    url = url,
+    note = note,
+    category = category,
+    createdAtEpochMillis = createdAt.toEpochMilli(),
+    updatedAtEpochMillis = updatedAt.toEpochMilli(),
+)
+
+private fun FavoriteBookmarkEntity.toDomain() = FavoriteBookmark(
+    id = UUID.fromString(id),
+    userId = userId,
+    title = title,
+    url = url,
+    note = note,
+    category = category,
+    createdAt = Instant.ofEpochMilli(createdAtEpochMillis),
+    updatedAt = Instant.ofEpochMilli(updatedAtEpochMillis),
 )
