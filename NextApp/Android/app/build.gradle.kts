@@ -48,6 +48,7 @@ dependencies {
     implementation(project(":core:session"))
     implementation(project(":core:data"))
     implementation(project(":core:notifications"))
+    implementation(project(":feature:account"))
     implementation(project(":feature:tools"))
 
     val composeBom = platform("androidx.compose:compose-bom:2026.06.00")

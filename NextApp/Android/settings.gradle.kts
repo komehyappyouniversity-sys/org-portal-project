@@ -24,5 +24,6 @@ include(
     ":core:data",
     ":core:notifications",
     ":core:testing",
+    ":feature:account",
     ":feature:tools",
 )

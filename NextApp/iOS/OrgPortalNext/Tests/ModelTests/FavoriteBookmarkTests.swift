@@ -2,6 +2,26 @@ import XCTest
 @testable import Model
 
 final class FavoriteBookmarkTests: XCTestCase {
+    func testAccountCredentialsValidation() {
+        XCTAssertNil(
+            AccountCredentials(
+                email: "member@example.com",
+                password: "password",
+                passwordConfirmation: "password"
+            ).validationMessage()
+        )
+        XCTAssertNotNil(
+            AccountCredentials(email: "invalid", password: "password").validationMessage()
+        )
+        XCTAssertNotNil(
+            AccountCredentials(
+                email: "member@example.com",
+                password: "password",
+                passwordConfirmation: "different"
+            ).validationMessage()
+        )
+    }
+
     func testValidationTrimsValuesAndDefaultsCategory() throws {
         let favorite = try FavoriteBookmark(
             title: " 公式サイト ",

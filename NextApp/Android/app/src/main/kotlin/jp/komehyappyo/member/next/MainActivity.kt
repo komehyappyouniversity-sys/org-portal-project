@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
 import jp.komehyappyo.member.next.core.data.FirebaseEnvironmentGuard
+import jp.komehyappyo.member.next.core.data.UnavailableAccountAuthRepository
 import jp.komehyappyo.member.next.core.data.LocalDiaryPhotoStore
 import jp.komehyappyo.member.next.core.data.OrgPortalDatabase
 import jp.komehyappyo.member.next.core.data.RoomDiaryRepository
@@ -32,6 +33,9 @@ import jp.komehyappyo.member.next.feature.tools.MeetingMinutesFeatureModel
 import jp.komehyappyo.member.next.feature.tools.MeetingRecordingService
 import jp.komehyappyo.member.next.feature.tools.SnsPostingAssistantFeatureModel
 import jp.komehyappyo.member.next.feature.tools.FavoriteBookmarkFeatureModel
+import jp.komehyappyo.member.next.core.session.AppSession
+import jp.komehyappyo.member.next.feature.account.AccountFeatureModel
+import jp.komehyappyo.member.next.feature.account.AccountRoot
 
 class MainActivity : ComponentActivity() {
     private val notificationPermission =
@@ -56,6 +60,11 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun NextApp() {
+        val appSession = remember { AppSession() }
+        val accountFactory = remember {
+            AccountFeatureModel.Factory(UnavailableAccountAuthRepository(), appSession)
+        }
+        val accountModel: AccountFeatureModel = viewModel(factory = accountFactory)
         val database = remember { OrgPortalDatabase.create(applicationContext) }
         val scheduleRepository = remember { RoomScheduleRepository(database.scheduleDao()) }
         val scheduleFactory = remember {
@@ -140,10 +149,7 @@ class MainActivity : ComponentActivity() {
                 )
             },
             myPage = {
-                EmptyState(
-                    title = "マイページ",
-                    message = "現在はGuestとして利用しています。",
-                )
+                AccountRoot(accountModel)
             },
         )
     }
