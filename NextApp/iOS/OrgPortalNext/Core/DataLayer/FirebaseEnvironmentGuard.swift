@@ -1,4 +1,5 @@
 import Foundation
+import Model
 
 public enum FirebaseEnvironment: String, Sendable {
     case emulator
@@ -38,4 +39,45 @@ public enum FirebaseEnvironmentError: Error, Equatable {
 
 public enum LegacyAdapterNamespace {
     // Legacy Adapter implementations are added here per feature.
+}
+
+public struct AuthenticatedAccount: Equatable, Sendable {
+    public let userId: String
+    public let email: String
+
+    public init(userId: String, email: String) {
+        self.userId = userId
+        self.email = email
+    }
+}
+
+public protocol AccountAuthRepository: Sendable {
+    func register(credentials: AccountCredentials) async throws -> AuthenticatedAccount
+    func login(credentials: AccountCredentials) async throws -> AuthenticatedAccount
+    func sendPasswordReset(email: String) async throws
+}
+
+public struct DevelopmentFirebaseNotConfiguredError: LocalizedError, Sendable {
+    public init() {}
+
+    public var errorDescription: String? {
+        "開発用Firebase認証が未設定です。本番Firebaseには接続していません。"
+    }
+}
+
+/// 開発用Firebase設定が安全に用意されるまで使用する明示的な未接続実装。
+public struct UnavailableAccountAuthRepository: AccountAuthRepository {
+    public init() {}
+
+    public func register(credentials: AccountCredentials) async throws -> AuthenticatedAccount {
+        throw DevelopmentFirebaseNotConfiguredError()
+    }
+
+    public func login(credentials: AccountCredentials) async throws -> AuthenticatedAccount {
+        throw DevelopmentFirebaseNotConfiguredError()
+    }
+
+    public func sendPasswordReset(email: String) async throws {
+        throw DevelopmentFirebaseNotConfiguredError()
+    }
 }
