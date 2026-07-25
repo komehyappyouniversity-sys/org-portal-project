@@ -52,6 +52,23 @@ final class FavoriteBookmarkTests: XCTestCase {
         XCTAssertNil(CommunityCodeParser.parse(String(repeating: "a", count: 101)))
     }
 
+    func testPublicCommunitySearchMatchesNameCodeAndDescription() {
+        let community = Community(
+            id: "community-1",
+            code: "K100U",
+            name: "米百俵大学",
+            description: "学び合う公開コミュニティ",
+            surfingVisible: true
+        )
+
+        XCTAssertTrue(community.matchesPublicSearch(""))
+        XCTAssertTrue(community.matchesPublicSearch("米百俵"))
+        XCTAssertTrue(community.matchesPublicSearch("k100u"))
+        XCTAssertTrue(community.matchesPublicSearch("公開コミュニティ"))
+        XCTAssertFalse(community.matchesPublicSearch("該当なし"))
+        XCTAssertTrue(community.surfingVisible)
+    }
+
     func testCommunityAdminAccessSupportsOwnerExplicitAndLegacyPermissions() {
         XCTAssertTrue(
             CommunityAdminAccess(

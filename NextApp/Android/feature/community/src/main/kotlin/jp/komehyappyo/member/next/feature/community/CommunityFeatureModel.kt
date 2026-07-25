@@ -18,6 +18,8 @@ import kotlinx.coroutines.launch
 
 data class CommunityUiState(
     val code: String = "",
+    val publicQuery: String = "",
+    val publicCommunities: List<Community> = emptyList(),
     val candidate: Community? = null,
     val memberships: List<Pair<CommunityMembership, Community>> = emptyList(),
     val adminAccess: CommunityAdminAccess? = null,
@@ -36,6 +38,42 @@ class CommunityFeatureModel(
 
     fun updateCode(value: String) {
         mutableState.value = mutableState.value.copy(code = value, message = null)
+    }
+
+    fun updatePublicQuery(value: String) {
+        mutableState.value = mutableState.value.copy(publicQuery = value, message = null)
+    }
+
+    fun refreshPublicCommunities() {
+        mutableState.value = mutableState.value.copy(isLoading = true, message = null)
+        viewModelScope.launch {
+            repository.publicCommunities(mutableState.value.publicQuery)
+                .onSuccess {
+                    mutableState.value = mutableState.value.copy(
+                        publicCommunities = it,
+                        isLoading = false,
+                    )
+                }
+                .onFailure { showError(it, clearCandidate = false) }
+        }
+    }
+
+    fun prepareApplication(community: Community) {
+        if (session.state.value.authenticationToken == null) {
+            mutableState.value = mutableState.value.copy(
+                message = "参加申請には、マイページから会員登録またはログインが必要です。",
+            )
+            return
+        }
+        mutableState.value = mutableState.value.copy(
+            code = community.code,
+            candidate = community,
+            message = if (community.joinEnabled) {
+                "参加先を確認し、下の「参加申請」を押してください。"
+            } else {
+                "このコミュニティは現在、参加申請を受け付けていません。"
+            },
+        )
     }
 
     fun receiveScan(value: String) {
@@ -85,7 +123,14 @@ class CommunityFeatureModel(
     fun refresh() {
         val current = session.state.value
         val token = current.authenticationToken ?: run {
-            mutableState.value = CommunityUiState()
+            mutableState.value = mutableState.value.copy(
+                candidate = null,
+                memberships = emptyList(),
+                adminAccess = null,
+                pendingApplications = emptyList(),
+                reviewingUserId = null,
+                isLoading = false,
+            )
             return
         }
         mutableState.value = mutableState.value.copy(isLoading = true)
@@ -183,9 +228,9 @@ class CommunityFeatureModel(
         }
     }
 
-    private fun showError(error: Throwable) {
+    private fun showError(error: Throwable, clearCandidate: Boolean = true) {
         mutableState.value = mutableState.value.copy(
-            candidate = null,
+            candidate = if (clearCandidate) null else mutableState.value.candidate,
             isLoading = false,
             message = error.message ?: "処理に失敗しました。",
         )

@@ -14,6 +14,7 @@ import java.net.URL
 import java.time.Instant
 
 interface CommunityRepository {
+    suspend fun publicCommunities(query: String): Result<List<Community>>
     suspend fun findCommunity(code: String, idToken: String): Result<Community>
     suspend fun apply(community: Community, userId: String, idToken: String): Result<Unit>
     suspend fun memberships(
@@ -47,6 +48,48 @@ private class CommunityHttpException(
 class FirebaseRestCommunityRepository(
     private val projectId: String,
 ) : CommunityRepository {
+    override suspend fun publicCommunities(query: String): Result<List<Community>> =
+        runCatching {
+            val body = JSONObject().put(
+                "structuredQuery",
+                JSONObject()
+                    .put(
+                        "from",
+                        JSONArray().put(JSONObject().put("collectionId", "organizations")),
+                    )
+                    .put(
+                        "where",
+                        JSONObject().put(
+                            "fieldFilter",
+                            JSONObject()
+                                .put(
+                                    "field",
+                                    JSONObject().put(
+                                        "fieldPath",
+                                        "communitySurfingVisible",
+                                    ),
+                                )
+                                .put("op", "EQUAL")
+                                .put("value", booleanValue(true)),
+                        ),
+                    ),
+            )
+            val rows = request("documents:runQuery", "POST", null, body) as JSONArray
+            buildList {
+                for (index in 0 until rows.length()) {
+                    val document = rows.optJSONObject(index)
+                        ?.optJSONObject("document") ?: continue
+                    runCatching { parseCommunity(document) }.getOrNull()
+                        ?.takeIf {
+                            it.isActive &&
+                                it.surfingVisible &&
+                                it.matchesPublicSearch(query)
+                        }
+                        ?.let(::add)
+                }
+            }.sortedBy { it.name }
+        }
+
     override suspend fun findCommunity(code: String, idToken: String): Result<Community> =
         runCatching {
             val normalized = CommunityCodeParser.parse(code)
@@ -333,6 +376,7 @@ class FirebaseRestCommunityRepository(
             homepageUrl = string(fields, "homepageURL"),
             isActive = boolean(fields, "isActive") ?: true,
             joinEnabled = boolean(fields, "communityJoinEnabled") ?: false,
+            surfingVisible = boolean(fields, "communitySurfingVisible") ?: false,
         )
     }
 
@@ -377,7 +421,7 @@ class FirebaseRestCommunityRepository(
     private suspend fun request(
         path: String,
         method: String,
-        idToken: String,
+        idToken: String?,
         body: JSONObject?,
     ): Any = withContext(Dispatchers.IO) {
         val connection = (
@@ -389,7 +433,9 @@ class FirebaseRestCommunityRepository(
             requestMethod = method
             connectTimeout = 15_000
             readTimeout = 15_000
-            setRequestProperty("Authorization", "Bearer $idToken")
+            idToken?.let {
+                setRequestProperty("Authorization", "Bearer $it")
+            }
             if (body != null) {
                 doOutput = true
                 setRequestProperty("Content-Type", "application/json; charset=UTF-8")
@@ -418,6 +464,7 @@ class FirebaseRestCommunityRepository(
     }
 
     private fun stringValue(value: String) = JSONObject().put("stringValue", value)
+    private fun booleanValue(value: Boolean) = JSONObject().put("booleanValue", value)
     private fun timestampValue(value: String) = JSONObject().put("timestampValue", value)
     private fun serverTimestamp(fieldPath: String) = JSONObject()
         .put("fieldPath", fieldPath)
