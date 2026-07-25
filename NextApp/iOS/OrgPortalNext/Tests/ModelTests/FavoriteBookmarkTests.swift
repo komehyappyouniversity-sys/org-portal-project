@@ -33,6 +33,25 @@ final class FavoriteBookmarkTests: XCTestCase {
         )
     }
 
+    func testCommunityCodeParserSupportsCodeAndInvitationURL() {
+        XCTAssertEqual(CommunityCodeParser.parse("  K100U  "), "k100u")
+        XCTAssertEqual(
+            CommunityCodeParser.parse(
+                "https://example.com/community/join?communityCode=K100U"
+            ),
+            "k100u"
+        )
+        XCTAssertEqual(
+            CommunityCodeParser.parse("https://example.com/community/K100U"),
+            "k100u"
+        )
+    }
+
+    func testCommunityCodeParserRejectsEmptyOrExcessivelyLongValues() {
+        XCTAssertNil(CommunityCodeParser.parse("   "))
+        XCTAssertNil(CommunityCodeParser.parse(String(repeating: "a", count: 101)))
+    }
+
     func testValidationTrimsValuesAndDefaultsCategory() throws {
         let favorite = try FavoriteBookmark(
             title: " 公式サイト ",

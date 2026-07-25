@@ -9,6 +9,8 @@ data class SessionState(
     val userId: String = "guest",
     val stage: UserStage = UserStage.Guest,
     val selectedCommunityId: String? = null,
+    val previousCommunityId: String? = null,
+    val authenticationToken: String? = null,
 )
 
 class AppSession {
@@ -19,7 +21,26 @@ class AppSession {
         mutableState.value = mutableState.value.copy(stage = stage, userId = userId)
     }
 
+    fun updateAuthenticatedUser(userId: String, idToken: String) {
+        mutableState.value = mutableState.value.copy(
+            userId = userId,
+            authenticationToken = idToken,
+        )
+    }
+
     fun selectCommunity(communityId: String?) {
-        mutableState.value = mutableState.value.copy(selectedCommunityId = communityId)
+        if (communityId == mutableState.value.selectedCommunityId) return
+        mutableState.value = mutableState.value.copy(
+            selectedCommunityId = communityId,
+            previousCommunityId = mutableState.value.selectedCommunityId,
+        )
+    }
+
+    fun returnToPreviousCommunity() {
+        val current = mutableState.value.selectedCommunityId
+        mutableState.value = mutableState.value.copy(
+            selectedCommunityId = mutableState.value.previousCommunityId,
+            previousCommunityId = current,
+        )
     }
 }

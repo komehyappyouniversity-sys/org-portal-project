@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "jp.komehyappyo.member.next.feature.account"
+    namespace = "jp.komehyappyo.member.next.feature.community"
     compileSdk = 36
     defaultConfig { minSdk = 26 }
     buildFeatures { compose = true }
@@ -27,10 +27,9 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.1")
-    implementation("androidx.biometric:biometric:1.1.0")
-    implementation("androidx.fragment:fragment-ktx:1.8.8")
-    implementation("androidx.core:core-ktx:1.16.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
     testImplementation(kotlin("test"))
 }

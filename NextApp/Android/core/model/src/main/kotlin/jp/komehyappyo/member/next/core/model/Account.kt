@@ -2,9 +2,63 @@ package jp.komehyappyo.member.next.core.model
 
 enum class AccountAccessState {
     Guest,
+    Registered,
     PendingApproval,
     Rejected,
     Member,
+}
+
+enum class CommunityMembershipStatus {
+    Pending,
+    Approved,
+    Rejected,
+}
+
+data class Community(
+    val id: String,
+    val code: String,
+    val name: String,
+    val description: String = "",
+    val logoUrl: String? = null,
+    val homepageUrl: String? = null,
+    val isActive: Boolean = true,
+    val joinEnabled: Boolean = false,
+)
+
+data class CommunityMembership(
+    val id: String,
+    val communityId: String,
+    val userId: String,
+    val status: CommunityMembershipStatus,
+    val role: String = "member",
+    val joinedAt: String? = null,
+)
+
+object CommunityCodeParser {
+    fun parse(value: String): String? {
+        val trimmed = value.trim()
+        if (trimmed.isEmpty()) return null
+        val fromUri = runCatching {
+            val uri = java.net.URI(trimmed)
+            if (uri.scheme == null) return@runCatching null
+            val queryCode = uri.rawQuery
+                ?.split("&")
+                ?.mapNotNull { part ->
+                    val pair = part.split("=", limit = 2)
+                    if (pair.size == 2 && pair[0] in setOf("communityCode", "organizationCode", "code")) {
+                        java.net.URLDecoder.decode(pair[1], Charsets.UTF_8.name())
+                    } else {
+                        null
+                    }
+                }
+                ?.firstOrNull()
+            queryCode ?: uri.path?.trimEnd('/')?.substringAfterLast('/')
+        }.getOrNull()
+        return normalize(fromUri ?: trimmed)
+    }
+
+    private fun normalize(value: String): String? =
+        value.trim().takeIf { it.isNotEmpty() && it.length <= 100 }?.lowercase()
 }
 
 data class AccountCredentials(

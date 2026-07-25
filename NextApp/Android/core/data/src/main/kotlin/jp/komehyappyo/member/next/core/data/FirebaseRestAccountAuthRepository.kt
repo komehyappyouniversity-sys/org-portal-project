@@ -22,6 +22,7 @@ class FirebaseRestAccountAuthRepository(
                     .put("returnSecureToken", true),
             )
             val idToken = response.getString("idToken")
+            val refreshToken = response.getString("refreshToken")
             val userId = response.getString("localId")
             val email = response.getString("email")
             val name = credentials.name.orEmpty().trim()
@@ -39,6 +40,8 @@ class FirebaseRestAccountAuthRepository(
                 userId = userId,
                 email = email,
                 emailVerified = false,
+                idToken = idToken,
+                refreshToken = refreshToken,
             )
         }
 
@@ -52,7 +55,8 @@ class FirebaseRestAccountAuthRepository(
                     .put("returnSecureToken", true),
             )
             val idToken = response.getString("idToken")
-            val account = lookup(idToken)
+            val refreshToken = response.getString("refreshToken")
+            val account = lookup(idToken, refreshToken)
             if (!account.emailVerified) {
                 sendEmailVerification(idToken)
                 throw FirebaseAuthException(
@@ -60,6 +64,15 @@ class FirebaseRestAccountAuthRepository(
                 )
             }
             account
+        }
+
+    override suspend fun refresh(refreshToken: String): Result<AuthenticatedAccount> =
+        runCatching {
+            val response = refreshRequest(refreshToken)
+            lookup(
+                idToken = response.getString("id_token"),
+                refreshToken = response.getString("refresh_token"),
+            )
         }
 
     override suspend fun sendPasswordReset(email: String): Result<Unit> =
@@ -73,7 +86,10 @@ class FirebaseRestAccountAuthRepository(
             Unit
         }
 
-    private suspend fun lookup(idToken: String): AuthenticatedAccount {
+    private suspend fun lookup(
+        idToken: String,
+        refreshToken: String,
+    ): AuthenticatedAccount {
         val response = request(
             endpoint = "accounts:lookup",
             body = JSONObject().put("idToken", idToken),
@@ -83,8 +99,48 @@ class FirebaseRestAccountAuthRepository(
             userId = user.getString("localId"),
             email = user.getString("email"),
             emailVerified = user.optBoolean("emailVerified", false),
+            idToken = idToken,
+            refreshToken = refreshToken,
         )
     }
+
+    private suspend fun refreshRequest(refreshToken: String): JSONObject =
+        withContext(Dispatchers.IO) {
+            val connection = (
+                URL("$SECURE_TOKEN_URL?key=$apiKey").openConnection() as HttpURLConnection
+                ).apply {
+                requestMethod = "POST"
+                connectTimeout = 15_000
+                readTimeout = 15_000
+                doOutput = true
+                setRequestProperty(
+                    "Content-Type",
+                    "application/x-www-form-urlencoded",
+                )
+            }
+            val body = "grant_type=refresh_token&refresh_token=" +
+                java.net.URLEncoder.encode(refreshToken, Charsets.UTF_8.name())
+            try {
+                connection.outputStream.use {
+                    it.write(body.toByteArray(Charsets.UTF_8))
+                }
+                val responseText = (
+                    if (connection.responseCode in 200..299) {
+                        connection.inputStream
+                    } else {
+                        connection.errorStream
+                    }
+                    ).bufferedReader().use { it.readText() }
+                if (connection.responseCode !in 200..299) {
+                    throw FirebaseAuthException(
+                        "生体認証ログインの有効期限が切れました。パスワードで再度ログインしてください。",
+                    )
+                }
+                JSONObject(responseText)
+            } finally {
+                connection.disconnect()
+            }
+        }
 
     private suspend fun sendEmailVerification(idToken: String) {
         request(
@@ -196,6 +252,7 @@ class FirebaseRestAccountAuthRepository(
     private companion object {
         const val BASE_URL = "https://identitytoolkit.googleapis.com/v1"
         const val FIRESTORE_BASE_URL = "https://firestore.googleapis.com/v1"
+        const val SECURE_TOKEN_URL = "https://securetoken.googleapis.com/v1/token"
     }
 }
 

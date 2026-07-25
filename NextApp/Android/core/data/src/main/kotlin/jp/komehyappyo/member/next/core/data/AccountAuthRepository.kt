@@ -6,11 +6,14 @@ data class AuthenticatedAccount(
     val userId: String,
     val email: String,
     val emailVerified: Boolean,
+    val idToken: String,
+    val refreshToken: String,
 )
 
 interface AccountAuthRepository {
     suspend fun register(credentials: AccountCredentials): Result<AuthenticatedAccount>
     suspend fun login(credentials: AccountCredentials): Result<AuthenticatedAccount>
+    suspend fun refresh(refreshToken: String): Result<AuthenticatedAccount>
     suspend fun sendPasswordReset(email: String): Result<Unit>
 }
 
@@ -26,6 +29,9 @@ class UnavailableAccountAuthRepository : AccountAuthRepository {
         Result.failure<AuthenticatedAccount>(DevelopmentFirebaseNotConfiguredException())
 
     override suspend fun login(credentials: AccountCredentials) =
+        Result.failure<AuthenticatedAccount>(DevelopmentFirebaseNotConfiguredException())
+
+    override suspend fun refresh(refreshToken: String) =
         Result.failure<AuthenticatedAccount>(DevelopmentFirebaseNotConfiguredException())
 
     override suspend fun sendPasswordReset(email: String) =
