@@ -389,6 +389,22 @@ public protocol CommunityRepository: Sendable {
     func apply(community: Community, userId: String, idToken: String) async throws
     func memberships(userId: String, idToken: String) async throws
         -> [(CommunityMembership, Community)]
+    func adminAccess(
+        communityId: String,
+        userId: String,
+        idToken: String
+    ) async throws -> CommunityAdminAccess?
+    func pendingApplications(
+        communityId: String,
+        idToken: String
+    ) async throws -> [CommunityMembership]
+    func reviewApplication(
+        communityId: String,
+        applicantUserId: String,
+        reviewerUserId: String,
+        status: CommunityMembershipStatus,
+        idToken: String
+    ) async throws
 }
 
 public enum CommunityRepositoryError: LocalizedError, Equatable {
@@ -398,6 +414,7 @@ public enum CommunityRepositoryError: LocalizedError, Equatable {
     case joiningDisabled
     case invalidResponse
     case requestFailed
+    case notAuthorized
 
     public var errorDescription: String? {
         switch self {
@@ -407,6 +424,7 @@ public enum CommunityRepositoryError: LocalizedError, Equatable {
         case .joiningDisabled: "このコミュニティは現在、参加申請を受け付けていません。"
         case .invalidResponse: "コミュニティ情報を読み取れませんでした。"
         case .requestFailed: "通信に失敗しました。時間をおいて再度お試しください。"
+        case .notAuthorized: "この操作を行う管理者権限がありません。"
         }
     }
 }
@@ -459,7 +477,7 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
         idToken: String
     ) async throws {
         let now = ISO8601DateFormatter().string(from: Date())
-        let fields: [String: Any] = [
+        var fields: [String: Any] = [
             "uid": ["stringValue": userId],
             "userId": ["stringValue": userId],
             "organizationId": ["stringValue": community.id],
@@ -469,6 +487,17 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
             "createdAt": ["timestampValue": now],
             "updatedAt": ["timestampValue": now]
         ]
+        if let profile = try? await memberProfile(userId: userId, idToken: idToken) {
+            if let value = string(profile, "name"), !value.isEmpty {
+                fields["applicantName"] = ["stringValue": value]
+            }
+            if let value = string(profile, "furigana"), !value.isEmpty {
+                fields["applicantFurigana"] = ["stringValue": value]
+            }
+            if let value = string(profile, "email"), !value.isEmpty {
+                fields["applicantEmail"] = ["stringValue": value]
+            }
+        }
         _ = try await requestJSON(
             path: "documents/organizations/\(community.id)/members/\(userId)",
             method: "PATCH",
@@ -512,6 +541,150 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
         return result.sorted {
             $0.1.name.localizedStandardCompare($1.1.name) == .orderedAscending
         }
+    }
+
+    public func adminAccess(
+        communityId: String,
+        userId: String,
+        idToken: String
+    ) async throws -> CommunityAdminAccess? {
+        do {
+            guard let document = try await requestJSON(
+                path: "documents/organizations/\(communityId)/admins/\(userId)",
+                method: "GET",
+                idToken: idToken
+            ) as? [String: Any],
+            let fields = document["fields"] as? [String: Any],
+            bool(fields, "isActive") == true else {
+                return nil
+            }
+            let permissions = permissionValues(fields, "permissions")
+            return CommunityAdminAccess(
+                communityId: communityId,
+                userId: userId,
+                role: string(fields, "role") ?? "admin",
+                permissions: permissions,
+                isLegacyFullAccess: fields["permissions"] == nil
+            )
+        } catch CommunityRepositoryError.notFound {
+            return nil
+        } catch CommunityRepositoryError.notAuthorized {
+            return nil
+        }
+    }
+
+    public func pendingApplications(
+        communityId: String,
+        idToken: String
+    ) async throws -> [CommunityMembership] {
+        let body: [String: Any] = [
+            "structuredQuery": [
+                "from": [["collectionId": "members"]],
+                "where": [
+                    "fieldFilter": [
+                        "field": ["fieldPath": "status"],
+                        "op": "EQUAL",
+                        "value": ["stringValue": CommunityMembershipStatus.pending.rawValue]
+                    ]
+                ]
+            ]
+        ]
+        let rows = try await requestJSON(
+            path: "documents/organizations/\(communityId):runQuery",
+            method: "POST",
+            idToken: idToken,
+            body: body
+        ) as? [[String: Any]] ?? []
+        return rows.compactMap { row in
+            guard let document = row["document"] as? [String: Any],
+                  let path = document["name"] as? String,
+                  let userId = path.split(separator: "/").last.map(String.init) else {
+                return nil
+            }
+            return parseMembership(document, userId: userId)
+        }.sorted {
+            ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast)
+        }
+    }
+
+    public func reviewApplication(
+        communityId: String,
+        applicantUserId: String,
+        reviewerUserId: String,
+        status: CommunityMembershipStatus,
+        idToken: String
+    ) async throws {
+        guard status == .approved || status == .rejected else {
+            throw CommunityRepositoryError.invalidResponse
+        }
+        let auditId = UUID().uuidString.lowercased()
+        let databaseRoot = "projects/\(projectId)/databases/(default)/documents"
+        let body: [String: Any] = [
+            "writes": [
+                [
+                    "update": [
+                        "name": "\(databaseRoot)/organizations/\(communityId)/members/\(applicantUserId)",
+                        "fields": [
+                            "status": ["stringValue": status.rawValue],
+                            "reviewedByUserId": ["stringValue": reviewerUserId]
+                        ]
+                    ],
+                    "updateMask": [
+                        "fieldPaths": ["status", "reviewedByUserId"]
+                    ],
+                    "updateTransforms": [
+                        [
+                            "fieldPath": "updatedAt",
+                            "setToServerValue": "REQUEST_TIME"
+                        ],
+                        [
+                            "fieldPath": "reviewedAt",
+                            "setToServerValue": "REQUEST_TIME"
+                        ]
+                    ],
+                    "currentDocument": ["exists": true]
+                ],
+                [
+                    "update": [
+                        "name": "\(databaseRoot)/organizations/\(communityId)/auditLogs/\(auditId)",
+                        "fields": [
+                            "action": ["stringValue": "membership.\(status.rawValue)"],
+                            "actorUserId": ["stringValue": reviewerUserId],
+                            "targetUserId": ["stringValue": applicantUserId],
+                            "communityId": ["stringValue": communityId]
+                        ]
+                    ],
+                    "updateTransforms": [
+                        [
+                            "fieldPath": "createdAt",
+                            "setToServerValue": "REQUEST_TIME"
+                        ]
+                    ],
+                    "currentDocument": ["exists": false]
+                ]
+            ]
+        ]
+        _ = try await requestJSON(
+            path: "documents:commit",
+            method: "POST",
+            idToken: idToken,
+            body: body
+        )
+    }
+
+    private func memberProfile(
+        userId: String,
+        idToken: String
+    ) async throws -> [String: Any] {
+        guard let document = try await requestJSON(
+            path: "documents/memberPrivate/\(userId)",
+            method: "GET",
+            idToken: idToken
+        ) as? [String: Any],
+        let fields = document["fields"] as? [String: Any] else {
+            throw CommunityRepositoryError.invalidResponse
+        }
+        return fields
     }
 
     private func getCommunity(id: String, idToken: String) async throws -> Community {
@@ -568,8 +741,30 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
             userId: userId,
             status: status,
             role: string(fields, "role") ?? "member",
-            joinedAt: timestamp(fields, "joinedAt")
+            joinedAt: timestamp(fields, "joinedAt"),
+            applicantName: string(fields, "applicantName"),
+            applicantFurigana: string(fields, "applicantFurigana"),
+            applicantEmail: string(fields, "applicantEmail"),
+            createdAt: timestamp(fields, "createdAt")
         )
+    }
+
+    private func permissionValues(
+        _ fields: [String: Any],
+        _ key: String
+    ) -> Set<String> {
+        guard let value = fields[key] as? [String: Any] else { return [] }
+        if let array = (value["arrayValue"] as? [String: Any])?["values"]
+            as? [[String: Any]] {
+            return Set(array.compactMap { $0["stringValue"] as? String })
+        }
+        if let mapFields = (value["mapValue"] as? [String: Any])?["fields"]
+            as? [String: [String: Any]] {
+            return Set(mapFields.compactMap { key, value in
+                value["booleanValue"] as? Bool == true ? key : nil
+            })
+        }
+        return []
     }
 
     private func string(_ fields: [String: Any], _ key: String) -> String? {
@@ -610,6 +805,9 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
             throw CommunityRepositoryError.requestFailed
         }
         if httpResponse.statusCode == 404 { throw CommunityRepositoryError.notFound }
+        if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+            throw CommunityRepositoryError.notAuthorized
+        }
         guard (200...299).contains(httpResponse.statusCode) else {
             throw CommunityRepositoryError.requestFailed
         }

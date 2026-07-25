@@ -52,6 +52,42 @@ final class FavoriteBookmarkTests: XCTestCase {
         XCTAssertNil(CommunityCodeParser.parse(String(repeating: "a", count: 101)))
     }
 
+    func testCommunityAdminAccessSupportsOwnerExplicitAndLegacyPermissions() {
+        XCTAssertTrue(
+            CommunityAdminAccess(
+                communityId: "k100u",
+                userId: "owner",
+                role: "owner",
+                permissions: []
+            ).canReviewMembers
+        )
+        XCTAssertTrue(
+            CommunityAdminAccess(
+                communityId: "k100u",
+                userId: "manager",
+                role: "manager",
+                permissions: [CommunityAdminAccess.memberReviewPermission]
+            ).canReviewMembers
+        )
+        XCTAssertTrue(
+            CommunityAdminAccess(
+                communityId: "k100u",
+                userId: "legacy",
+                role: "admin",
+                permissions: [],
+                isLegacyFullAccess: true
+            ).canReviewMembers
+        )
+        XCTAssertFalse(
+            CommunityAdminAccess(
+                communityId: "k100u",
+                userId: "accountant",
+                role: "manager",
+                permissions: ["accountingRead"]
+            ).canReviewMembers
+        )
+    }
+
     func testValidationTrimsValuesAndDefaultsCategory() throws {
         let favorite = try FavoriteBookmark(
             title: " 公式サイト ",
