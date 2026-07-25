@@ -55,6 +55,7 @@ dependencies {
     implementation(project(":core:notifications"))
     implementation(project(":feature:account"))
     implementation(project(":feature:community"))
+    implementation(project(":feature:messages"))
     implementation(project(":feature:tools"))
 
     val composeBom = platform("androidx.compose:compose-bom:2026.06.00")

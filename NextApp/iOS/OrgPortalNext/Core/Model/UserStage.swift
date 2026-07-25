@@ -75,6 +75,7 @@ public struct CommunityMembership: Identifiable, Equatable, Codable, Sendable {
     public let applicantFurigana: String?
     public let applicantEmail: String?
     public let createdAt: Date?
+    public let categoryIds: Set<String>
 
     public init(
         id: String,
@@ -86,7 +87,8 @@ public struct CommunityMembership: Identifiable, Equatable, Codable, Sendable {
         applicantName: String? = nil,
         applicantFurigana: String? = nil,
         applicantEmail: String? = nil,
-        createdAt: Date? = nil
+        createdAt: Date? = nil,
+        categoryIds: Set<String> = []
     ) {
         self.id = id
         self.communityId = communityId
@@ -98,6 +100,95 @@ public struct CommunityMembership: Identifiable, Equatable, Codable, Sendable {
         self.applicantFurigana = applicantFurigana
         self.applicantEmail = applicantEmail
         self.createdAt = createdAt
+        self.categoryIds = categoryIds
+    }
+}
+
+public enum AnnouncementPublishScope: String, Codable, CaseIterable, Sendable {
+    case `public`
+    case memberAll
+    case category
+    case individual
+}
+
+public struct AnnouncementAttachment: Equatable, Codable, Sendable {
+    public let type: String
+    public let name: String
+    public let url: URL
+
+    public init(type: String, name: String, url: URL) {
+        self.type = type
+        self.name = name
+        self.url = url
+    }
+}
+
+public struct Announcement: Identifiable, Equatable, Codable, Sendable {
+    public let id: String
+    public let communityId: String
+    public let title: String
+    public let body: String
+    public let publishScope: AnnouncementPublishScope
+    public let targetCategoryIds: Set<String>
+    public let targetUserIds: Set<String>
+    public let attachments: [AnnouncementAttachment]
+    public let zoomURL: URL?
+    public let videoURL: URL?
+    public let createdAt: Date?
+
+    public init(
+        id: String,
+        communityId: String,
+        title: String,
+        body: String,
+        publishScope: AnnouncementPublishScope,
+        targetCategoryIds: Set<String> = [],
+        targetUserIds: Set<String> = [],
+        attachments: [AnnouncementAttachment] = [],
+        zoomURL: URL? = nil,
+        videoURL: URL? = nil,
+        createdAt: Date? = nil
+    ) {
+        self.id = id
+        self.communityId = communityId
+        self.title = title
+        self.body = body
+        self.publishScope = publishScope
+        self.targetCategoryIds = targetCategoryIds
+        self.targetUserIds = targetUserIds
+        self.attachments = attachments
+        self.zoomURL = zoomURL
+        self.videoURL = videoURL
+        self.createdAt = createdAt
+    }
+
+    public func isVisible(
+        userId: String?,
+        categoryIds: Set<String>,
+        isApprovedMember: Bool
+    ) -> Bool {
+        switch publishScope {
+        case .public:
+            return true
+        case .memberAll:
+            return isApprovedMember
+        case .category:
+            return isApprovedMember && !targetCategoryIds.isDisjoint(with: categoryIds)
+        case .individual:
+            return isApprovedMember && userId.map(targetUserIds.contains) == true
+        }
+    }
+}
+
+public struct AnnouncementReadState: Equatable, Codable, Sendable {
+    public let userId: String
+    public let announcementId: String
+    public let readAt: Date
+
+    public init(userId: String, announcementId: String, readAt: Date) {
+        self.userId = userId
+        self.announcementId = announcementId
+        self.readAt = readAt
     }
 }
 

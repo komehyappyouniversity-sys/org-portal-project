@@ -405,6 +405,11 @@ class FirebaseRestCommunityRepository(
             applicantFurigana = string(fields, "applicantFurigana"),
             applicantEmail = string(fields, "applicantEmail"),
             createdAt = timestamp(fields, "createdAt"),
+            categoryIds = (
+                stringArray(fields, "categoryIds") +
+                    stringArray(fields, "categories") +
+                    listOfNotNull(string(fields, "categoryId"))
+                ).toSet(),
         )
     }
 
@@ -503,5 +508,18 @@ class FirebaseRestCommunityRepository(
                 }
             }
         return emptySet()
+    }
+    private fun stringArray(fields: JSONObject, key: String): List<String> {
+        val values = fields.optJSONObject(key)
+            ?.optJSONObject("arrayValue")
+            ?.optJSONArray("values") ?: return emptyList()
+        return buildList {
+            for (index in 0 until values.length()) {
+                values.optJSONObject(index)
+                    ?.optString("stringValue")
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let(::add)
+            }
+        }
     }
 }

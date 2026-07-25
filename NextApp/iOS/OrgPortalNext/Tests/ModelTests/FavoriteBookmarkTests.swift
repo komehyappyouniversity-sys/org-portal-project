@@ -69,6 +69,75 @@ final class FavoriteBookmarkTests: XCTestCase {
         XCTAssertTrue(community.surfingVisible)
     }
 
+    func testAnnouncementVisibilityMatchesPublishScope() {
+        let publicAnnouncement = Announcement(
+            id: "public",
+            communityId: "k100u",
+            title: "公開",
+            body: "",
+            publishScope: .public
+        )
+        let memberAnnouncement = Announcement(
+            id: "member",
+            communityId: "k100u",
+            title: "会員",
+            body: "",
+            publishScope: .memberAll
+        )
+        let categoryAnnouncement = Announcement(
+            id: "category",
+            communityId: "k100u",
+            title: "カテゴリ",
+            body: "",
+            publishScope: .category,
+            targetCategoryIds: ["course-a"]
+        )
+        let individualAnnouncement = Announcement(
+            id: "individual",
+            communityId: "k100u",
+            title: "個別",
+            body: "",
+            publishScope: .individual,
+            targetUserIds: ["member-1"]
+        )
+
+        XCTAssertTrue(
+            publicAnnouncement.isVisible(
+                userId: nil,
+                categoryIds: [],
+                isApprovedMember: false
+            )
+        )
+        XCTAssertFalse(
+            memberAnnouncement.isVisible(
+                userId: "member-1",
+                categoryIds: [],
+                isApprovedMember: false
+            )
+        )
+        XCTAssertTrue(
+            categoryAnnouncement.isVisible(
+                userId: "member-1",
+                categoryIds: ["course-a"],
+                isApprovedMember: true
+            )
+        )
+        XCTAssertFalse(
+            categoryAnnouncement.isVisible(
+                userId: "member-1",
+                categoryIds: ["course-b"],
+                isApprovedMember: true
+            )
+        )
+        XCTAssertTrue(
+            individualAnnouncement.isVisible(
+                userId: "member-1",
+                categoryIds: [],
+                isApprovedMember: true
+            )
+        )
+    }
+
     func testCommunityAdminAccessSupportsOwnerExplicitAndLegacyPermissions() {
         XCTAssertTrue(
             CommunityAdminAccess(

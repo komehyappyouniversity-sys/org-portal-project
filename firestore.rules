@@ -27,6 +27,31 @@ service cloud.firestore {
       return isAdmin(organizationId) || isSuperAdmin();
     }
 
+    function isApprovedMember(organizationId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/organizations/$(organizationId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/organizations/$(organizationId)/members/$(request.auth.uid)).data.status == "approved";
+    }
+
+    function isPublicAnnouncement(data) {
+      return (
+          data.keys().hasAny(["publishScope"])
+          && data.publishScope == "public"
+        )
+        || (
+          data.keys().hasAny(["messageType"])
+          && data.messageType == "publicAnnouncement"
+        )
+        || (
+          data.keys().hasAny(["visibility"])
+          && data.visibility == "public"
+        )
+        || (
+          data.keys().hasAny(["deliveryType"])
+          && data.deliveryType == "公開お知らせ"
+        );
+    }
+
     function canReviewMembers(organizationId) {
       let adminPath = /databases/$(database)/documents/organizations/$(organizationId)/admins/$(request.auth.uid);
       let admin = isSignedIn() && exists(adminPath) ? get(adminPath).data : {};
@@ -325,7 +350,12 @@ service cloud.firestore {
       }
 
       match /messages/{messageId} {
-        allow read: if isOrgActive(organizationId);
+        allow read: if isOrgActive(organizationId)
+          && (
+            isPublicAnnouncement(resource.data)
+            || isApprovedMember(organizationId)
+            || isOrgStaff(organizationId)
+          );
         allow create, delete: if isOrgStaff(organizationId);
 
         allow update: if isOrgStaff(organizationId)
@@ -337,6 +367,16 @@ service cloud.firestore {
               "updatedAt"
             ])
           );
+      }
+
+      match /announcements/{announcementId} {
+        allow read: if isOrgActive(organizationId)
+          && (
+            isPublicAnnouncement(resource.data)
+            || isApprovedMember(organizationId)
+            || isOrgStaff(organizationId)
+          );
+        allow create, update, delete: if isOrgStaff(organizationId);
       }
 
       match /categories/{categoryId} {
