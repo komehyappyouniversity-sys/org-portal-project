@@ -206,7 +206,8 @@ service cloud.firestore {
 
     match /organizations/{organizationId} {
 
-      allow read: if true;
+      allow read: if isSignedIn()
+        || resource.data.communitySurfingVisible == true;
       allow create, update: if isSuperAdmin();
       allow delete: if false;
 

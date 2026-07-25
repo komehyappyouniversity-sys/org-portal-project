@@ -81,6 +81,24 @@ class AccountCredentialsTest {
     }
 
     @Test
+    fun publicCommunitySearchMatchesNameCodeAndDescription() {
+        val community = Community(
+            id = "community-1",
+            code = "K100U",
+            name = "米百俵大学",
+            description = "学び合う公開コミュニティ",
+            surfingVisible = true,
+        )
+
+        assertTrue(community.matchesPublicSearch(""))
+        assertTrue(community.matchesPublicSearch("米百俵"))
+        assertTrue(community.matchesPublicSearch("k100u"))
+        assertTrue(community.matchesPublicSearch("公開コミュニティ"))
+        assertFalse(community.matchesPublicSearch("該当なし"))
+        assertTrue(community.surfingVisible)
+    }
+
+    @Test
     fun communityAdminAccessSupportsOwnerExplicitAndLegacyPermissions() {
         assertTrue(
             CommunityAdminAccess(

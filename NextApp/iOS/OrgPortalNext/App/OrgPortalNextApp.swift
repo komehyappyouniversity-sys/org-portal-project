@@ -168,6 +168,8 @@ private struct AppBootstrapView: View {
 @MainActor
 private final class CommunityFeatureModel: ObservableObject {
     @Published var code = ""
+    @Published var publicQuery = ""
+    @Published private(set) var publicItems: [Community] = []
     @Published private(set) var candidate: Community?
     @Published private(set) var items: [(CommunityMembership, Community)] = []
     @Published private(set) var adminAccess: CommunityAdminAccess?
@@ -187,6 +189,33 @@ private final class CommunityFeatureModel: ObservableObject {
 
     var isLoggedIn: Bool {
         session.authenticatedUserId != nil && session.authenticationToken != nil
+    }
+
+    func refreshPublicCommunities() {
+        isLoading = true
+        message = nil
+        Task {
+            do {
+                publicItems = try await repository.publicCommunities(query: publicQuery)
+                isLoading = false
+            } catch {
+                publicItems = []
+                isLoading = false
+                message = error.localizedDescription
+            }
+        }
+    }
+
+    func prepareApplication(for community: Community) {
+        guard isLoggedIn else {
+            message = "参加申請には、マイページから会員登録またはログインが必要です。"
+            return
+        }
+        candidate = community
+        code = community.code
+        message = community.joinEnabled
+            ? "参加先を確認し、下の「参加申請」を押してください。"
+            : "このコミュニティは現在、参加申請を受け付けていません。"
     }
 
     func search() {
@@ -325,6 +354,7 @@ private struct CommunityRootView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    publicCommunitySection
                     if !model.isLoggedIn {
                         ContentUnavailableView(
                             "ログインが必要です",
@@ -346,9 +376,69 @@ private struct CommunityRootView: View {
                 .padding(24)
             }
             .navigationTitle("つながる")
-            .task { await model.refresh() }
+            .task {
+                model.refreshPublicCommunities()
+                await model.refresh()
+            }
             .sheet(isPresented: $model.showsScanner) {
                 CommunityQRScanner { model.receivedScan($0) }
+            }
+        }
+    }
+
+    private var publicCommunitySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("コミュニティを探す").font(.title2.bold())
+            Text("公開中のコミュニティを見て回れます。")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            HStack {
+                TextField("名前・コード・紹介文で検索", text: $model.publicQuery)
+                    .textFieldStyle(.roundedBorder)
+                    .submitLabel(.search)
+                    .onSubmit { model.refreshPublicCommunities() }
+                Button("検索") { model.refreshPublicCommunities() }
+                    .buttonStyle(.bordered)
+            }
+            if model.publicItems.isEmpty && !model.isLoading {
+                Text("公開中のコミュニティは見つかりませんでした。")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(model.publicItems) { community in
+                DisclosureGroup {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if !community.description.isEmpty {
+                            Text(community.description)
+                        }
+                        if let homepage = community.homepageURL {
+                            Link("ホームページを見る", destination: homepage)
+                        }
+                        Text(community.joinEnabled ? "参加申請受付中" : "現在は参加申請受付外")
+                            .font(.footnote)
+                            .foregroundStyle(
+                                community.joinEnabled ? Color.green : Color.secondary
+                            )
+                        Button("このコミュニティへ参加") {
+                            model.prepareApplication(for: community)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!community.joinEnabled)
+                    }
+                    .padding(.top, 8)
+                } label: {
+                    HStack(spacing: 12) {
+                        CommunityLogo(community: community)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(community.name).font(.headline)
+                            Text("コード: \(community.code)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding()
+                .background(.background)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
             }
         }
     }

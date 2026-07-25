@@ -31,6 +31,7 @@ public struct Community: Identifiable, Equatable, Codable, Sendable {
     public let homepageURL: URL?
     public let isActive: Bool
     public let joinEnabled: Bool
+    public let surfingVisible: Bool
 
     public init(
         id: String,
@@ -40,7 +41,8 @@ public struct Community: Identifiable, Equatable, Codable, Sendable {
         logoURL: URL? = nil,
         homepageURL: URL? = nil,
         isActive: Bool = true,
-        joinEnabled: Bool = false
+        joinEnabled: Bool = false,
+        surfingVisible: Bool = false
     ) {
         self.id = id
         self.code = code
@@ -50,6 +52,15 @@ public struct Community: Identifiable, Equatable, Codable, Sendable {
         self.homepageURL = homepageURL
         self.isActive = isActive
         self.joinEnabled = joinEnabled
+        self.surfingVisible = surfingVisible
+    }
+
+    public func matchesPublicSearch(_ query: String) -> Bool {
+        let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return true }
+        return [name, code, description].contains {
+            $0.localizedCaseInsensitiveContains(normalized)
+        }
     }
 }
 

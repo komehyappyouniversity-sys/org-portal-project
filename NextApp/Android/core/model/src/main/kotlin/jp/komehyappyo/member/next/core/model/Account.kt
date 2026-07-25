@@ -23,7 +23,16 @@ data class Community(
     val homepageUrl: String? = null,
     val isActive: Boolean = true,
     val joinEnabled: Boolean = false,
-)
+    val surfingVisible: Boolean = false,
+) {
+    fun matchesPublicSearch(query: String): Boolean {
+        val normalized = query.trim()
+        if (normalized.isEmpty()) return true
+        return listOf(name, code, description).any {
+            it.contains(normalized, ignoreCase = true)
+        }
+    }
+}
 
 data class CommunityMembership(
     val id: String,

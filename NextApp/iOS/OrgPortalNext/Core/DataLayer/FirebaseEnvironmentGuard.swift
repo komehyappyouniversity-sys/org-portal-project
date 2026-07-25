@@ -385,6 +385,7 @@ public enum FirebaseRESTAuthError: LocalizedError, Sendable {
 }
 
 public protocol CommunityRepository: Sendable {
+    func publicCommunities(query: String) async throws -> [Community]
     func findCommunity(code: String, idToken: String) async throws -> Community
     func apply(community: Community, userId: String, idToken: String) async throws
     func memberships(userId: String, idToken: String) async throws
@@ -436,6 +437,32 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
     public init(projectId: String, session: URLSession = .shared) {
         self.projectId = projectId
         self.session = session
+    }
+
+    public func publicCommunities(query: String) async throws -> [Community] {
+        let body: [String: Any] = [
+            "structuredQuery": [
+                "from": [["collectionId": "organizations"]],
+                "where": [
+                    "fieldFilter": [
+                        "field": ["fieldPath": "communitySurfingVisible"],
+                        "op": "EQUAL",
+                        "value": ["booleanValue": true]
+                    ]
+                ]
+            ]
+        ]
+        let rows = try await requestJSON(
+            path: "documents:runQuery",
+            method: "POST",
+            idToken: nil,
+            body: body
+        ) as? [[String: Any]] ?? []
+        return rows
+            .compactMap { $0["document"] as? [String: Any] }
+            .compactMap { try? parseCommunity($0) }
+            .filter { $0.isActive && $0.surfingVisible && $0.matchesPublicSearch(query) }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     public func findCommunity(code: String, idToken: String) async throws -> Community {
@@ -720,7 +747,8 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
             logoURL: string(fields, "logoImageURL").flatMap(URL.init(string:)),
             homepageURL: string(fields, "homepageURL").flatMap(URL.init(string:)),
             isActive: bool(fields, "isActive") ?? true,
-            joinEnabled: bool(fields, "communityJoinEnabled") ?? false
+            joinEnabled: bool(fields, "communityJoinEnabled") ?? false,
+            surfingVisible: bool(fields, "communitySurfingVisible") ?? false
         )
     }
 
@@ -785,7 +813,7 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
     private func requestJSON(
         path: String,
         method: String,
-        idToken: String,
+        idToken: String?,
         body: [String: Any]? = nil
     ) async throws -> Any {
         guard let url = URL(
@@ -795,7 +823,9 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.timeoutInterval = 15
-        request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+        if let idToken {
+            request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+        }
         if let body {
             request.setValue("application/json; charset=UTF-8", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
