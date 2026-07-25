@@ -228,6 +228,24 @@ private final class CommunityFeatureModel: ObservableObject {
             : "このコミュニティは現在、参加申請を受け付けていません。"
     }
 
+    func apply(to community: Community) {
+        guard isLoggedIn else {
+            message = "参加申請には、マイページから会員登録またはログインが必要です。"
+            return
+        }
+        guard community.joinEnabled else {
+            message = "このコミュニティは現在、参加申請を受け付けていません。"
+            return
+        }
+        candidate = community
+        code = community.code
+        apply()
+    }
+
+    func membershipStatus(for communityId: String) -> CommunityMembershipStatus? {
+        items.first { $0.1.id == communityId }?.0.status
+    }
+
     func search() {
         guard let token = session.authenticationToken else {
             message = "先にマイページからログインしてください。"
@@ -601,6 +619,15 @@ private struct CommunityRootView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    if model.isLoading { ProgressView() }
+                    if let message = model.message {
+                        Text(message)
+                            .foregroundStyle(.secondary)
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.secondary.opacity(0.08))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
                     publicCommunitySection
                     if !model.isLoggedIn {
                         ContentUnavailableView(
@@ -614,10 +641,6 @@ private struct CommunityRootView: View {
                             applicationReviewSection
                         }
                         joinSection
-                    }
-                    if model.isLoading { ProgressView() }
-                    if let message = model.message {
-                        Text(message).foregroundStyle(.secondary)
                     }
                 }
                 .padding(24)
@@ -660,16 +683,30 @@ private struct CommunityRootView: View {
                         if let homepage = community.homepageURL {
                             Link("ホームページを見る", destination: homepage)
                         }
-                        Text(community.joinEnabled ? "参加申請受付中" : "現在は参加申請受付外")
+                        let membershipStatus = model.membershipStatus(for: community.id)
+                        Text(publicStatusText(
+                            membershipStatus: membershipStatus,
+                            joinEnabled: community.joinEnabled
+                        ))
                             .font(.footnote)
-                            .foregroundStyle(
-                                community.joinEnabled ? Color.green : Color.secondary
-                            )
-                        Button("このコミュニティへ参加") {
-                            model.prepareApplication(for: community)
+                            .foregroundStyle(publicStatusColor(membershipStatus))
+                        if membershipStatus == .approved {
+                            Button(
+                                model.session.selectedCommunityId == community.id
+                                    ? "選択中のコミュニティ"
+                                    : "このコミュニティへ切替"
+                            ) {
+                                model.selectCommunity(community.id)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(model.session.selectedCommunityId == community.id)
+                        } else if membershipStatus == nil {
+                            Button("このコミュニティへ参加申請") {
+                                model.apply(to: community)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(!community.joinEnabled || model.isLoading)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(!community.joinEnabled)
                     }
                     .padding(.top, 8)
                 } label: {
@@ -813,6 +850,22 @@ private struct CommunityRootView: View {
         case .approved: .green
         case .rejected: .red
         }
+    }
+
+    private func publicStatusText(
+        membershipStatus: CommunityMembershipStatus?,
+        joinEnabled: Bool
+    ) -> String {
+        if let membershipStatus {
+            return statusText(membershipStatus)
+        }
+        return joinEnabled ? "参加申請受付中" : "現在は参加申請受付外"
+    }
+
+    private func publicStatusColor(
+        _ membershipStatus: CommunityMembershipStatus?
+    ) -> Color {
+        membershipStatus.map(statusColor) ?? .secondary
     }
 }
 

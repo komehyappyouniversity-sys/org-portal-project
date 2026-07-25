@@ -76,6 +76,26 @@ class CommunityFeatureModel(
         )
     }
 
+    fun applyTo(community: Community) {
+        if (session.state.value.authenticationToken == null) {
+            mutableState.value = mutableState.value.copy(
+                message = "参加申請には、マイページから会員登録またはログインが必要です。",
+            )
+            return
+        }
+        if (!community.joinEnabled) {
+            mutableState.value = mutableState.value.copy(
+                message = "このコミュニティは現在、参加申請を受け付けていません。",
+            )
+            return
+        }
+        mutableState.value = mutableState.value.copy(
+            code = community.code,
+            candidate = community,
+        )
+        apply()
+    }
+
     fun receiveScan(value: String) {
         updateCode(CommunityCodeParser.parse(value) ?: value)
         search()
