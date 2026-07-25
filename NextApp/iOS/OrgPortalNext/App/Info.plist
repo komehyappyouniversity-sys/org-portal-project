@@ -22,6 +22,8 @@
     <string>1</string>
     <key>FirebaseProjectID</key>
     <string>$(FIREBASE_PROJECT_ID)</string>
+    <key>FirebaseWebAPIKey</key>
+    <string>$(FIREBASE_WEB_API_KEY)</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>

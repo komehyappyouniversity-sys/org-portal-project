@@ -14,7 +14,12 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
-        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"demo-org-portal-next\"")
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"kome-org-portal-next-dev\"")
+        buildConfigField(
+            "String",
+            "FIREBASE_WEB_API_KEY",
+            "\"AIzaSyDiVMzyOYl143PI43c6GwWPAQLXHEC9pIU\"",
+        )
     }
 
     buildTypes {

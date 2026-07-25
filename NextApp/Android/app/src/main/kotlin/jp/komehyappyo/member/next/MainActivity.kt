@@ -10,7 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
 import jp.komehyappyo.member.next.core.data.FirebaseEnvironmentGuard
-import jp.komehyappyo.member.next.core.data.UnavailableAccountAuthRepository
+import jp.komehyappyo.member.next.core.data.FirebaseRestAccountAuthRepository
 import jp.komehyappyo.member.next.core.data.LocalDiaryPhotoStore
 import jp.komehyappyo.member.next.core.data.OrgPortalDatabase
 import jp.komehyappyo.member.next.core.data.RoomDiaryRepository
@@ -62,7 +62,13 @@ class MainActivity : ComponentActivity() {
     private fun NextApp() {
         val appSession = remember { AppSession() }
         val accountFactory = remember {
-            AccountFeatureModel.Factory(UnavailableAccountAuthRepository(), appSession)
+            AccountFeatureModel.Factory(
+                FirebaseRestAccountAuthRepository(
+                    apiKey = BuildConfig.FIREBASE_WEB_API_KEY,
+                    projectId = BuildConfig.FIREBASE_PROJECT_ID,
+                ),
+                appSession,
+            )
         }
         val accountModel: AccountFeatureModel = viewModel(factory = accountFactory)
         val database = remember { OrgPortalDatabase.create(applicationContext) }

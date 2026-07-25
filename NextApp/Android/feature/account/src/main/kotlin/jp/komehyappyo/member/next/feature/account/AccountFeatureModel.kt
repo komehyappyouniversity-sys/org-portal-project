@@ -33,8 +33,20 @@ class AccountFeatureModel(
         mutableState.value = mutableState.value.copy(screen = screen, message = null)
     }
 
-    fun register(email: String, password: String, confirmation: String) {
-        val credentials = AccountCredentials(email, password, confirmation)
+    fun register(
+        name: String,
+        furigana: String,
+        email: String,
+        password: String,
+        confirmation: String,
+    ) {
+        val credentials = AccountCredentials(
+            email = email,
+            password = password,
+            passwordConfirmation = confirmation,
+            name = name,
+            furigana = furigana,
+        )
         credentials.validationError()?.let {
             mutableState.value = mutableState.value.copy(message = it)
             return
@@ -75,11 +87,19 @@ class AccountFeatureModel(
         viewModelScope.launch {
             block()
                 .onSuccess { account ->
-                    session.updateStage(UserStage.Member, account.userId)
-                    mutableState.value = AccountUiState(
-                        accessState = AccountAccessState.Member,
-                        message = "ログインしました。",
-                    )
+                    if (account.emailVerified) {
+                        session.updateStage(UserStage.Guest, account.userId)
+                        mutableState.value = AccountUiState(
+                            accessState = AccountAccessState.PendingApproval,
+                            message = "ログインしました。コミュニティへの参加承認をお待ちください。",
+                        )
+                    } else {
+                        session.updateStage(UserStage.Guest, account.userId)
+                        mutableState.value = AccountUiState(
+                            accessState = AccountAccessState.Guest,
+                            message = "確認メールを送信しました。メール内のリンクで確認後、ログインしてください。",
+                        )
+                    }
                 }
                 .onFailure { showError(it) }
         }

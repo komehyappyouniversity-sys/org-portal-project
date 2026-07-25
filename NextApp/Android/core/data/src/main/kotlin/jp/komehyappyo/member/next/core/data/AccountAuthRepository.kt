@@ -5,6 +5,7 @@ import jp.komehyappyo.member.next.core.model.AccountCredentials
 data class AuthenticatedAccount(
     val userId: String,
     val email: String,
+    val emailVerified: Boolean,
 )
 
 interface AccountAuthRepository {
