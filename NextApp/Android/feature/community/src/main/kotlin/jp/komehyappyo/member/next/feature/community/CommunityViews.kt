@@ -74,7 +74,7 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                 )
                 if (membership.status == CommunityMembershipStatus.Approved) {
                     OutlinedButton(
-                        onClick = { model.session.selectCommunity(community.id) },
+                        onClick = { model.selectCommunity(community.id) },
                         enabled = sessionState.selectedCommunityId != community.id,
                     ) {
                         Text(
@@ -92,6 +92,51 @@ fun CommunityRoot(model: CommunityFeatureModel) {
         if (sessionState.previousCommunityId != null) {
             TextButton(onClick = model.session::returnToPreviousCommunity) {
                 Text("前のコミュニティへ戻る")
+            }
+        }
+
+        if (state.adminAccess?.canReviewMembers == true) {
+            Text("参加申請の承認")
+            if (state.pendingApplications.isEmpty()) {
+                Text("承認待ちの申請はありません。")
+            }
+            state.pendingApplications.forEach { application ->
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(application.applicantName ?: "申請者")
+                    application.applicantFurigana?.let { Text(it) }
+                    Text(application.applicantEmail ?: "利用者ID: ${application.userId}")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = {
+                                model.review(
+                                    application,
+                                    CommunityMembershipStatus.Approved,
+                                )
+                            },
+                            enabled = state.reviewingUserId == null,
+                        ) {
+                            Text("承認")
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                model.review(
+                                    application,
+                                    CommunityMembershipStatus.Rejected,
+                                )
+                            },
+                            enabled = state.reviewingUserId == null,
+                        ) {
+                            Text("却下")
+                        }
+                    }
+                    if (state.reviewingUserId == application.userId) {
+                        CircularProgressIndicator()
+                    }
+                }
+                HorizontalDivider()
             }
         }
 

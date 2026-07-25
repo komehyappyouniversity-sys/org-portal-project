@@ -1,6 +1,7 @@
 package jp.komehyappyo.member.next.core.data
 
 import jp.komehyappyo.member.next.core.model.Community
+import jp.komehyappyo.member.next.core.model.CommunityAdminAccess
 import jp.komehyappyo.member.next.core.model.CommunityCodeParser
 import jp.komehyappyo.member.next.core.model.CommunityMembership
 import jp.komehyappyo.member.next.core.model.CommunityMembershipStatus
@@ -19,9 +20,29 @@ interface CommunityRepository {
         userId: String,
         idToken: String,
     ): Result<List<Pair<CommunityMembership, Community>>>
+    suspend fun adminAccess(
+        communityId: String,
+        userId: String,
+        idToken: String,
+    ): Result<CommunityAdminAccess?>
+    suspend fun pendingApplications(
+        communityId: String,
+        idToken: String,
+    ): Result<List<CommunityMembership>>
+    suspend fun reviewApplication(
+        communityId: String,
+        applicantUserId: String,
+        reviewerUserId: String,
+        status: CommunityMembershipStatus,
+        idToken: String,
+    ): Result<Unit>
 }
 
 class CommunityRepositoryException(message: String) : IllegalStateException(message)
+private class CommunityHttpException(
+    val status: Int,
+    message: String,
+) : IllegalStateException(message)
 
 class FirebaseRestCommunityRepository(
     private val projectId: String,
@@ -47,6 +68,7 @@ class FirebaseRestCommunityRepository(
         idToken: String,
     ): Result<Unit> = runCatching {
         val now = Instant.now().toString()
+        val profile = runCatching { memberProfile(userId, idToken) }.getOrNull()
         val fields = JSONObject()
             .put("uid", stringValue(userId))
             .put("userId", stringValue(userId))
@@ -56,6 +78,11 @@ class FirebaseRestCommunityRepository(
             .put("role", stringValue("member"))
             .put("createdAt", timestampValue(now))
             .put("updatedAt", timestampValue(now))
+        profile?.let {
+            string(it, "name")?.let { value -> fields.put("applicantName", stringValue(value)) }
+            string(it, "furigana")?.let { value -> fields.put("applicantFurigana", stringValue(value)) }
+            string(it, "email")?.let { value -> fields.put("applicantEmail", stringValue(value)) }
+        }
         request(
             path = "documents/organizations/${community.id}/members/$userId",
             method = "PATCH",
@@ -102,6 +129,162 @@ class FirebaseRestCommunityRepository(
                 add(membership to community)
             }
         }.sortedBy { it.second.name }
+    }
+
+    override suspend fun adminAccess(
+        communityId: String,
+        userId: String,
+        idToken: String,
+    ): Result<CommunityAdminAccess?> = runCatching {
+        val document = try {
+            request(
+                "documents/organizations/$communityId/admins/$userId",
+                "GET",
+                idToken,
+                null,
+            ) as JSONObject
+        } catch (error: CommunityHttpException) {
+            if (error.status == 403 || error.status == 404) return@runCatching null
+            throw error
+        }
+        val fields = document.optJSONObject("fields") ?: return@runCatching null
+        if (boolean(fields, "isActive") == false) return@runCatching null
+        val permissions = permissionValues(fields.optJSONObject("permissions"))
+        CommunityAdminAccess(
+            communityId = communityId,
+            userId = userId,
+            role = string(fields, "role") ?: "admin",
+            permissions = permissions,
+            isLegacyFullAccess = !fields.has("permissions"),
+        )
+    }
+
+    override suspend fun pendingApplications(
+        communityId: String,
+        idToken: String,
+    ): Result<List<CommunityMembership>> = runCatching {
+        val body = JSONObject().put(
+            "structuredQuery",
+            JSONObject()
+                .put("from", JSONArray().put(JSONObject().put("collectionId", "members")))
+                .put(
+                    "where",
+                    JSONObject().put(
+                        "fieldFilter",
+                        JSONObject()
+                            .put("field", JSONObject().put("fieldPath", "status"))
+                            .put("op", "EQUAL")
+                            .put("value", stringValue("pending")),
+                    ),
+                ),
+        )
+        val rows = request(
+            "documents/organizations/$communityId:runQuery",
+            "POST",
+            idToken,
+            body,
+        ) as JSONArray
+        buildList {
+            for (index in 0 until rows.length()) {
+                val document = rows.optJSONObject(index)?.optJSONObject("document") ?: continue
+                parseMembership(document, null)?.let(::add)
+            }
+        }.sortedBy { it.createdAt.orEmpty() }
+    }
+
+    override suspend fun reviewApplication(
+        communityId: String,
+        applicantUserId: String,
+        reviewerUserId: String,
+        status: CommunityMembershipStatus,
+        idToken: String,
+    ): Result<Unit> = runCatching {
+        require(
+            status == CommunityMembershipStatus.Approved ||
+                status == CommunityMembershipStatus.Rejected,
+        ) { "承認または却下を指定してください。" }
+        val statusValue = when (status) {
+            CommunityMembershipStatus.Approved -> "approved"
+            CommunityMembershipStatus.Rejected -> "rejected"
+            CommunityMembershipStatus.Pending -> error("承認または却下を指定してください。")
+        }
+        val databaseRoot =
+            "projects/$projectId/databases/(default)/documents"
+        val membershipName =
+            "$databaseRoot/organizations/$communityId/members/$applicantUserId"
+        val auditName =
+            "$databaseRoot/organizations/$communityId/auditLogs/" +
+                java.util.UUID.randomUUID().toString()
+        val membershipFields = JSONObject()
+            .put("status", stringValue(statusValue))
+            .put("reviewedByUserId", stringValue(reviewerUserId))
+        val auditFields = JSONObject()
+            .put(
+                "action",
+                stringValue(
+                    if (status == CommunityMembershipStatus.Approved) {
+                        "membership.approved"
+                    } else {
+                        "membership.rejected"
+                    },
+                ),
+            )
+            .put("actorUserId", stringValue(reviewerUserId))
+            .put("targetUserId", stringValue(applicantUserId))
+            .put("communityId", stringValue(communityId))
+        val writes = JSONArray()
+            .put(
+                JSONObject()
+                    .put(
+                        "update",
+                        JSONObject()
+                            .put("name", membershipName)
+                            .put("fields", membershipFields),
+                    )
+                    .put(
+                        "updateMask",
+                        JSONObject().put(
+                            "fieldPaths",
+                            JSONArray()
+                                .put("status")
+                                .put("reviewedByUserId"),
+                        ),
+                    )
+                    .put(
+                        "updateTransforms",
+                        JSONArray()
+                            .put(serverTimestamp("updatedAt"))
+                            .put(serverTimestamp("reviewedAt")),
+                    )
+                    .put(
+                        "currentDocument",
+                        JSONObject().put("exists", true),
+                    ),
+            )
+            .put(
+                JSONObject()
+                    .put(
+                        "update",
+                        JSONObject()
+                            .put("name", auditName)
+                            .put("fields", auditFields),
+                    )
+                    .put(
+                        "updateTransforms",
+                        JSONArray().put(serverTimestamp("createdAt")),
+                    )
+                    .put(
+                        "currentDocument",
+                        JSONObject().put("exists", false),
+                    ),
+            )
+        request(
+            "documents:commit",
+            "POST",
+            idToken,
+            JSONObject().put("writes", writes),
+        )
+        Unit
     }
 
     private suspend fun queryCommunity(code: String, idToken: String): Community {
@@ -155,7 +338,7 @@ class FirebaseRestCommunityRepository(
 
     private fun parseMembership(
         document: JSONObject,
-        userId: String,
+        userId: String?,
     ): CommunityMembership? {
         val fields = document.optJSONObject("fields") ?: return null
         val parts = document.optString("name").split("/")
@@ -168,13 +351,27 @@ class FirebaseRestCommunityRepository(
             else -> return null
         }
         return CommunityMembership(
-            id = parts.lastOrNull() ?: userId,
+            id = parts.lastOrNull() ?: userId.orEmpty(),
             communityId = parts[organizationIndex + 1],
-            userId = userId,
+            userId = string(fields, "uid") ?: string(fields, "userId") ?: userId.orEmpty(),
             status = status,
             role = string(fields, "role") ?: "member",
             joinedAt = timestamp(fields, "joinedAt"),
+            applicantName = string(fields, "applicantName"),
+            applicantFurigana = string(fields, "applicantFurigana"),
+            applicantEmail = string(fields, "applicantEmail"),
+            createdAt = timestamp(fields, "createdAt"),
         )
+    }
+
+    private suspend fun memberProfile(userId: String, idToken: String): JSONObject {
+        val document = request(
+            "documents/memberPrivate/$userId",
+            "GET",
+            idToken,
+            null,
+        ) as JSONObject
+        return document.optJSONObject("fields") ?: JSONObject()
     }
 
     private suspend fun request(
@@ -211,7 +408,7 @@ class FirebaseRestCommunityRepository(
                 } else {
                     "通信に失敗しました。時間をおいて再度お試しください。"
                 }
-                throw CommunityRepositoryException(message)
+                throw CommunityHttpException(status, message)
             }
             val text = connection.inputStream.bufferedReader().use { it.readText() }
             if (text.trimStart().startsWith("[")) JSONArray(text) else JSONObject(text)
@@ -222,10 +419,42 @@ class FirebaseRestCommunityRepository(
 
     private fun stringValue(value: String) = JSONObject().put("stringValue", value)
     private fun timestampValue(value: String) = JSONObject().put("timestampValue", value)
+    private fun serverTimestamp(fieldPath: String) = JSONObject()
+        .put("fieldPath", fieldPath)
+        .put("setToServerValue", "REQUEST_TIME")
     private fun string(fields: JSONObject, key: String): String? =
         fields.optJSONObject(key)?.optString("stringValue")?.takeIf { it.isNotEmpty() }
     private fun boolean(fields: JSONObject, key: String): Boolean? =
         fields.optJSONObject(key)?.takeIf { it.has("booleanValue") }?.optBoolean("booleanValue")
     private fun timestamp(fields: JSONObject, key: String): String? =
         fields.optJSONObject(key)?.optString("timestampValue")?.takeIf { it.isNotEmpty() }
+    private fun permissionValues(value: JSONObject?): Set<String> {
+        if (value == null) return emptySet()
+        value.optJSONObject("arrayValue")
+            ?.optJSONArray("values")
+            ?.let { values ->
+                return buildSet {
+                    for (index in 0 until values.length()) {
+                        values.optJSONObject(index)
+                            ?.optString("stringValue")
+                            ?.takeIf { it.isNotEmpty() }
+                            ?.let(::add)
+                    }
+                }
+            }
+        value.optJSONObject("mapValue")
+            ?.optJSONObject("fields")
+            ?.let { fields ->
+                return buildSet {
+                    val keys = fields.keys()
+                    while (keys.hasNext()) {
+                        val key = keys.next()
+                        if (fields.optJSONObject(key)?.optBoolean("booleanValue") == true) {
+                            add(key)
+                        }
+                    }
+                }
+            }
+        return emptySet()
+    }
 }

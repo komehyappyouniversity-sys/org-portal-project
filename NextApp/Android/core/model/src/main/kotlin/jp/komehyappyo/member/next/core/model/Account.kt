@@ -32,7 +32,30 @@ data class CommunityMembership(
     val status: CommunityMembershipStatus,
     val role: String = "member",
     val joinedAt: String? = null,
+    val applicantName: String? = null,
+    val applicantFurigana: String? = null,
+    val applicantEmail: String? = null,
+    val createdAt: String? = null,
 )
+
+data class CommunityAdminAccess(
+    val communityId: String,
+    val userId: String,
+    val role: String,
+    val permissions: Set<String>,
+    val isLegacyFullAccess: Boolean = false,
+) {
+    val canReviewMembers: Boolean
+        get() = role == "owner" ||
+            isLegacyFullAccess ||
+            MEMBER_REVIEW_PERMISSION in permissions ||
+            LEGACY_MEMBER_REVIEW_PERMISSION in permissions
+
+    companion object {
+        const val MEMBER_REVIEW_PERMISSION = "memberReview"
+        const val LEGACY_MEMBER_REVIEW_PERMISSION = "メンバー閲覧・承認"
+    }
+}
 
 object CommunityCodeParser {
     fun parse(value: String): String? {

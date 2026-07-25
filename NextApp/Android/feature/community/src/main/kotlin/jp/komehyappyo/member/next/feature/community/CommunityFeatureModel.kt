@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import jp.komehyappyo.member.next.core.data.CommunityRepository
 import jp.komehyappyo.member.next.core.model.Community
+import jp.komehyappyo.member.next.core.model.CommunityAdminAccess
 import jp.komehyappyo.member.next.core.model.CommunityCodeParser
 import jp.komehyappyo.member.next.core.model.CommunityMembership
 import jp.komehyappyo.member.next.core.model.CommunityMembershipStatus
@@ -19,6 +20,9 @@ data class CommunityUiState(
     val code: String = "",
     val candidate: Community? = null,
     val memberships: List<Pair<CommunityMembership, Community>> = emptyList(),
+    val adminAccess: CommunityAdminAccess? = null,
+    val pendingApplications: List<CommunityMembership> = emptyList(),
+    val reviewingUserId: String? = null,
     val isLoading: Boolean = false,
     val message: String? = null,
 )
@@ -102,8 +106,80 @@ class CommunityFeatureModel(
                         if (approved.isEmpty()) UserStage.Guest else UserStage.Member,
                         current.userId,
                     )
+                    refreshManagement()
                 }
                 .onFailure { showError(it) }
+        }
+    }
+
+    fun selectCommunity(communityId: String) {
+        session.selectCommunity(communityId)
+        refreshManagement()
+    }
+
+    fun review(
+        application: CommunityMembership,
+        status: CommunityMembershipStatus,
+    ) {
+        if (status == CommunityMembershipStatus.Pending) return
+        val current = session.state.value
+        val communityId = current.selectedCommunityId ?: return
+        val token = current.authenticationToken ?: return
+        mutableState.value = mutableState.value.copy(
+            reviewingUserId = application.userId,
+            message = null,
+        )
+        viewModelScope.launch {
+            repository.reviewApplication(
+                communityId = communityId,
+                applicantUserId = application.userId,
+                reviewerUserId = current.userId,
+                status = status,
+                idToken = token,
+            ).onSuccess {
+                mutableState.value = mutableState.value.copy(
+                    message = if (status == CommunityMembershipStatus.Approved) {
+                        "参加申請を承認しました。"
+                    } else {
+                        "参加申請を却下しました。"
+                    },
+                )
+                refreshManagement()
+            }.onFailure(::showError)
+            mutableState.value = mutableState.value.copy(reviewingUserId = null)
+        }
+    }
+
+    private fun refreshManagement() {
+        val current = session.state.value
+        val communityId = current.selectedCommunityId
+        val token = current.authenticationToken
+        if (communityId == null || token == null) {
+            mutableState.value = mutableState.value.copy(
+                adminAccess = null,
+                pendingApplications = emptyList(),
+            )
+            return
+        }
+        viewModelScope.launch {
+            repository.adminAccess(communityId, current.userId, token)
+                .onSuccess { access ->
+                    mutableState.value = mutableState.value.copy(adminAccess = access)
+                    if (access?.canReviewMembers == true) {
+                        repository.pendingApplications(communityId, token)
+                            .onSuccess { applications ->
+                                mutableState.value = mutableState.value.copy(
+                                    pendingApplications = applications,
+                                )
+                            }
+                            .onFailure(::showError)
+                    } else {
+                        mutableState.value = mutableState.value.copy(
+                            pendingApplications = emptyList(),
+                        )
+                    }
+                }
+                .onFailure(::showError)
         }
     }
 

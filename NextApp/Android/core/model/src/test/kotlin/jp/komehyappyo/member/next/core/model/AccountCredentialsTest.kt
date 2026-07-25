@@ -2,8 +2,10 @@ package jp.komehyappyo.member.next.core.model
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class AccountCredentialsTest {
     @Test
@@ -76,5 +78,42 @@ class AccountCredentialsTest {
     fun communityCodeParserRejectsEmptyOrExcessivelyLongValues() {
         assertNull(CommunityCodeParser.parse("   "))
         assertNull(CommunityCodeParser.parse("a".repeat(101)))
+    }
+
+    @Test
+    fun communityAdminAccessSupportsOwnerExplicitAndLegacyPermissions() {
+        assertTrue(
+            CommunityAdminAccess(
+                communityId = "k100u",
+                userId = "owner",
+                role = "owner",
+                permissions = emptySet(),
+            ).canReviewMembers,
+        )
+        assertTrue(
+            CommunityAdminAccess(
+                communityId = "k100u",
+                userId = "manager",
+                role = "manager",
+                permissions = setOf(CommunityAdminAccess.MEMBER_REVIEW_PERMISSION),
+            ).canReviewMembers,
+        )
+        assertTrue(
+            CommunityAdminAccess(
+                communityId = "k100u",
+                userId = "legacy",
+                role = "admin",
+                permissions = emptySet(),
+                isLegacyFullAccess = true,
+            ).canReviewMembers,
+        )
+        assertFalse(
+            CommunityAdminAccess(
+                communityId = "k100u",
+                userId = "accountant",
+                role = "manager",
+                permissions = setOf("accountingRead"),
+            ).canReviewMembers,
+        )
     }
 }

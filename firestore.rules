@@ -27,6 +27,42 @@ service cloud.firestore {
       return isAdmin(organizationId) || isSuperAdmin();
     }
 
+    function canReviewMembers(organizationId) {
+      let adminPath = /databases/$(database)/documents/organizations/$(organizationId)/admins/$(request.auth.uid);
+      let admin = isSignedIn() && exists(adminPath) ? get(adminPath).data : {};
+      return isSuperAdmin()
+        || (
+          isAdmin(organizationId)
+          && (
+            (
+              admin.keys().hasAny(["role"])
+              && admin.role == "owner"
+            )
+            || !admin.keys().hasAny(["permissions"])
+            || (
+              admin.permissions is list
+              && (
+                "memberReview" in admin.permissions
+                || "メンバー閲覧・承認" in admin.permissions
+              )
+            )
+            || (
+              admin.permissions is map
+              && (
+                (
+                  admin.permissions.keys().hasAny(["memberReview"])
+                  && admin.permissions["memberReview"] == true
+                )
+                || (
+                  admin.permissions.keys().hasAny(["メンバー閲覧・承認"])
+                  && admin.permissions["メンバー閲覧・承認"] == true
+                )
+              )
+            )
+          )
+        );
+    }
+
     function isOrgActive(organizationId) {
       return exists(/databases/$(database)/documents/organizations/$(organizationId))
         && get(/databases/$(database)/documents/organizations/$(organizationId)).data.isActive == true;
@@ -40,6 +76,9 @@ service cloud.firestore {
           "communityId",
           "role",
           "status",
+          "applicantName",
+          "applicantFurigana",
+          "applicantEmail",
           "createdAt",
           "updatedAt"
         ])
@@ -58,7 +97,22 @@ service cloud.firestore {
         && data.organizationId == organizationId
         && data.communityId == organizationId
         && data.role == "member"
-        && data.status == "pending";
+        && data.status == "pending"
+        && (
+          !data.keys().hasAny(["applicantName"])
+          || data.applicantName is string
+        )
+        && (
+          !data.keys().hasAny(["applicantFurigana"])
+          || data.applicantFurigana is string
+        )
+        && (
+          !data.keys().hasAny(["applicantEmail"])
+          || (
+            data.applicantEmail is string
+            && data.applicantEmail == request.auth.token.email
+          )
+        );
     }
 
     function isSharedManualData(data) {
@@ -162,7 +216,7 @@ service cloud.firestore {
       }
 
       match /members/{memberUid} {
-        allow read: if isOrgStaff(organizationId) || isOwner(memberUid);
+        allow read: if canReviewMembers(organizationId) || isOwner(memberUid);
 
         allow create: if isOwner(memberUid)
           && isMembershipApplication(
@@ -171,7 +225,18 @@ service cloud.firestore {
             memberUid
           );
 
-        allow update: if isOrgStaff(organizationId)
+        allow update: if (
+            canReviewMembers(organizationId)
+            && resource.data.status == "pending"
+            && request.resource.data.status in ["approved", "rejected"]
+            && request.resource.data.reviewedByUserId == request.auth.uid
+            && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+              "status",
+              "reviewedByUserId",
+              "reviewedAt",
+              "updatedAt"
+            ])
+          )
           || (
             isOwner(memberUid)
             && request.resource.data.uid == resource.data.uid
@@ -185,7 +250,34 @@ service cloud.firestore {
             ])
           );
 
-        allow delete: if isOrgStaff(organizationId);
+        allow delete: if canReviewMembers(organizationId);
+      }
+
+      match /auditLogs/{auditId} {
+        allow read: if canReviewMembers(organizationId);
+        allow create: if canReviewMembers(organizationId)
+          && request.resource.data.keys().hasOnly([
+            "action",
+            "actorUserId",
+            "targetUserId",
+            "communityId",
+            "createdAt"
+          ])
+          && request.resource.data.keys().hasAll([
+            "action",
+            "actorUserId",
+            "targetUserId",
+            "communityId",
+            "createdAt"
+          ])
+          && request.resource.data.action in [
+            "membership.approved",
+            "membership.rejected"
+          ]
+          && request.resource.data.actorUserId == request.auth.uid
+          && request.resource.data.targetUserId is string
+          && request.resource.data.communityId == organizationId;
+        allow update, delete: if false;
       }
 
       match /memberRegistrations/{memberUid} {
@@ -287,7 +379,7 @@ service cloud.firestore {
       }
 
       match /{document=**} {
-        allow read, write: if isOrgStaff(organizationId);
+        allow read, write: if isSuperAdmin();
       }
     }
 
@@ -295,6 +387,11 @@ service cloud.firestore {
     match /{path=**}/members/{memberUid} {
       allow read: if isSignedIn()
         && resource.data.uid == request.auth.uid;
+    }
+
+    // 管理者本人の権限確認用。
+    match /{path=**}/admins/{adminUid} {
+      allow read: if isOwner(adminUid);
     }
 
     match /{document=**} {

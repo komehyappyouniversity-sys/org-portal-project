@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "NextApp/**"
+      - "firestore.rules"
+      - "storage.rules"
       - "docs/**"
       - "scripts/generate_ios_project.rb"
       - ".github/workflows/next-app-ci.yml"
@@ -12,6 +14,8 @@ on:
       - main
     paths:
       - "NextApp/**"
+      - "firestore.rules"
+      - "storage.rules"
       - "docs/**"
       - "scripts/generate_ios_project.rb"
       - ".github/workflows/next-app-ci.yml"
@@ -70,9 +74,6 @@ jobs:
   firebase-emulator:
     name: Firebase Emulator / smoke
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: NextApp/firebase
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-java@v5
@@ -86,6 +87,7 @@ jobs:
         run: >-
           npx --yes firebase-tools@15.24.0
           emulators:exec
+          --config firebase.emulator.json
           --project demo-org-portal-next
           --only auth,firestore,storage
           'node -e "process.exit(0)"'

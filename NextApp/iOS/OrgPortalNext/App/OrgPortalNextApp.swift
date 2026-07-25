@@ -170,6 +170,9 @@ private final class CommunityFeatureModel: ObservableObject {
     @Published var code = ""
     @Published private(set) var candidate: Community?
     @Published private(set) var items: [(CommunityMembership, Community)] = []
+    @Published private(set) var adminAccess: CommunityAdminAccess?
+    @Published private(set) var pendingApplications: [CommunityMembership] = []
+    @Published private(set) var reviewingUserId: String?
     @Published private(set) var isLoading = false
     @Published var message: String?
     @Published var showsScanner = false
@@ -248,9 +251,68 @@ private final class CommunityFeatureModel: ObservableObject {
                 session.selectCommunity(first.1.id)
             }
             session.updateUserStage(approved.isEmpty ? .guest : .member)
+            await refreshManagement()
             isLoading = false
         } catch {
             isLoading = false
+            message = error.localizedDescription
+        }
+    }
+
+    func selectCommunity(_ communityId: String) {
+        session.selectCommunity(communityId)
+        Task { await refreshManagement() }
+    }
+
+    func review(_ application: CommunityMembership, status: CommunityMembershipStatus) {
+        guard status == .approved || status == .rejected,
+              let communityId = session.selectedCommunityId,
+              let reviewerUserId = session.authenticatedUserId,
+              let token = session.authenticationToken else { return }
+        reviewingUserId = application.userId
+        message = nil
+        Task {
+            do {
+                try await repository.reviewApplication(
+                    communityId: communityId,
+                    applicantUserId: application.userId,
+                    reviewerUserId: reviewerUserId,
+                    status: status,
+                    idToken: token
+                )
+                message = status == .approved ? "参加申請を承認しました。" : "参加申請を却下しました。"
+                await refreshManagement()
+            } catch {
+                message = error.localizedDescription
+            }
+            reviewingUserId = nil
+        }
+    }
+
+    private func refreshManagement() async {
+        guard let communityId = session.selectedCommunityId,
+              let userId = session.authenticatedUserId,
+              let token = session.authenticationToken else {
+            adminAccess = nil
+            pendingApplications = []
+            return
+        }
+        do {
+            let access = try await repository.adminAccess(
+                communityId: communityId,
+                userId: userId,
+                idToken: token
+            )
+            adminAccess = access
+            pendingApplications = access?.canReviewMembers == true
+                ? try await repository.pendingApplications(
+                    communityId: communityId,
+                    idToken: token
+                )
+                : []
+        } catch {
+            adminAccess = nil
+            pendingApplications = []
             message = error.localizedDescription
         }
     }
@@ -271,6 +333,9 @@ private struct CommunityRootView: View {
                         )
                     } else {
                         membershipSection
+                        if model.adminAccess?.canReviewMembers == true {
+                            applicationReviewSection
+                        }
                         joinSection
                     }
                     if model.isLoading { ProgressView() }
@@ -312,7 +377,7 @@ private struct CommunityRootView: View {
                         Button(
                             model.session.selectedCommunityId == community.id ? "選択中" : "切替"
                         ) {
-                            model.session.selectCommunity(community.id)
+                            model.selectCommunity(community.id)
                         }
                         .disabled(model.session.selectedCommunityId == community.id)
                     }
@@ -325,6 +390,43 @@ private struct CommunityRootView: View {
                 Button("前のコミュニティへ戻る") {
                     model.session.returnToPreviousCommunity()
                 }
+            }
+        }
+    }
+
+    private var applicationReviewSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("参加申請の承認").font(.title2.bold())
+            if model.pendingApplications.isEmpty {
+                Text("承認待ちの申請はありません。").foregroundStyle(.secondary)
+            }
+            ForEach(model.pendingApplications, id: \.id) { application in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(application.applicantName ?? "申請者")
+                        .font(.headline)
+                    if let furigana = application.applicantFurigana {
+                        Text(furigana).font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Text(application.applicantEmail ?? "利用者ID: \(application.userId)")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                    HStack {
+                        Button("承認") { model.review(application, status: .approved) }
+                            .buttonStyle(.borderedProminent)
+                        Button("却下", role: .destructive) {
+                            model.review(application, status: .rejected)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .disabled(model.reviewingUserId != nil)
+                    if model.reviewingUserId == application.userId {
+                        ProgressView()
+                    }
+                }
+                .padding()
+                .background(.background)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
             }
         }
     }

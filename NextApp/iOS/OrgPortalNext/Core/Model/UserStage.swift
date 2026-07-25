@@ -60,6 +60,10 @@ public struct CommunityMembership: Identifiable, Equatable, Codable, Sendable {
     public let status: CommunityMembershipStatus
     public let role: String
     public let joinedAt: Date?
+    public let applicantName: String?
+    public let applicantFurigana: String?
+    public let applicantEmail: String?
+    public let createdAt: Date?
 
     public init(
         id: String,
@@ -67,7 +71,11 @@ public struct CommunityMembership: Identifiable, Equatable, Codable, Sendable {
         userId: String,
         status: CommunityMembershipStatus,
         role: String = "member",
-        joinedAt: Date? = nil
+        joinedAt: Date? = nil,
+        applicantName: String? = nil,
+        applicantFurigana: String? = nil,
+        applicantEmail: String? = nil,
+        createdAt: Date? = nil
     ) {
         self.id = id
         self.communityId = communityId
@@ -75,6 +83,42 @@ public struct CommunityMembership: Identifiable, Equatable, Codable, Sendable {
         self.status = status
         self.role = role
         self.joinedAt = joinedAt
+        self.applicantName = applicantName
+        self.applicantFurigana = applicantFurigana
+        self.applicantEmail = applicantEmail
+        self.createdAt = createdAt
+    }
+}
+
+public struct CommunityAdminAccess: Equatable, Codable, Sendable {
+    public static let memberReviewPermission = "memberReview"
+    public static let legacyMemberReviewPermission = "メンバー閲覧・承認"
+
+    public let communityId: String
+    public let userId: String
+    public let role: String
+    public let permissions: Set<String>
+    public let isLegacyFullAccess: Bool
+
+    public init(
+        communityId: String,
+        userId: String,
+        role: String,
+        permissions: Set<String>,
+        isLegacyFullAccess: Bool = false
+    ) {
+        self.communityId = communityId
+        self.userId = userId
+        self.role = role
+        self.permissions = permissions
+        self.isLegacyFullAccess = isLegacyFullAccess
+    }
+
+    public var canReviewMembers: Bool {
+        role == "owner"
+            || isLegacyFullAccess
+            || permissions.contains(Self.memberReviewPermission)
+            || permissions.contains(Self.legacyMemberReviewPermission)
     }
 }
 
