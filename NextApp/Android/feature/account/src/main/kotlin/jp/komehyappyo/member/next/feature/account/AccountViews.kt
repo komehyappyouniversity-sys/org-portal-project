@@ -84,6 +84,8 @@ private fun AccountOverview(state: AccountUiState, model: AccountFeatureModel) {
 
 @Composable
 private fun AccountForm(register: Boolean, state: AccountUiState, model: AccountFeatureModel) {
+    var name by remember { mutableStateOf("") }
+    var furigana by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf("") }
@@ -92,6 +94,20 @@ private fun AccountForm(register: Boolean, state: AccountUiState, model: Account
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(if (register) "会員登録" else "ログイン")
+        if (register) {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("名前") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = furigana,
+                onValueChange = { furigana = it },
+                label = { Text("ふりがな") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         OutlinedTextField(
             value = email,
             onValueChange = { email = it },
@@ -117,7 +133,9 @@ private fun AccountForm(register: Boolean, state: AccountUiState, model: Account
         }
         Button(
             onClick = {
-                if (register) model.register(email, password, confirmation)
+                if (register) {
+                    model.register(name, furigana, email, password, confirmation)
+                }
                 else model.login(email, password)
             },
             enabled = !state.isLoading,

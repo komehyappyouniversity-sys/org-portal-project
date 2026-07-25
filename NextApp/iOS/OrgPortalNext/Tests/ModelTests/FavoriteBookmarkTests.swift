@@ -7,7 +7,9 @@ final class FavoriteBookmarkTests: XCTestCase {
             AccountCredentials(
                 email: "member@example.com",
                 password: "password",
-                passwordConfirmation: "password"
+                passwordConfirmation: "password",
+                name: "根津 孝誠",
+                furigana: "ねづ こうせい"
             ).validationMessage()
         )
         XCTAssertNotNil(
@@ -17,7 +19,16 @@ final class FavoriteBookmarkTests: XCTestCase {
             AccountCredentials(
                 email: "member@example.com",
                 password: "password",
-                passwordConfirmation: "different"
+                passwordConfirmation: "different",
+                name: "根津 孝誠",
+                furigana: "ねづ こうせい"
+            ).validationMessage()
+        )
+        XCTAssertNotNil(
+            AccountCredentials(
+                email: "member@example.com",
+                password: "password",
+                passwordConfirmation: "password"
             ).validationMessage()
         )
     }

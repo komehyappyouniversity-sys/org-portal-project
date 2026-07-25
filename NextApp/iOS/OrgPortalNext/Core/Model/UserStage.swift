@@ -21,18 +21,32 @@ public struct AccountCredentials: Equatable, Sendable {
     public let email: String
     public let password: String
     public let passwordConfirmation: String?
+    public let name: String?
+    public let furigana: String?
 
     public init(
         email: String,
         password: String,
-        passwordConfirmation: String? = nil
+        passwordConfirmation: String? = nil,
+        name: String? = nil,
+        furigana: String? = nil
     ) {
         self.email = email
         self.password = password
         self.passwordConfirmation = passwordConfirmation
+        self.name = name
+        self.furigana = furigana
     }
 
     public func validationMessage() -> String? {
+        if passwordConfirmation != nil,
+           name?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
+            return "名前を入力してください。"
+        }
+        if passwordConfirmation != nil,
+           furigana?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
+            return "ふりがなを入力してください。"
+        }
         let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let parts = normalizedEmail.split(separator: "@", omittingEmptySubsequences: false)
         guard parts.count == 2, parts[1].contains(".") else {

@@ -11,8 +11,16 @@ data class AccountCredentials(
     val email: String,
     val password: String,
     val passwordConfirmation: String? = null,
+    val name: String? = null,
+    val furigana: String? = null,
 ) {
     fun validationError(): String? {
+        if (passwordConfirmation != null && name.orEmpty().trim().isEmpty()) {
+            return "名前を入力してください。"
+        }
+        if (passwordConfirmation != null && furigana.orEmpty().trim().isEmpty()) {
+            return "ふりがなを入力してください。"
+        }
         val normalizedEmail = email.trim()
         if (!EMAIL_PATTERN.matches(normalizedEmail)) {
             return "メールアドレスの形式を確認してください。"

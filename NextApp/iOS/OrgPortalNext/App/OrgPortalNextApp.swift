@@ -14,7 +14,7 @@ struct OrgPortalNextApp: App {
     init() {
         let projectId = Bundle.main.object(forInfoDictionaryKey: "FirebaseProjectID") as? String ?? ""
         let firebaseConfiguration = FirebaseRuntimeConfiguration(
-            environment: .emulator,
+            environment: .development,
             projectId: projectId,
             isDebugBuild: true,
             productionProjectId: "ictnagaoka-member"
@@ -59,10 +59,18 @@ private struct AppBootstrapView: View {
 
     init(modelContainer: ModelContainer) {
         let session = AppSession()
+        let firebaseAPIKey = Bundle.main.object(
+            forInfoDictionaryKey: "FirebaseWebAPIKey"
+        ) as? String ?? ""
         _appSession = StateObject(wrappedValue: session)
         _accountModel = StateObject(
             wrappedValue: AccountFeatureModel(
-                repository: UnavailableAccountAuthRepository(),
+                repository: FirebaseRESTAccountAuthRepository(
+                    apiKey: firebaseAPIKey,
+                    projectId: Bundle.main.object(
+                        forInfoDictionaryKey: "FirebaseProjectID"
+                    ) as? String ?? ""
+                ),
                 session: session
             )
         )
@@ -172,11 +180,19 @@ private final class AccountFeatureModel: ObservableObject {
         message = nil
     }
 
-    func register(email: String, password: String, confirmation: String) {
+    func register(
+        name: String,
+        furigana: String,
+        email: String,
+        password: String,
+        confirmation: String
+    ) {
         let credentials = AccountCredentials(
             email: email,
             password: password,
-            passwordConfirmation: confirmation
+            passwordConfirmation: confirmation,
+            name: name,
+            furigana: furigana
         )
         guard validate(credentials) else { return }
         authenticate { try await self.repository.register(credentials: credentials) }
@@ -222,10 +238,12 @@ private final class AccountFeatureModel: ObservableObject {
         Task {
             do {
                 let account = try await operation()
-                session.updateUserStage(.member)
-                accessState = .member
+                session.updateUserStage(.guest)
+                accessState = account.emailVerified ? .pendingApproval : .guest
                 isLoading = false
-                message = "\(account.email)でログインしました。"
+                message = account.emailVerified
+                    ? "\(account.email)でログインしました。コミュニティへの参加承認をお待ちください。"
+                    : "確認メールを送信しました。メール内のリンクで確認後、ログインしてください。"
                 screen = .overview
             } catch {
                 show(error)
@@ -304,6 +322,8 @@ private struct AccountRootView: View {
 private struct AccountFormView: View {
     @ObservedObject var model: AccountFeatureModel
     let isRegistration: Bool
+    @State private var name = ""
+    @State private var furigana = ""
     @State private var email = ""
     @State private var password = ""
     @State private var confirmation = ""
@@ -312,6 +332,13 @@ private struct AccountFormView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(isRegistration ? "会員登録" : "ログイン")
                 .font(.title2.bold())
+            if isRegistration {
+                TextField("名前", text: $name)
+                    .textContentType(.name)
+                    .textFieldStyle(.roundedBorder)
+                TextField("ふりがな", text: $furigana)
+                    .textFieldStyle(.roundedBorder)
+            }
             TextField("メールアドレス", text: $email)
                 .textContentType(.emailAddress)
                 .keyboardType(.emailAddress)
@@ -325,7 +352,13 @@ private struct AccountFormView: View {
             }
             Button(isRegistration ? "登録する" : "ログイン") {
                 if isRegistration {
-                    model.register(email: email, password: password, confirmation: confirmation)
+                    model.register(
+                        name: name,
+                        furigana: furigana,
+                        email: email,
+                        password: password,
+                        confirmation: confirmation
+                    )
                 } else {
                     model.login(email: email, password: password)
                 }

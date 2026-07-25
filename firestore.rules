@@ -68,6 +68,59 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
+    match /memberPrivate/{uid} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly([
+          "uid",
+          "email",
+          "name",
+          "furigana",
+          "phone",
+          "lastAppliedOrganizationId",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.keys().hasAll([
+          "uid",
+          "email",
+          "name",
+          "furigana",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.name is string
+        && request.resource.data.furigana is string
+        && (
+          !request.resource.data.keys().hasAny(["phone"])
+          || request.resource.data.phone is string
+        )
+        && (
+          !request.resource.data.keys().hasAny(["lastAppliedOrganizationId"])
+          || request.resource.data.lastAppliedOrganizationId is string
+        );
+
+      allow update: if isOwner(uid)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          "name",
+          "furigana",
+          "phone",
+          "lastAppliedOrganizationId",
+          "updatedAt"
+        ]);
+
+      allow delete: if isOwner(uid);
+
+      match /{document=**} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+
     match /organizations/{organizationId} {
 
       allow read: if true;

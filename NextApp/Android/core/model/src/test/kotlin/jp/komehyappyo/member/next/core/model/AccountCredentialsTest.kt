@@ -12,6 +12,8 @@ class AccountCredentialsTest {
                 email = "member@example.com",
                 password = "password",
                 passwordConfirmation = "password",
+                name = "根津 孝誠",
+                furigana = "ねづ こうせい",
             ).validationError(),
         )
     }
@@ -24,8 +26,33 @@ class AccountCredentialsTest {
     @Test
     fun mismatchedConfirmationIsRejected() {
         assertNotNull(
-            AccountCredentials("member@example.com", "password", "different")
+            AccountCredentials(
+                "member@example.com",
+                "password",
+                "different",
+                "根津 孝誠",
+                "ねづ こうせい",
+            )
                 .validationError(),
+        )
+    }
+
+    @Test
+    fun registrationRequiresNameAndFurigana() {
+        assertNotNull(
+            AccountCredentials(
+                email = "member@example.com",
+                password = "password",
+                passwordConfirmation = "password",
+            ).validationError(),
+        )
+        assertNotNull(
+            AccountCredentials(
+                email = "member@example.com",
+                password = "password",
+                passwordConfirmation = "password",
+                name = "根津 孝誠",
+            ).validationError(),
         )
     }
 }
