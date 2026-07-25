@@ -11,6 +11,8 @@ data class FavoriteBookmark(
     val url: String,
     val note: String = "",
     val category: String = UNCATEGORIZED,
+    val secondaryCategory: String = "",
+    val tertiaryCategory: String = "",
     val createdAt: Instant = Instant.now(),
     val updatedAt: Instant = Instant.now(),
 ) {
@@ -18,6 +20,8 @@ data class FavoriteBookmark(
         val trimmedTitle = title.trim()
         val trimmedUrl = url.trim()
         val trimmedCategory = category.trim().ifEmpty { UNCATEGORIZED }
+        val trimmedSecondaryCategory = secondaryCategory.trim()
+        val trimmedTertiaryCategory = tertiaryCategory.trim()
         require(trimmedTitle.isNotEmpty()) { "タイトルを入力してください。" }
         val uri = runCatching { URI(trimmedUrl) }.getOrNull()
         require(
@@ -32,9 +36,20 @@ data class FavoriteBookmark(
             url = trimmedUrl,
             note = note.trim(),
             category = trimmedCategory,
+            secondaryCategory = trimmedSecondaryCategory,
+            tertiaryCategory = if (trimmedSecondaryCategory.isEmpty()) {
+                ""
+            } else {
+                trimmedTertiaryCategory
+            },
             updatedAt = now ?: updatedAt,
         )
     }
+
+    val categoryPath: String
+        get() = listOf(category, secondaryCategory, tertiaryCategory)
+            .filter(String::isNotEmpty)
+            .joinToString(" / ")
 
     companion object {
         const val UNCATEGORIZED = "未分類"

@@ -17,6 +17,8 @@ final class FavoriteBookmarkBackupServiceTests: XCTestCase {
             url: "https://example.com/article",
             note: "後で読み返すメモ",
             category: "学習",
+            secondaryCategory: "開発",
+            tertiaryCategory: "Swift",
             createdAt: Date(timeIntervalSince1970: 100),
             updatedAt: Date(timeIntervalSince1970: 200)
         )
@@ -48,6 +50,8 @@ final class FavoriteBookmarkBackupServiceTests: XCTestCase {
         XCTAssertEqual(restoredFavorite.url, "https://example.com/article")
         XCTAssertEqual(restoredFavorite.note, "後で読み返すメモ")
         XCTAssertEqual(restoredFavorite.category, "学習")
+        XCTAssertEqual(restoredFavorite.secondaryCategory, "開発")
+        XCTAssertEqual(restoredFavorite.tertiaryCategory, "Swift")
     }
 
     func testInvalidBackupFormatIsRejected() async throws {
@@ -64,6 +68,35 @@ final class FavoriteBookmarkBackupServiceTests: XCTestCase {
         } catch {
             XCTAssertEqual(error as? FavoriteBookmarkBackupError, .invalidFormat)
         }
+    }
+
+    func testVersion1BackupRestoresLegacyCategoryAsPrimaryCategory() async throws {
+        let container = try inMemoryContainer()
+        let repository = SwiftDataFavoriteBookmarkRepository(modelContainer: container)
+        let service = FavoriteBookmarkBackupService(repository: repository)
+        let legacyBackup = try JSONSerialization.data(withJSONObject: [
+            "format": FavoriteBookmarkBackupService.formatIdentifier,
+            "version": 1,
+            "exportedAtEpochMillis": 300_000,
+            "favorites": [[
+                "id": UUID().uuidString,
+                "userId": "guest-local",
+                "title": "旧バックアップ",
+                "url": "https://example.com/legacy",
+                "note": "旧形式のメモ",
+                "category": "学習",
+                "createdAtEpochMillis": 100_000,
+                "updatedAtEpochMillis": 200_000
+            ]]
+        ])
+
+        let importedCount = try await service.importData(legacyBackup)
+        XCTAssertEqual(importedCount, 1)
+        let restoredFavorites = try await repository.fetchAll()
+        let restored = try XCTUnwrap(restoredFavorites.first)
+        XCTAssertEqual(restored.category, "学習")
+        XCTAssertTrue(restored.secondaryCategory.isEmpty)
+        XCTAssertTrue(restored.tertiaryCategory.isEmpty)
     }
 
     private func inMemoryContainer() throws -> ModelContainer {

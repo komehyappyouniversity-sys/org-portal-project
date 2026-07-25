@@ -20,6 +20,9 @@ private struct FavoriteBookmarkBackupEntry: Codable {
     let url: String
     let note: String
     let category: String
+    let categoryPrimary: String?
+    let categorySecondary: String?
+    let categoryTertiary: String?
     let createdAtEpochMillis: Int64
     let updatedAtEpochMillis: Int64
 }
@@ -27,7 +30,7 @@ private struct FavoriteBookmarkBackupEntry: Codable {
 @MainActor
 public final class FavoriteBookmarkBackupService {
     public static let formatIdentifier = "org-portal-favorites-backup"
-    public static let currentVersion = 1
+    public static let currentVersion = 2
 
     private let repository: FavoriteBookmarkRepository
 
@@ -44,6 +47,9 @@ public final class FavoriteBookmarkBackupService {
                 url: favorite.url,
                 note: favorite.note,
                 category: favorite.category,
+                categoryPrimary: favorite.category,
+                categorySecondary: favorite.secondaryCategory,
+                categoryTertiary: favorite.tertiaryCategory,
                 createdAtEpochMillis: Self.epochMillis(favorite.createdAt),
                 updatedAtEpochMillis: Self.epochMillis(favorite.updatedAt)
             )
@@ -73,7 +79,7 @@ public final class FavoriteBookmarkBackupService {
         guard envelope.format == Self.formatIdentifier else {
             throw FavoriteBookmarkBackupError.invalidFormat
         }
-        guard envelope.version == Self.currentVersion else {
+        guard (1...Self.currentVersion).contains(envelope.version) else {
             throw FavoriteBookmarkBackupError.unsupportedVersion
         }
 
@@ -88,7 +94,9 @@ public final class FavoriteBookmarkBackupService {
                 title: entry.title,
                 url: entry.url,
                 note: entry.note,
-                category: entry.category,
+                category: entry.categoryPrimary ?? entry.category,
+                secondaryCategory: entry.categorySecondary ?? "",
+                tertiaryCategory: entry.categoryTertiary ?? "",
                 createdAt: Self.date(entry.createdAtEpochMillis),
                 updatedAt: Self.date(entry.updatedAtEpochMillis)
             )

@@ -11,7 +11,10 @@ import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.json.JSONArray
+import org.json.JSONObject
 import java.time.Instant
+import java.util.UUID
 
 @RunWith(RobolectricTestRunner::class)
 class FavoriteBookmarkBackupServiceTest {
@@ -30,6 +33,8 @@ class FavoriteBookmarkBackupServiceTest {
             url = "https://example.com/article",
             note = "後で読み返すメモ",
             category = "学習",
+            secondaryCategory = "開発",
+            tertiaryCategory = "Kotlin",
             createdAt = Instant.ofEpochSecond(100),
             updatedAt = Instant.ofEpochSecond(200),
         )
@@ -57,6 +62,8 @@ class FavoriteBookmarkBackupServiceTest {
         assertEquals("https://example.com/article", restoredFavorite.url)
         assertEquals("後で読み返すメモ", restoredFavorite.note)
         assertEquals("学習", restoredFavorite.category)
+        assertEquals("開発", restoredFavorite.secondaryCategory)
+        assertEquals("Kotlin", restoredFavorite.tertiaryCategory)
     }
 
     @Test
@@ -68,6 +75,37 @@ class FavoriteBookmarkBackupServiceTest {
         } catch (error: FavoriteBookmarkBackupException.InvalidFormat) {
             // Expected.
         }
+    }
+
+    @Test
+    fun `version 1 backup restores legacy category as primary category`() = runTest {
+        val repository = repository()
+        val legacyBackup = JSONObject()
+            .put("format", FavoriteBookmarkBackupService.FORMAT_IDENTIFIER)
+            .put("version", 1)
+            .put("exportedAtEpochMillis", 300_000)
+            .put(
+                "favorites",
+                JSONArray().put(
+                    JSONObject()
+                        .put("id", UUID.randomUUID().toString())
+                        .put("userId", "guest-local")
+                        .put("title", "旧バックアップ")
+                        .put("url", "https://example.com/legacy")
+                        .put("note", "旧形式のメモ")
+                        .put("category", "学習")
+                        .put("createdAtEpochMillis", 100_000)
+                        .put("updatedAtEpochMillis", 200_000),
+                ),
+            )
+            .toString()
+            .toByteArray()
+
+        assertEquals(1, FavoriteBookmarkBackupService(repository).importData(legacyBackup))
+        val restored = repository.observeAll().first().single()
+        assertEquals("学習", restored.category)
+        assertEquals("", restored.secondaryCategory)
+        assertEquals("", restored.tertiaryCategory)
     }
 
     private fun repository(): RoomFavoriteBookmarkRepository {

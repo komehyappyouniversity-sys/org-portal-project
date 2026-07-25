@@ -115,13 +115,21 @@ public struct FavoriteBookmarksView: View {
                 case let .editor(existing):
                     FavoriteBookmarkEditor(
                         existing: existing,
-                        onSave: { title, url, note, category in
+                        onSave: {
+                            title,
+                            url,
+                            note,
+                            category,
+                            secondaryCategory,
+                            tertiaryCategory in
                             let didSave = await model.save(
                                 existing: existing,
                                 title: title,
                                 url: url,
                                 note: note,
-                                category: category
+                                category: category,
+                                secondaryCategory: secondaryCategory,
+                                tertiaryCategory: tertiaryCategory
                             )
                             if didSave {
                                 activeSheet = nil
@@ -210,7 +218,7 @@ private struct FavoriteBookmarkRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(favorite.title)
                         .font(.headline)
-                    Text(favorite.category)
+                    Text(favorite.categoryPath)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -240,7 +248,7 @@ private struct FavoriteBookmarkRow: View {
 
 private struct FavoriteBookmarkEditor: View {
     let existing: FavoriteBookmark?
-    let onSave: (String, String, String, String) async -> Void
+    let onSave: (String, String, String, String, String, String) async -> Void
     let onDelete: (() async -> Void)?
 
     @Environment(\.dismiss) private var dismiss
@@ -248,12 +256,14 @@ private struct FavoriteBookmarkEditor: View {
     @State private var url: String
     @State private var note: String
     @State private var category: String
+    @State private var secondaryCategory: String
+    @State private var tertiaryCategory: String
     @State private var isSaving = false
     @State private var confirmsDeletion = false
 
     init(
         existing: FavoriteBookmark?,
-        onSave: @escaping (String, String, String, String) async -> Void,
+        onSave: @escaping (String, String, String, String, String, String) async -> Void,
         onDelete: (() async -> Void)?
     ) {
         self.existing = existing
@@ -263,6 +273,8 @@ private struct FavoriteBookmarkEditor: View {
         _url = State(initialValue: existing?.url ?? "https://")
         _note = State(initialValue: existing?.note ?? "")
         _category = State(initialValue: existing?.category ?? FavoriteBookmark.uncategorized)
+        _secondaryCategory = State(initialValue: existing?.secondaryCategory ?? "")
+        _tertiaryCategory = State(initialValue: existing?.tertiaryCategory ?? "")
     }
 
     var body: some View {
@@ -274,7 +286,12 @@ private struct FavoriteBookmarkEditor: View {
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    TextField("カテゴリ", text: $category)
+                    TextField("大分類", text: $category)
+                    TextField("中分類", text: $secondaryCategory)
+                    TextField("小分類", text: $tertiaryCategory)
+                        .disabled(secondaryCategory.trimmingCharacters(
+                            in: .whitespacesAndNewlines
+                        ).isEmpty)
                     TextField("メモ", text: $note, axis: .vertical)
                         .lineLimit(4...8)
                 }
@@ -295,7 +312,14 @@ private struct FavoriteBookmarkEditor: View {
                     Button("保存") {
                         isSaving = true
                         Task {
-                            await onSave(title, url, note, category)
+                            await onSave(
+                                title,
+                                url,
+                                note,
+                                category,
+                                secondaryCategory,
+                                tertiaryCategory
+                            )
                             isSaving = false
                         }
                     }

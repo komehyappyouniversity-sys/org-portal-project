@@ -10,6 +10,8 @@ public final class FavoriteBookmarkRecord {
     public var url: String
     public var note: String
     public var category: String
+    public var secondaryCategory: String?
+    public var tertiaryCategory: String?
     public var createdAt: Date
     public var updatedAt: Date
 
@@ -20,6 +22,8 @@ public final class FavoriteBookmarkRecord {
         url = favorite.url
         note = favorite.note
         category = favorite.category
+        secondaryCategory = favorite.secondaryCategory
+        tertiaryCategory = favorite.tertiaryCategory
         createdAt = favorite.createdAt
         updatedAt = favorite.updatedAt
     }
@@ -30,6 +34,8 @@ public final class FavoriteBookmarkRecord {
         url = favorite.url
         note = favorite.note
         category = favorite.category
+        secondaryCategory = favorite.secondaryCategory
+        tertiaryCategory = favorite.tertiaryCategory
         createdAt = favorite.createdAt
         updatedAt = favorite.updatedAt
     }
@@ -42,6 +48,8 @@ public final class FavoriteBookmarkRecord {
             url: url,
             note: note,
             category: category,
+            secondaryCategory: secondaryCategory ?? "",
+            tertiaryCategory: tertiaryCategory ?? "",
             createdAt: createdAt,
             updatedAt: updatedAt
         )

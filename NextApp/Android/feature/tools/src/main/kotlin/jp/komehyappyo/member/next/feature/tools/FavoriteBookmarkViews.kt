@@ -167,8 +167,23 @@ fun FavoriteBookmarksRoot(model: FavoriteBookmarkFeatureModel) {
                 showsNewFavorite = false
                 editingFavorite = null
             },
-            onSave = { title, url, note, category ->
-                model.save(editingFavorite, title, url, note, category) { success ->
+            onSave = {
+                    title,
+                    url,
+                    note,
+                    category,
+                    secondaryCategory,
+                    tertiaryCategory,
+                ->
+                model.save(
+                    editingFavorite,
+                    title,
+                    url,
+                    note,
+                    category,
+                    secondaryCategory,
+                    tertiaryCategory,
+                ) { success ->
                     if (success) {
                         showsNewFavorite = false
                         editingFavorite = null
@@ -232,7 +247,7 @@ private fun FavoriteBookmarkCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(favorite.title, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        favorite.category,
+                        favorite.categoryPath,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -270,7 +285,7 @@ private fun FavoriteBookmarkCard(
 private fun FavoriteBookmarkDialog(
     existing: FavoriteBookmark?,
     onDismiss: () -> Unit,
-    onSave: (String, String, String, String) -> Unit,
+    onSave: (String, String, String, String, String, String) -> Unit,
     onDelete: (() -> Unit)?,
 ) {
     var title by remember(existing?.id) { mutableStateOf(existing?.title.orEmpty()) }
@@ -278,6 +293,12 @@ private fun FavoriteBookmarkDialog(
     var note by remember(existing?.id) { mutableStateOf(existing?.note.orEmpty()) }
     var category by remember(existing?.id) {
         mutableStateOf(existing?.category ?: FavoriteBookmark.UNCATEGORIZED)
+    }
+    var secondaryCategory by remember(existing?.id) {
+        mutableStateOf(existing?.secondaryCategory.orEmpty())
+    }
+    var tertiaryCategory by remember(existing?.id) {
+        mutableStateOf(existing?.tertiaryCategory.orEmpty())
     }
 
     AlertDialog(
@@ -298,7 +319,21 @@ private fun FavoriteBookmarkDialog(
                 OutlinedTextField(
                     value = category,
                     onValueChange = { category = it },
-                    label = { Text("カテゴリ") },
+                    label = { Text("大分類") },
+                )
+                OutlinedTextField(
+                    value = secondaryCategory,
+                    onValueChange = {
+                        secondaryCategory = it
+                        if (it.isBlank()) tertiaryCategory = ""
+                    },
+                    label = { Text("中分類") },
+                )
+                OutlinedTextField(
+                    value = tertiaryCategory,
+                    onValueChange = { tertiaryCategory = it },
+                    enabled = secondaryCategory.isNotBlank(),
+                    label = { Text("小分類") },
                 )
                 OutlinedTextField(
                     value = note,
@@ -312,7 +347,18 @@ private fun FavoriteBookmarkDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(title, url, note, category) }) { Text("保存") }
+            TextButton(
+                onClick = {
+                    onSave(
+                        title,
+                        url,
+                        note,
+                        category,
+                        secondaryCategory,
+                        tertiaryCategory,
+                    )
+                },
+            ) { Text("保存") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("キャンセル") }

@@ -21,6 +21,9 @@ class FavoriteBookmarkBackupService(
                     .put("url", favorite.url)
                     .put("note", favorite.note)
                     .put("category", favorite.category)
+                    .put("categoryPrimary", favorite.category)
+                    .put("categorySecondary", favorite.secondaryCategory)
+                    .put("categoryTertiary", favorite.tertiaryCategory)
                     .put("createdAtEpochMillis", favorite.createdAt.toEpochMilli())
                     .put("updatedAtEpochMillis", favorite.updatedAt.toEpochMilli()),
             )
@@ -40,7 +43,7 @@ class FavoriteBookmarkBackupService(
         if (root.optString("format") != FORMAT_IDENTIFIER) {
             throw FavoriteBookmarkBackupException.InvalidFormat
         }
-        if (root.optInt("version") != CURRENT_VERSION) {
+        if (root.optInt("version") !in 1..CURRENT_VERSION) {
             throw FavoriteBookmarkBackupException.UnsupportedVersion
         }
         val entries = root.optJSONArray("favorites")
@@ -57,9 +60,11 @@ class FavoriteBookmarkBackupService(
                     url = entry.getString("url"),
                     note = entry.optString("note"),
                     category = entry.optString(
-                        "category",
-                        FavoriteBookmark.UNCATEGORIZED,
+                        "categoryPrimary",
+                        entry.optString("category", FavoriteBookmark.UNCATEGORIZED),
                     ),
+                    secondaryCategory = entry.optString("categorySecondary"),
+                    tertiaryCategory = entry.optString("categoryTertiary"),
                     createdAt = Instant.ofEpochMilli(
                         entry.getLong("createdAtEpochMillis"),
                     ),
@@ -78,7 +83,7 @@ class FavoriteBookmarkBackupService(
 
     companion object {
         const val FORMAT_IDENTIFIER = "org-portal-favorites-backup"
-        const val CURRENT_VERSION = 1
+        const val CURRENT_VERSION = 2
     }
 }
 

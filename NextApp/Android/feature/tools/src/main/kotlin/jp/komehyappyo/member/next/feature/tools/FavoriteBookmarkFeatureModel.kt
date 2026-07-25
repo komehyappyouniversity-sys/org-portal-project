@@ -64,6 +64,8 @@ class FavoriteBookmarkFeatureModel(
         url: String,
         note: String,
         category: String,
+        secondaryCategory: String,
+        tertiaryCategory: String,
         onComplete: (Boolean) -> Unit,
     ) {
         viewModelScope.launch {
@@ -76,6 +78,8 @@ class FavoriteBookmarkFeatureModel(
                     url = url,
                     note = note,
                     category = category,
+                    secondaryCategory = secondaryCategory,
+                    tertiaryCategory = tertiaryCategory,
                     createdAt = existing?.createdAt ?: now,
                     updatedAt = now,
                 ).validated().also { repository.save(it) }

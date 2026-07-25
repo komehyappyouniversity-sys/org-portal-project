@@ -109,6 +109,8 @@ data class FavoriteBookmarkEntity(
     val url: String,
     val note: String,
     val category: String,
+    val secondaryCategory: String,
+    val tertiaryCategory: String,
     val createdAtEpochMillis: Long,
     val updatedAtEpochMillis: Long,
 )
@@ -206,7 +208,7 @@ interface FavoriteBookmarkDao {
         SnsCustomLinkEntity::class,
         FavoriteBookmarkEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class OrgPortalDatabase : RoomDatabase() {
@@ -317,6 +319,19 @@ abstract class OrgPortalDatabase : RoomDatabase() {
             }
         }
 
+        val migration6To7 = object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE `favorite_bookmarks` " +
+                        "ADD COLUMN `secondaryCategory` TEXT NOT NULL DEFAULT ''",
+                )
+                database.execSQL(
+                    "ALTER TABLE `favorite_bookmarks` " +
+                        "ADD COLUMN `tertiaryCategory` TEXT NOT NULL DEFAULT ''",
+                )
+            }
+        }
+
         fun create(context: Context): OrgPortalDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
@@ -328,6 +343,7 @@ abstract class OrgPortalDatabase : RoomDatabase() {
                 migration3To4,
                 migration4To5,
                 migration5To6,
+                migration6To7,
             ).build()
     }
 }
@@ -600,6 +616,8 @@ private fun FavoriteBookmark.toEntity() = FavoriteBookmarkEntity(
     url = url,
     note = note,
     category = category,
+    secondaryCategory = secondaryCategory,
+    tertiaryCategory = tertiaryCategory,
     createdAtEpochMillis = createdAt.toEpochMilli(),
     updatedAtEpochMillis = updatedAt.toEpochMilli(),
 )
@@ -611,6 +629,8 @@ private fun FavoriteBookmarkEntity.toDomain() = FavoriteBookmark(
     url = url,
     note = note,
     category = category,
+    secondaryCategory = secondaryCategory,
+    tertiaryCategory = tertiaryCategory,
     createdAt = Instant.ofEpochMilli(createdAtEpochMillis),
     updatedAt = Instant.ofEpochMilli(updatedAtEpochMillis),
 )

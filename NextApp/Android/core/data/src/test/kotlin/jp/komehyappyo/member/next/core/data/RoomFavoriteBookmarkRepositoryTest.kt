@@ -38,10 +38,14 @@ class RoomFavoriteBookmarkRepositoryTest {
             title = "公式ブログ",
             url = "https://example.com",
             category = "仕事",
+            secondaryCategory = "資料",
+            tertiaryCategory = "重要",
         )
 
         repository.save(favorite)
-        assertEquals(listOf("公式ブログ"), repository.observeAll().first().map { it.title })
+        val saved = repository.observeAll().first()
+        assertEquals(listOf("公式ブログ"), saved.map { it.title })
+        assertEquals("仕事 / 資料 / 重要", saved.first().categoryPath)
 
         favorite = favorite.copy(title = "公式サイト", note = "更新済み")
         repository.save(favorite)

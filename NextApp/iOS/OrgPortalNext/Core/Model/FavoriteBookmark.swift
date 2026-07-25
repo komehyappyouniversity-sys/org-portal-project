@@ -9,6 +9,8 @@ public struct FavoriteBookmark: Identifiable, Codable, Equatable, Sendable {
     public var url: String
     public var note: String
     public var category: String
+    public var secondaryCategory: String
+    public var tertiaryCategory: String
     public var createdAt: Date
     public var updatedAt: Date
 
@@ -19,6 +21,8 @@ public struct FavoriteBookmark: Identifiable, Codable, Equatable, Sendable {
         url: String,
         note: String = "",
         category: String = FavoriteBookmark.uncategorized,
+        secondaryCategory: String = "",
+        tertiaryCategory: String = "",
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -28,8 +32,16 @@ public struct FavoriteBookmark: Identifiable, Codable, Equatable, Sendable {
         self.url = url
         self.note = note
         self.category = category
+        self.secondaryCategory = secondaryCategory
+        self.tertiaryCategory = tertiaryCategory
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+
+    public var categoryPath: String {
+        [category, secondaryCategory, tertiaryCategory]
+            .filter { !$0.isEmpty }
+            .joined(separator: " / ")
     }
 
     public func validated(now: Date? = nil) throws -> FavoriteBookmark {
@@ -39,6 +51,15 @@ public struct FavoriteBookmark: Identifiable, Codable, Equatable, Sendable {
         value.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedCategory = category.trimmingCharacters(in: .whitespacesAndNewlines)
         value.category = trimmedCategory.isEmpty ? Self.uncategorized : trimmedCategory
+        value.secondaryCategory = secondaryCategory.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        value.tertiaryCategory = tertiaryCategory.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        if value.secondaryCategory.isEmpty {
+            value.tertiaryCategory = ""
+        }
         if let now {
             value.updatedAt = now
         }

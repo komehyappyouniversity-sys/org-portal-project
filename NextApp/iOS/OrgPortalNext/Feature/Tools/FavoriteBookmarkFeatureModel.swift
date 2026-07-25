@@ -33,7 +33,9 @@ public final class FavoriteBookmarkFeatureModel: ObservableObject {
         title: String,
         url: String,
         note: String,
-        category: String
+        category: String,
+        secondaryCategory: String,
+        tertiaryCategory: String
     ) async -> Bool {
         do {
             let now = Date()
@@ -44,6 +46,8 @@ public final class FavoriteBookmarkFeatureModel: ObservableObject {
                 url: url,
                 note: note,
                 category: category,
+                secondaryCategory: secondaryCategory,
+                tertiaryCategory: tertiaryCategory,
                 createdAt: existing?.createdAt ?? now,
                 updatedAt: now
             ).validated()

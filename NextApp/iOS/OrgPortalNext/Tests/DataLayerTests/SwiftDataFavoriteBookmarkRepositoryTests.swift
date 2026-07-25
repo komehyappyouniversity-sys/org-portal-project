@@ -15,12 +15,15 @@ final class SwiftDataFavoriteBookmarkRepositoryTests: XCTestCase {
         var favorite = FavoriteBookmark(
             title: "公式ブログ",
             url: "https://example.com",
-            category: "仕事"
+            category: "仕事",
+            secondaryCategory: "資料",
+            tertiaryCategory: "重要"
         )
 
         try await repository.save(favorite)
         let saved = try await repository.fetchAll()
         XCTAssertEqual(saved.map(\.title), ["公式ブログ"])
+        XCTAssertEqual(saved.first?.categoryPath, "仕事 / 資料 / 重要")
 
         favorite.title = "公式サイト"
         favorite.note = "更新済み"
