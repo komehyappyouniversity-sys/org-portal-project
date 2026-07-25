@@ -5,7 +5,7 @@ final class GuestHomeToolTests: XCTestCase {
     func testToolsHaveTheSharedDisplayOrder() {
         XCTAssertEqual(
             GuestHomeTool.ordered,
-            [.schedule, .diary, .denomination, .meetingMinutes]
+            [.schedule, .diary, .denomination, .meetingMinutes, .favorites]
         )
     }
 
@@ -14,5 +14,6 @@ final class GuestHomeToolTests: XCTestCase {
         XCTAssertTrue(GuestHomeTool.diary.isAvailable)
         XCTAssertTrue(GuestHomeTool.denomination.isAvailable)
         XCTAssertTrue(GuestHomeTool.meetingMinutes.isAvailable)
+        XCTAssertTrue(GuestHomeTool.favorites.isAvailable)
     }
 }

@@ -6,6 +6,7 @@ public enum GuestHomeTool: String, CaseIterable, Identifiable, Sendable {
     case diary
     case denomination
     case meetingMinutes
+    case favorites
 
     public var id: String { rawValue }
 
@@ -13,7 +14,8 @@ public enum GuestHomeTool: String, CaseIterable, Identifiable, Sendable {
         .schedule,
         .diary,
         .denomination,
-        .meetingMinutes
+        .meetingMinutes,
+        .favorites
     ]
 
     public var isAvailable: Bool {
@@ -26,6 +28,7 @@ public enum GuestHomeTool: String, CaseIterable, Identifiable, Sendable {
         case .diary: "home.diary.title"
         case .denomination: "home.denomination.title"
         case .meetingMinutes: "home.meeting_minutes.title"
+        case .favorites: "お気に入り"
         }
     }
 
@@ -35,6 +38,7 @@ public enum GuestHomeTool: String, CaseIterable, Identifiable, Sendable {
         case .diary: "home.diary.subtitle"
         case .denomination: "home.denomination.subtitle"
         case .meetingMinutes: "home.meeting_minutes.subtitle"
+        case .favorites: "よく見るWebページを自分専用に保存します。"
         }
     }
 
@@ -44,6 +48,7 @@ public enum GuestHomeTool: String, CaseIterable, Identifiable, Sendable {
         case .diary: "book.closed"
         case .denomination: "yensign.circle"
         case .meetingMinutes: "mic"
+        case .favorites: "bookmark"
         }
     }
 }
@@ -53,21 +58,25 @@ public struct GuestHomeView: View {
     @ObservedObject private var diaryModel: DiaryFeatureModel
     @ObservedObject private var cashDistributionModel: CashDistributionFeatureModel
     @ObservedObject private var meetingMinutesModel: MeetingMinutesFeatureModel
+    @ObservedObject private var favoriteBookmarkModel: FavoriteBookmarkFeatureModel
     @State private var isShowingTodaySchedule = false
     @State private var isShowingDiary = false
     @State private var isShowingDenomination = false
     @State private var isShowingMeetingMinutes = false
+    @State private var isShowingFavorites = false
 
     public init(
         scheduleModel: ScheduleFeatureModel,
         diaryModel: DiaryFeatureModel,
         cashDistributionModel: CashDistributionFeatureModel,
-        meetingMinutesModel: MeetingMinutesFeatureModel
+        meetingMinutesModel: MeetingMinutesFeatureModel,
+        favoriteBookmarkModel: FavoriteBookmarkFeatureModel
     ) {
         self.scheduleModel = scheduleModel
         self.diaryModel = diaryModel
         self.cashDistributionModel = cashDistributionModel
         self.meetingMinutesModel = meetingMinutesModel
+        self.favoriteBookmarkModel = favoriteBookmarkModel
     }
 
     public var body: some View {
@@ -121,9 +130,20 @@ public struct GuestHomeView: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityHint("home.denomination.accessibility_hint")
-                        } else {
+                        } else if tool == .meetingMinutes {
                             Button {
                                 isShowingMeetingMinutes = true
+                            } label: {
+                                FeatureCard(
+                                    tool.title,
+                                    subtitle: tool.subtitle,
+                                    systemImage: tool.systemImage
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            Button {
+                                isShowingFavorites = true
                             } label: {
                                 FeatureCard(
                                     tool.title,
@@ -150,6 +170,9 @@ public struct GuestHomeView: View {
         }
         .sheet(isPresented: $isShowingMeetingMinutes) {
             MeetingMinutesRootView(model: meetingMinutesModel)
+        }
+        .sheet(isPresented: $isShowingFavorites) {
+            FavoriteBookmarksView(model: favoriteBookmarkModel)
         }
     }
 }

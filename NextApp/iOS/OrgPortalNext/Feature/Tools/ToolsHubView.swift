@@ -8,6 +8,7 @@ public struct ToolsHubView: View {
         case denomination
         case meetingMinutes
         case snsPostingAssistant
+        case favorites
 
         var id: String {
             switch self {
@@ -16,6 +17,7 @@ public struct ToolsHubView: View {
             case .denomination: "denomination"
             case .meetingMinutes: "meetingMinutes"
             case .snsPostingAssistant: "snsPostingAssistant"
+            case .favorites: "favorites"
             }
         }
     }
@@ -25,6 +27,7 @@ public struct ToolsHubView: View {
     @ObservedObject private var cashDistributionModel: CashDistributionFeatureModel
     @ObservedObject private var meetingMinutesModel: MeetingMinutesFeatureModel
     @ObservedObject private var snsPostingAssistantModel: SnsPostingAssistantFeatureModel
+    @ObservedObject private var favoriteBookmarkModel: FavoriteBookmarkFeatureModel
     @State private var destination: Destination?
 
     public init(
@@ -32,13 +35,15 @@ public struct ToolsHubView: View {
         diaryModel: DiaryFeatureModel,
         cashDistributionModel: CashDistributionFeatureModel,
         meetingMinutesModel: MeetingMinutesFeatureModel,
-        snsPostingAssistantModel: SnsPostingAssistantFeatureModel
+        snsPostingAssistantModel: SnsPostingAssistantFeatureModel,
+        favoriteBookmarkModel: FavoriteBookmarkFeatureModel
     ) {
         self.scheduleModel = scheduleModel
         self.diaryModel = diaryModel
         self.cashDistributionModel = cashDistributionModel
         self.meetingMinutesModel = meetingMinutesModel
         self.snsPostingAssistantModel = snsPostingAssistantModel
+        self.favoriteBookmarkModel = favoriteBookmarkModel
     }
 
     public var body: some View {
@@ -94,6 +99,16 @@ public struct ToolsHubView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                Button {
+                    destination = .favorites
+                } label: {
+                    FeatureCard(
+                        "お気に入り",
+                        subtitle: "よく見るWebページを自分専用に保存します。",
+                        systemImage: "bookmark"
+                    )
+                }
+                .buttonStyle(.plain)
             }
             .listStyle(.plain)
             .navigationTitle("tab.tools")
@@ -125,6 +140,8 @@ public struct ToolsHubView: View {
                     MeetingMinutesRootView(model: meetingMinutesModel)
                 case .snsPostingAssistant:
                     SnsPostingAssistantView(model: snsPostingAssistantModel)
+                case .favorites:
+                    FavoriteBookmarksView(model: favoriteBookmarkModel)
                 }
             }
         }

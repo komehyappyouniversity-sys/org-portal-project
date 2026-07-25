@@ -29,7 +29,8 @@ struct OrgPortalNextApp: App {
                 DiaryRecord.self,
                 CashDistributionRecord.self,
                 MeetingMinutesRecord.self,
-                SnsCustomLinkRecord.self
+                SnsCustomLinkRecord.self,
+                FavoriteBookmarkRecord.self
             )
         } catch {
             fatalError("Unable to initialize local storage: \(error)")
@@ -50,6 +51,7 @@ private struct AppBootstrapView: View {
     @StateObject private var cashDistributionModel: CashDistributionFeatureModel
     @StateObject private var meetingMinutesModel: MeetingMinutesFeatureModel
     @StateObject private var snsPostingAssistantModel: SnsPostingAssistantFeatureModel
+    @StateObject private var favoriteBookmarkModel: FavoriteBookmarkFeatureModel
 
     init(modelContainer: ModelContainer) {
         let scheduleRepository = SwiftDataScheduleRepository(
@@ -96,6 +98,13 @@ private struct AppBootstrapView: View {
                 )
             )
         )
+        _favoriteBookmarkModel = StateObject(
+            wrappedValue: FavoriteBookmarkFeatureModel(
+                repository: SwiftDataFavoriteBookmarkRepository(
+                    modelContainer: modelContainer
+                )
+            )
+        )
     }
 
     var body: some View {
@@ -104,14 +113,16 @@ private struct AppBootstrapView: View {
                 scheduleModel: scheduleModel,
                 diaryModel: diaryModel,
                 cashDistributionModel: cashDistributionModel,
-                meetingMinutesModel: meetingMinutesModel
+                meetingMinutesModel: meetingMinutesModel,
+                favoriteBookmarkModel: favoriteBookmarkModel
             ),
             tools: ToolsHubView(
                 scheduleModel: scheduleModel,
                 diaryModel: diaryModel,
                 cashDistributionModel: cashDistributionModel,
                 meetingMinutesModel: meetingMinutesModel,
-                snsPostingAssistantModel: snsPostingAssistantModel
+                snsPostingAssistantModel: snsPostingAssistantModel,
+                favoriteBookmarkModel: favoriteBookmarkModel
             ),
             community: PlaceholderTabView(
                 titleKey: "tab.community",

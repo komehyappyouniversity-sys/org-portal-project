@@ -11,6 +11,7 @@ import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Calculate
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,6 +31,7 @@ private enum class ToolsDestination {
     Denomination,
     MeetingMinutes,
     SnsPostingAssistant,
+    Favorites,
 }
 
 @Composable
@@ -39,6 +41,7 @@ fun ToolsHubRoot(
     cashDistributionModel: CashDistributionFeatureModel,
     meetingMinutesModel: MeetingMinutesFeatureModel,
     snsPostingAssistantModel: SnsPostingAssistantFeatureModel,
+    favoriteBookmarkModel: FavoriteBookmarkFeatureModel,
 ) {
     var destination by remember { mutableStateOf<ToolsDestination?>(null) }
     when (destination) {
@@ -66,6 +69,11 @@ fun ToolsHubRoot(
             onBack = { destination = null },
         ) {
             SnsPostingAssistantRoot(snsPostingAssistantModel)
+        }
+        ToolsDestination.Favorites -> ToolDestinationContainer(
+            onBack = { destination = null },
+        ) {
+            FavoriteBookmarksRoot(favoriteBookmarkModel)
         }
         null -> Column(
             modifier = Modifier
@@ -107,6 +115,13 @@ fun ToolsHubRoot(
                     title = "SNS投稿補助",
                     description = "文章をコピーして外部SNSを開きます。",
                     icon = Icons.Outlined.Share,
+                )
+            }
+            Button(onClick = { destination = ToolsDestination.Favorites }) {
+                FeatureCard(
+                    title = "お気に入り",
+                    description = "よく見るWebページを自分専用に保存します。",
+                    icon = Icons.Outlined.Bookmark,
                 )
             }
         }
