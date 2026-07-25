@@ -25,5 +25,6 @@ include(
     ":core:notifications",
     ":core:testing",
     ":feature:account",
+    ":feature:community",
     ":feature:tools",
 )

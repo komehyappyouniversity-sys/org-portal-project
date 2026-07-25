@@ -3,14 +3,15 @@ package jp.komehyappyo.member.next
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.fragment.app.FragmentActivity
 import jp.komehyappyo.member.next.core.data.FirebaseEnvironmentGuard
 import jp.komehyappyo.member.next.core.data.FirebaseRestAccountAuthRepository
+import jp.komehyappyo.member.next.core.data.FirebaseRestCommunityRepository
 import jp.komehyappyo.member.next.core.data.LocalDiaryPhotoStore
 import jp.komehyappyo.member.next.core.data.OrgPortalDatabase
 import jp.komehyappyo.member.next.core.data.RoomDiaryRepository
@@ -20,7 +21,6 @@ import jp.komehyappyo.member.next.core.data.LocalMeetingRecordingStore
 import jp.komehyappyo.member.next.core.data.RoomMeetingMinutesRepository
 import jp.komehyappyo.member.next.core.data.RoomSnsCustomLinkRepository
 import jp.komehyappyo.member.next.core.data.RoomFavoriteBookmarkRepository
-import jp.komehyappyo.member.next.core.designsystem.EmptyState
 import jp.komehyappyo.member.next.core.designsystem.OrgPortalTheme
 import jp.komehyappyo.member.next.core.navigation.AppShell
 import jp.komehyappyo.member.next.core.notifications.NotificationService
@@ -36,8 +36,11 @@ import jp.komehyappyo.member.next.feature.tools.FavoriteBookmarkFeatureModel
 import jp.komehyappyo.member.next.core.session.AppSession
 import jp.komehyappyo.member.next.feature.account.AccountFeatureModel
 import jp.komehyappyo.member.next.feature.account.AccountRoot
+import jp.komehyappyo.member.next.feature.account.BiometricCredentialStore
+import jp.komehyappyo.member.next.feature.community.CommunityFeatureModel
+import jp.komehyappyo.member.next.feature.community.CommunityRoot
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -67,10 +70,18 @@ class MainActivity : ComponentActivity() {
                     apiKey = BuildConfig.FIREBASE_WEB_API_KEY,
                     projectId = BuildConfig.FIREBASE_PROJECT_ID,
                 ),
+                BiometricCredentialStore(applicationContext),
                 appSession,
             )
         }
         val accountModel: AccountFeatureModel = viewModel(factory = accountFactory)
+        val communityFactory = remember {
+            CommunityFeatureModel.Factory(
+                FirebaseRestCommunityRepository(BuildConfig.FIREBASE_PROJECT_ID),
+                appSession,
+            )
+        }
+        val communityModel: CommunityFeatureModel = viewModel(factory = communityFactory)
         val database = remember { OrgPortalDatabase.create(applicationContext) }
         val scheduleRepository = remember { RoomScheduleRepository(database.scheduleDao()) }
         val scheduleFactory = remember {
@@ -149,13 +160,10 @@ class MainActivity : ComponentActivity() {
                 )
             },
             connect = {
-                EmptyState(
-                    title = "つながる",
-                    message = "コミュニティ機能は後続タスクで実装します。",
-                )
+                CommunityRoot(communityModel)
             },
             myPage = {
-                AccountRoot(accountModel)
+                AccountRoot(accountModel, this@MainActivity)
             },
         )
     }

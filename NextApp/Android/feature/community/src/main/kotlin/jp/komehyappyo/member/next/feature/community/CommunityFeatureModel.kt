@@ -1,0 +1,126 @@
+package jp.komehyappyo.member.next.feature.community
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import jp.komehyappyo.member.next.core.data.CommunityRepository
+import jp.komehyappyo.member.next.core.model.Community
+import jp.komehyappyo.member.next.core.model.CommunityCodeParser
+import jp.komehyappyo.member.next.core.model.CommunityMembership
+import jp.komehyappyo.member.next.core.model.CommunityMembershipStatus
+import jp.komehyappyo.member.next.core.model.UserStage
+import jp.komehyappyo.member.next.core.session.AppSession
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+data class CommunityUiState(
+    val code: String = "",
+    val candidate: Community? = null,
+    val memberships: List<Pair<CommunityMembership, Community>> = emptyList(),
+    val isLoading: Boolean = false,
+    val message: String? = null,
+)
+
+class CommunityFeatureModel(
+    private val repository: CommunityRepository,
+    val session: AppSession,
+) : ViewModel() {
+    private val mutableState = MutableStateFlow(CommunityUiState())
+    val state: StateFlow<CommunityUiState> = mutableState.asStateFlow()
+
+    fun updateCode(value: String) {
+        mutableState.value = mutableState.value.copy(code = value, message = null)
+    }
+
+    fun receiveScan(value: String) {
+        updateCode(CommunityCodeParser.parse(value) ?: value)
+        search()
+    }
+
+    fun search() {
+        val token = session.state.value.authenticationToken
+        if (token == null) {
+            mutableState.value = mutableState.value.copy(
+                message = "先にマイページからログインしてください。",
+            )
+            return
+        }
+        mutableState.value = mutableState.value.copy(isLoading = true, message = null)
+        viewModelScope.launch {
+            repository.findCommunity(mutableState.value.code, token)
+                .onSuccess {
+                    mutableState.value = mutableState.value.copy(
+                        candidate = it,
+                        isLoading = false,
+                    )
+                }
+                .onFailure { showError(it) }
+        }
+    }
+
+    fun apply() {
+        val community = mutableState.value.candidate ?: return
+        val current = session.state.value
+        val token = current.authenticationToken ?: return
+        mutableState.value = mutableState.value.copy(isLoading = true, message = null)
+        viewModelScope.launch {
+            repository.apply(community, current.userId, token)
+                .onSuccess {
+                    mutableState.value = mutableState.value.copy(
+                        candidate = null,
+                        message = "参加申請を送信しました。承認されるまでお待ちください。",
+                    )
+                    refresh()
+                }
+                .onFailure { showError(it) }
+        }
+    }
+
+    fun refresh() {
+        val current = session.state.value
+        val token = current.authenticationToken ?: run {
+            mutableState.value = CommunityUiState()
+            return
+        }
+        mutableState.value = mutableState.value.copy(isLoading = true)
+        viewModelScope.launch {
+            repository.memberships(current.userId, token)
+                .onSuccess { items ->
+                    mutableState.value = mutableState.value.copy(
+                        memberships = items,
+                        isLoading = false,
+                    )
+                    val approved = items.filter {
+                        it.first.status == CommunityMembershipStatus.Approved
+                    }
+                    if (session.state.value.selectedCommunityId == null) {
+                        approved.firstOrNull()?.let { session.selectCommunity(it.second.id) }
+                    }
+                    session.updateStage(
+                        if (approved.isEmpty()) UserStage.Guest else UserStage.Member,
+                        current.userId,
+                    )
+                }
+                .onFailure { showError(it) }
+        }
+    }
+
+    private fun showError(error: Throwable) {
+        mutableState.value = mutableState.value.copy(
+            candidate = null,
+            isLoading = false,
+            message = error.message ?: "処理に失敗しました。",
+        )
+    }
+
+    class Factory(
+        private val repository: CommunityRepository,
+        private val session: AppSession,
+    ) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T =
+            CommunityFeatureModel(repository, session) as T
+    }
+}

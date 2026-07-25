@@ -19,14 +19,18 @@ data class AccountUiState(
     val screen: AccountScreen = AccountScreen.Overview,
     val accessState: AccountAccessState = AccountAccessState.Guest,
     val isLoading: Boolean = false,
+    val canUseBiometricLogin: Boolean = false,
     val message: String? = null,
 )
 
 class AccountFeatureModel(
     private val repository: AccountAuthRepository,
+    private val biometricStore: BiometricCredentialStore,
     private val session: AppSession,
 ) : ViewModel() {
-    private val mutableState = MutableStateFlow(AccountUiState())
+    private val mutableState = MutableStateFlow(
+        AccountUiState(canUseBiometricLogin = biometricStore.hasCredential),
+    )
     val state: StateFlow<AccountUiState> = mutableState.asStateFlow()
 
     fun show(screen: AccountScreen) {
@@ -63,6 +67,16 @@ class AccountFeatureModel(
         runAuth { repository.login(credentials) }
     }
 
+    fun biometricLogin() {
+        runAuth {
+            runCatching { biometricStore.load() }
+                .fold(
+                    onSuccess = { repository.refresh(it) },
+                    onFailure = { Result.failure(it) },
+                )
+        }
+    }
+
     fun resetPassword(email: String) {
         val credentials = AccountCredentials(email, "password")
         credentials.validationError()?.let {
@@ -87,16 +101,21 @@ class AccountFeatureModel(
         viewModelScope.launch {
             block()
                 .onSuccess { account ->
+                    runCatching { biometricStore.save(account.refreshToken) }
                     if (account.emailVerified) {
+                        session.updateAuthenticatedUser(account.userId, account.idToken)
                         session.updateStage(UserStage.Guest, account.userId)
                         mutableState.value = AccountUiState(
-                            accessState = AccountAccessState.PendingApproval,
-                            message = "ログインしました。コミュニティへの参加承認をお待ちください。",
+                            accessState = AccountAccessState.Registered,
+                            canUseBiometricLogin = biometricStore.hasCredential,
+                            message = "ログインしました。「つながる」からコミュニティへ参加できます。",
                         )
                     } else {
+                        session.updateAuthenticatedUser(account.userId, account.idToken)
                         session.updateStage(UserStage.Guest, account.userId)
                         mutableState.value = AccountUiState(
                             accessState = AccountAccessState.Guest,
+                            canUseBiometricLogin = biometricStore.hasCredential,
                             message = "確認メールを送信しました。メール内のリンクで確認後、ログインしてください。",
                         )
                     }
@@ -114,10 +133,11 @@ class AccountFeatureModel(
 
     class Factory(
         private val repository: AccountAuthRepository,
+        private val biometricStore: BiometricCredentialStore,
         private val session: AppSession,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            AccountFeatureModel(repository, session) as T
+            AccountFeatureModel(repository, biometricStore, session) as T
     }
 }

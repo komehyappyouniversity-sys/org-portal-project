@@ -1,6 +1,7 @@
 package jp.komehyappyo.member.next.core.model
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
@@ -54,5 +55,26 @@ class AccountCredentialsTest {
                 name = "根津 孝誠",
             ).validationError(),
         )
+    }
+
+    @Test
+    fun communityCodeParserSupportsCodeAndInvitationUrl() {
+        assertEquals("k100u", CommunityCodeParser.parse("  K100U  "))
+        assertEquals(
+            "k100u",
+            CommunityCodeParser.parse(
+                "https://example.com/community/join?communityCode=K100U",
+            ),
+        )
+        assertEquals(
+            "k100u",
+            CommunityCodeParser.parse("https://example.com/community/K100U"),
+        )
+    }
+
+    @Test
+    fun communityCodeParserRejectsEmptyOrExcessivelyLongValues() {
+        assertNull(CommunityCodeParser.parse("   "))
+        assertNull(CommunityCodeParser.parse("a".repeat(101)))
     }
 }

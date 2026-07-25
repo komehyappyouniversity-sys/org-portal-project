@@ -1,5 +1,7 @@
 package jp.komehyappyo.member.next.feature.account
 
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,14 +26,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import jp.komehyappyo.member.next.core.model.AccountAccessState
 
 @Composable
-fun AccountRoot(model: AccountFeatureModel) {
+fun AccountRoot(
+    model: AccountFeatureModel,
+    activity: FragmentActivity,
+) {
     val state by model.state.collectAsStateWithLifecycle()
     when (state.screen) {
-        AccountScreen.Overview -> AccountOverview(state, model)
+        AccountScreen.Overview -> AccountOverview(state, model, activity)
         AccountScreen.Register -> AccountForm(true, state, model)
         AccountScreen.Login -> AccountForm(false, state, model)
         AccountScreen.ResetPassword -> ResetPasswordForm(state, model)
@@ -39,7 +46,11 @@ fun AccountRoot(model: AccountFeatureModel) {
 }
 
 @Composable
-private fun AccountOverview(state: AccountUiState, model: AccountFeatureModel) {
+private fun AccountOverview(
+    state: AccountUiState,
+    model: AccountFeatureModel,
+    activity: FragmentActivity,
+) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -60,12 +71,27 @@ private fun AccountOverview(state: AccountUiState, model: AccountFeatureModel) {
                 ) {
                     Text("ログイン")
                 }
+                if (state.canUseBiometricLogin) {
+                    OutlinedButton(
+                        onClick = {
+                            requestBiometricAuthentication(
+                                activity = activity,
+                                onSuccess = model::biometricLogin,
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("顔・指紋などの生体認証でログイン")
+                    }
+                }
                 TextButton(onClick = { model.show(AccountScreen.ResetPassword) }) {
                     Text("パスワードを忘れた方")
                 }
             }
             AccountAccessState.PendingApproval ->
                 Text("コミュニティへの参加申請を確認中です。承認後に会員向け機能が追加されます。")
+            AccountAccessState.Registered ->
+                Text("ログイン済みです。「つながる」からコミュニティコードまたはQRコードで参加申請できます。")
             AccountAccessState.Rejected -> {
                 Text("コミュニティへの参加申請は承認されませんでした。申請先へご確認ください。")
                 OutlinedButton(
@@ -80,6 +106,37 @@ private fun AccountOverview(state: AccountUiState, model: AccountFeatureModel) {
         }
         StatusMessage(state)
     }
+}
+
+private fun requestBiometricAuthentication(
+    activity: FragmentActivity,
+    onSuccess: () -> Unit,
+) {
+    val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG
+    if (BiometricManager.from(activity).canAuthenticate(authenticators) !=
+        BiometricManager.BIOMETRIC_SUCCESS
+    ) {
+        return
+    }
+    val prompt = BiometricPrompt(
+        activity,
+        ContextCompat.getMainExecutor(activity),
+        object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(
+                result: BiometricPrompt.AuthenticationResult,
+            ) {
+                onSuccess()
+            }
+        },
+    )
+    prompt.authenticate(
+        BiometricPrompt.PromptInfo.Builder()
+            .setTitle("生体認証でログイン")
+            .setSubtitle("本人確認後、会員アプリへログインします")
+            .setAllowedAuthenticators(authenticators)
+            .setNegativeButtonText("キャンセル")
+            .build(),
+    )
 }
 
 @Composable

@@ -45,17 +45,28 @@ public struct AuthenticatedAccount: Equatable, Sendable {
     public let userId: String
     public let email: String
     public let emailVerified: Bool
+    public let idToken: String
+    public let refreshToken: String
 
-    public init(userId: String, email: String, emailVerified: Bool) {
+    public init(
+        userId: String,
+        email: String,
+        emailVerified: Bool,
+        idToken: String,
+        refreshToken: String
+    ) {
         self.userId = userId
         self.email = email
         self.emailVerified = emailVerified
+        self.idToken = idToken
+        self.refreshToken = refreshToken
     }
 }
 
 public protocol AccountAuthRepository: Sendable {
     func register(credentials: AccountCredentials) async throws -> AuthenticatedAccount
     func login(credentials: AccountCredentials) async throws -> AuthenticatedAccount
+    func refresh(refreshToken: String) async throws -> AuthenticatedAccount
     func sendPasswordReset(email: String) async throws
 }
 
@@ -76,6 +87,10 @@ public struct UnavailableAccountAuthRepository: AccountAuthRepository {
     }
 
     public func login(credentials: AccountCredentials) async throws -> AuthenticatedAccount {
+        throw DevelopmentFirebaseNotConfiguredError()
+    }
+
+    public func refresh(refreshToken: String) async throws -> AuthenticatedAccount {
         throw DevelopmentFirebaseNotConfiguredError()
     }
 
@@ -111,7 +126,8 @@ public struct FirebaseRESTAccountAuthRepository: AccountAuthRepository {
         guard
             let userId = response["localId"] as? String,
             let email = response["email"] as? String,
-            let idToken = response["idToken"] as? String
+            let idToken = response["idToken"] as? String,
+            let refreshToken = response["refreshToken"] as? String
         else {
             throw FirebaseRESTAuthError.invalidResponse
         }
@@ -131,7 +147,9 @@ public struct FirebaseRESTAccountAuthRepository: AccountAuthRepository {
         return AuthenticatedAccount(
             userId: userId,
             email: email,
-            emailVerified: false
+            emailVerified: false,
+            idToken: idToken,
+            refreshToken: refreshToken
         )
     }
 
@@ -144,15 +162,57 @@ public struct FirebaseRESTAccountAuthRepository: AccountAuthRepository {
                 "returnSecureToken": true
             ]
         )
-        guard let idToken = response["idToken"] as? String else {
+        guard
+            let idToken = response["idToken"] as? String,
+            let refreshToken = response["refreshToken"] as? String
+        else {
             throw FirebaseRESTAuthError.invalidResponse
         }
-        let account = try await lookup(idToken: idToken)
+        let account = try await lookup(idToken: idToken, refreshToken: refreshToken)
         guard account.emailVerified else {
             try await sendEmailVerification(idToken: idToken)
             throw FirebaseRESTAuthError.emailNotVerified
         }
         return account
+    }
+
+    public func refresh(refreshToken: String) async throws -> AuthenticatedAccount {
+        guard var components = URLComponents(
+            string: "https://securetoken.googleapis.com/v1/token"
+        ) else {
+            throw FirebaseRESTAuthError.invalidResponse
+        }
+        components.queryItems = [URLQueryItem(name: "key", value: apiKey)]
+        guard let url = components.url else {
+            throw FirebaseRESTAuthError.invalidResponse
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 15
+        request.setValue(
+            "application/x-www-form-urlencoded",
+            forHTTPHeaderField: "Content-Type"
+        )
+        var form = URLComponents()
+        form.queryItems = [
+            URLQueryItem(name: "grant_type", value: "refresh_token"),
+            URLQueryItem(name: "refresh_token", value: refreshToken)
+        ]
+        request.httpBody = form.percentEncodedQuery?.data(using: .utf8)
+        let (data, response) = try await session.data(for: request)
+        guard
+            let httpResponse = response as? HTTPURLResponse,
+            (200...299).contains(httpResponse.statusCode),
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let idToken = json["id_token"] as? String,
+            let newRefreshToken = json["refresh_token"] as? String
+        else {
+            throw FirebaseRESTAuthError.biometricCredentialExpired
+        }
+        return try await lookup(
+            idToken: idToken,
+            refreshToken: newRefreshToken
+        )
     }
 
     public func sendPasswordReset(email: String) async throws {
@@ -165,7 +225,10 @@ public struct FirebaseRESTAccountAuthRepository: AccountAuthRepository {
         )
     }
 
-    private func lookup(idToken: String) async throws -> AuthenticatedAccount {
+    private func lookup(
+        idToken: String,
+        refreshToken: String
+    ) async throws -> AuthenticatedAccount {
         let response = try await request(
             endpoint: "accounts:lookup",
             body: ["idToken": idToken]
@@ -181,7 +244,9 @@ public struct FirebaseRESTAccountAuthRepository: AccountAuthRepository {
         return AuthenticatedAccount(
             userId: userId,
             email: email,
-            emailVerified: user["emailVerified"] as? Bool ?? false
+            emailVerified: user["emailVerified"] as? Bool ?? false,
+            idToken: idToken,
+            refreshToken: refreshToken
         )
     }
 
@@ -286,6 +351,7 @@ public enum FirebaseRESTAuthError: LocalizedError, Sendable {
     case invalidResponse
     case emailNotVerified
     case profileSaveFailed
+    case biometricCredentialExpired
     case server(code: String)
 
     public var errorDescription: String? {
@@ -296,6 +362,8 @@ public enum FirebaseRESTAuthError: LocalizedError, Sendable {
             return "メールアドレスの確認が完了していません。確認メールを再送しました。"
         case .profileSaveFailed:
             return "アカウントは作成されましたが、会員情報を保存できませんでした。"
+        case .biometricCredentialExpired:
+            return "生体認証ログインの有効期限が切れました。パスワードで再度ログインしてください。"
         case .server(let code):
             switch code {
             case "EMAIL_EXISTS":
@@ -313,5 +381,238 @@ public enum FirebaseRESTAuthError: LocalizedError, Sendable {
                 return "認証処理に失敗しました。通信環境を確認して再度お試しください。"
             }
         }
+    }
+}
+
+public protocol CommunityRepository: Sendable {
+    func findCommunity(code: String, idToken: String) async throws -> Community
+    func apply(community: Community, userId: String, idToken: String) async throws
+    func memberships(userId: String, idToken: String) async throws
+        -> [(CommunityMembership, Community)]
+}
+
+public enum CommunityRepositoryError: LocalizedError, Equatable {
+    case invalidCode
+    case notFound
+    case inactive
+    case joiningDisabled
+    case invalidResponse
+    case requestFailed
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidCode: "コミュニティコードを確認してください。"
+        case .notFound: "該当するコミュニティが見つかりませんでした。"
+        case .inactive: "このコミュニティは現在利用できません。"
+        case .joiningDisabled: "このコミュニティは現在、参加申請を受け付けていません。"
+        case .invalidResponse: "コミュニティ情報を読み取れませんでした。"
+        case .requestFailed: "通信に失敗しました。時間をおいて再度お試しください。"
+        }
+    }
+}
+
+public struct FirebaseRESTCommunityRepository: CommunityRepository {
+    private let projectId: String
+    private let session: URLSession
+
+    public init(projectId: String, session: URLSession = .shared) {
+        self.projectId = projectId
+        self.session = session
+    }
+
+    public func findCommunity(code: String, idToken: String) async throws -> Community {
+        guard let normalized = CommunityCodeParser.parse(code) else {
+            throw CommunityRepositoryError.invalidCode
+        }
+        if let direct = try? await getCommunity(id: normalized, idToken: idToken) {
+            return try validated(direct)
+        }
+        let body: [String: Any] = [
+            "structuredQuery": [
+                "from": [["collectionId": "organizations"]],
+                "where": [
+                    "fieldFilter": [
+                        "field": ["fieldPath": "organizationCode"],
+                        "op": "EQUAL",
+                        "value": ["stringValue": normalized]
+                    ]
+                ],
+                "limit": 1
+            ]
+        ]
+        let rows = try await requestJSON(
+            path: "documents:runQuery",
+            method: "POST",
+            idToken: idToken,
+            body: body
+        ) as? [[String: Any]]
+        guard let document = rows?
+            .compactMap({ $0["document"] as? [String: Any] }).first else {
+            throw CommunityRepositoryError.notFound
+        }
+        return try validated(try parseCommunity(document))
+    }
+
+    public func apply(
+        community: Community,
+        userId: String,
+        idToken: String
+    ) async throws {
+        let now = ISO8601DateFormatter().string(from: Date())
+        let fields: [String: Any] = [
+            "uid": ["stringValue": userId],
+            "userId": ["stringValue": userId],
+            "organizationId": ["stringValue": community.id],
+            "communityId": ["stringValue": community.id],
+            "status": ["stringValue": "pending"],
+            "role": ["stringValue": "member"],
+            "createdAt": ["timestampValue": now],
+            "updatedAt": ["timestampValue": now]
+        ]
+        _ = try await requestJSON(
+            path: "documents/organizations/\(community.id)/members/\(userId)",
+            method: "PATCH",
+            idToken: idToken,
+            body: ["fields": fields]
+        )
+    }
+
+    public func memberships(
+        userId: String,
+        idToken: String
+    ) async throws -> [(CommunityMembership, Community)] {
+        let body: [String: Any] = [
+            "structuredQuery": [
+                "from": [["collectionId": "members", "allDescendants": true]],
+                "where": [
+                    "fieldFilter": [
+                        "field": ["fieldPath": "uid"],
+                        "op": "EQUAL",
+                        "value": ["stringValue": userId]
+                    ]
+                ]
+            ]
+        ]
+        let rows = try await requestJSON(
+            path: "documents:runQuery",
+            method: "POST",
+            idToken: idToken,
+            body: body
+        ) as? [[String: Any]] ?? []
+        var result: [(CommunityMembership, Community)] = []
+        for row in rows {
+            guard let document = row["document"] as? [String: Any],
+                  let membership = parseMembership(document, userId: userId),
+                  let community = try? await getCommunity(
+                    id: membership.communityId,
+                    idToken: idToken
+                  ) else { continue }
+            result.append((membership, community))
+        }
+        return result.sorted {
+            $0.1.name.localizedStandardCompare($1.1.name) == .orderedAscending
+        }
+    }
+
+    private func getCommunity(id: String, idToken: String) async throws -> Community {
+        guard let document = try await requestJSON(
+            path: "documents/organizations/\(id)",
+            method: "GET",
+            idToken: idToken
+        ) as? [String: Any] else {
+            throw CommunityRepositoryError.invalidResponse
+        }
+        return try parseCommunity(document)
+    }
+
+    private func validated(_ community: Community) throws -> Community {
+        guard community.isActive else { throw CommunityRepositoryError.inactive }
+        guard community.joinEnabled else { throw CommunityRepositoryError.joiningDisabled }
+        return community
+    }
+
+    private func parseCommunity(_ document: [String: Any]) throws -> Community {
+        guard let fields = document["fields"] as? [String: Any] else {
+            throw CommunityRepositoryError.invalidResponse
+        }
+        let id = (document["name"] as? String)?.split(separator: "/").last.map(String.init) ?? ""
+        guard !id.isEmpty, let name = string(fields, "name"), !name.isEmpty else {
+            throw CommunityRepositoryError.invalidResponse
+        }
+        return Community(
+            id: id,
+            code: string(fields, "organizationCode") ?? id,
+            name: name,
+            description: string(fields, "description") ?? "",
+            logoURL: string(fields, "logoImageURL").flatMap(URL.init(string:)),
+            homepageURL: string(fields, "homepageURL").flatMap(URL.init(string:)),
+            isActive: bool(fields, "isActive") ?? true,
+            joinEnabled: bool(fields, "communityJoinEnabled") ?? false
+        )
+    }
+
+    private func parseMembership(
+        _ document: [String: Any],
+        userId: String
+    ) -> CommunityMembership? {
+        guard let fields = document["fields"] as? [String: Any],
+              let path = document["name"] as? String else { return nil }
+        let components = path.split(separator: "/")
+        guard let organizationIndex = components.lastIndex(of: "organizations"),
+              components.indices.contains(organizationIndex + 1),
+              let rawStatus = string(fields, "status"),
+              let status = CommunityMembershipStatus(rawValue: rawStatus) else { return nil }
+        return CommunityMembership(
+            id: components.last.map(String.init) ?? userId,
+            communityId: String(components[organizationIndex + 1]),
+            userId: userId,
+            status: status,
+            role: string(fields, "role") ?? "member",
+            joinedAt: timestamp(fields, "joinedAt")
+        )
+    }
+
+    private func string(_ fields: [String: Any], _ key: String) -> String? {
+        (fields[key] as? [String: Any])?["stringValue"] as? String
+    }
+
+    private func bool(_ fields: [String: Any], _ key: String) -> Bool? {
+        (fields[key] as? [String: Any])?["booleanValue"] as? Bool
+    }
+
+    private func timestamp(_ fields: [String: Any], _ key: String) -> Date? {
+        guard let value = (fields[key] as? [String: Any])?["timestampValue"] as? String else {
+            return nil
+        }
+        return ISO8601DateFormatter().date(from: value)
+    }
+
+    private func requestJSON(
+        path: String,
+        method: String,
+        idToken: String,
+        body: [String: Any]? = nil
+    ) async throws -> Any {
+        guard let url = URL(
+            string: "https://firestore.googleapis.com/v1/projects/\(projectId)"
+                + "/databases/(default)/\(path)"
+        ) else { throw CommunityRepositoryError.invalidResponse }
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.timeoutInterval = 15
+        request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+        if let body {
+            request.setValue("application/json; charset=UTF-8", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw CommunityRepositoryError.requestFailed
+        }
+        if httpResponse.statusCode == 404 { throw CommunityRepositoryError.notFound }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw CommunityRepositoryError.requestFailed
+        }
+        return try JSONSerialization.jsonObject(with: data)
     }
 }

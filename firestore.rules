@@ -32,6 +32,35 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/organizations/$(organizationId)).data.isActive == true;
     }
 
+    function isMembershipApplication(data, organizationId, memberUid) {
+      return data.keys().hasOnly([
+          "uid",
+          "userId",
+          "organizationId",
+          "communityId",
+          "role",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ])
+        && data.keys().hasAll([
+          "uid",
+          "userId",
+          "organizationId",
+          "communityId",
+          "role",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ])
+        && data.uid == memberUid
+        && data.userId == memberUid
+        && data.organizationId == organizationId
+        && data.communityId == organizationId
+        && data.role == "member"
+        && data.status == "pending";
+    }
+
     function isSharedManualData(data) {
       return data.keys().hasOnly([
           "title",
@@ -136,14 +165,24 @@ service cloud.firestore {
         allow read: if isOrgStaff(organizationId) || isOwner(memberUid);
 
         allow create: if isOwner(memberUid)
-          && request.resource.data.uid == request.auth.uid
-          && request.resource.data.status in ["pending", "approved"];
+          && isMembershipApplication(
+            request.resource.data,
+            organizationId,
+            memberUid
+          );
 
         allow update: if isOrgStaff(organizationId)
           || (
             isOwner(memberUid)
             && request.resource.data.uid == resource.data.uid
+            && request.resource.data.userId == resource.data.userId
+            && request.resource.data.organizationId == resource.data.organizationId
+            && request.resource.data.communityId == resource.data.communityId
+            && request.resource.data.role == resource.data.role
             && request.resource.data.status == resource.data.status
+            && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+              "updatedAt"
+            ])
           );
 
         allow delete: if isOrgStaff(organizationId);
@@ -250,6 +289,12 @@ service cloud.firestore {
       match /{document=**} {
         allow read, write: if isOrgStaff(organizationId);
       }
+    }
+
+    // 所属一覧のcollection-group取得用。利用者本人のデータだけを返す。
+    match /{path=**}/members/{memberUid} {
+      allow read: if isSignedIn()
+        && resource.data.uid == request.auth.uid;
     }
 
     match /{document=**} {
