@@ -4,6 +4,7 @@ import SwiftData
 import SwiftUI
 import VisionKit
 import DataLayer
+import DesignSystem
 import FeatureTools
 import Navigation
 import Notifications
@@ -60,6 +61,7 @@ private struct AppBootstrapView: View {
     @StateObject private var appSession: AppSession
     @StateObject private var accountModel: AccountFeatureModel
     @StateObject private var communityModel: CommunityFeatureModel
+    @StateObject private var announcementModel: AnnouncementFeatureModel
 
     init(modelContainer: ModelContainer) {
         let session = AppSession()
@@ -79,14 +81,19 @@ private struct AppBootstrapView: View {
                 session: session
             )
         )
-        _communityModel = StateObject(
-            wrappedValue: CommunityFeatureModel(
-                repository: FirebaseRESTCommunityRepository(
-                    projectId: Bundle.main.object(
-                        forInfoDictionaryKey: "FirebaseProjectID"
-                    ) as? String ?? ""
-                ),
-                session: session
+        let firebaseProjectID = Bundle.main.object(
+            forInfoDictionaryKey: "FirebaseProjectID"
+        ) as? String ?? ""
+        let community = CommunityFeatureModel(
+            repository: FirebaseRESTCommunityRepository(projectId: firebaseProjectID),
+            session: session
+        )
+        _communityModel = StateObject(wrappedValue: community)
+        _announcementModel = StateObject(
+            wrappedValue: AnnouncementFeatureModel(
+                repository: FirebaseRESTAnnouncementRepository(projectId: firebaseProjectID),
+                session: session,
+                memberships: { community.items.map(\.0) }
             )
         )
         let scheduleRepository = SwiftDataScheduleRepository(
@@ -159,7 +166,10 @@ private struct AppBootstrapView: View {
                 snsPostingAssistantModel: snsPostingAssistantModel,
                 favoriteBookmarkModel: favoriteBookmarkModel
             ),
-            community: CommunityRootView(model: communityModel),
+            community: ConnectedRootView(
+                communityModel: communityModel,
+                announcementModel: announcementModel
+            ),
             profile: AccountRootView(model: accountModel)
         )
     }
@@ -216,6 +226,24 @@ private final class CommunityFeatureModel: ObservableObject {
         message = community.joinEnabled
             ? "参加先を確認し、下の「参加申請」を押してください。"
             : "このコミュニティは現在、参加申請を受け付けていません。"
+    }
+
+    func apply(to community: Community) {
+        guard isLoggedIn else {
+            message = "参加申請には、マイページから会員登録またはログインが必要です。"
+            return
+        }
+        guard community.joinEnabled else {
+            message = "このコミュニティは現在、参加申請を受け付けていません。"
+            return
+        }
+        candidate = community
+        code = community.code
+        apply()
+    }
+
+    func membershipStatus(for communityId: String) -> CommunityMembershipStatus? {
+        items.first { $0.1.id == communityId }?.0.status
     }
 
     func search() {
@@ -347,6 +375,243 @@ private final class CommunityFeatureModel: ObservableObject {
     }
 }
 
+@MainActor
+private final class AnnouncementFeatureModel: ObservableObject {
+    @Published private(set) var announcements: [Announcement] = []
+    @Published private(set) var readIDs: Set<String> = []
+    @Published var selected: Announcement?
+    @Published private(set) var isLoading = false
+    @Published var errorMessage: String?
+
+    private let repository: any AnnouncementRepository
+    let session: AppSession
+    private let memberships: () -> [CommunityMembership]
+
+    init(
+        repository: any AnnouncementRepository,
+        session: AppSession,
+        memberships: @escaping () -> [CommunityMembership]
+    ) {
+        self.repository = repository
+        self.session = session
+        self.memberships = memberships
+    }
+
+    func refresh() {
+        let communityID = session.selectedCommunityId
+        let userID = session.authenticatedUserId
+        let token = session.authenticationToken
+        let membership = memberships().first {
+            $0.communityId == communityID && $0.status == .approved
+        }
+        isLoading = true
+        errorMessage = nil
+        Task {
+            do {
+                announcements = try await repository.announcements(
+                    communityId: communityID,
+                    membership: membership,
+                    userId: userID,
+                    idToken: token
+                )
+                if let userID, let token {
+                    readIDs = try await repository.readAnnouncementIDs(
+                        userId: userID,
+                        idToken: token
+                    )
+                } else {
+                    readIDs = []
+                }
+                isLoading = false
+            } catch {
+                isLoading = false
+                errorMessage = "お知らせを読み込めませんでした。時間をおいて再度お試しください。"
+            }
+        }
+    }
+
+    func open(_ announcement: Announcement) {
+        selected = announcement
+        guard let userID = session.authenticatedUserId,
+              let token = session.authenticationToken,
+              !readIDs.contains(announcement.id) else { return }
+        Task {
+            do {
+                try await repository.markRead(
+                    userId: userID,
+                    announcementId: announcement.id,
+                    idToken: token
+                )
+                readIDs.insert(announcement.id)
+            } catch {
+                errorMessage = "既読状態を保存できませんでした。"
+            }
+        }
+    }
+}
+
+private struct ConnectedRootView: View {
+    @ObservedObject var communityModel: CommunityFeatureModel
+    @ObservedObject var announcementModel: AnnouncementFeatureModel
+    @State private var selection = 0
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Picker("つながる", selection: $selection) {
+                Text("コミュニティ").tag(0)
+                Text("お知らせ").tag(1)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 24)
+            .padding(.top, 12)
+            if selection == 0 {
+                CommunityRootView(model: communityModel)
+            } else {
+                AnnouncementRootView(model: announcementModel)
+            }
+        }
+    }
+}
+
+private struct AnnouncementRootView: View {
+    @ObservedObject var model: AnnouncementFeatureModel
+
+    private var refreshIdentity: String {
+        [
+            model.session.selectedCommunityId ?? "public",
+            model.session.authenticatedUserId ?? "guest",
+            model.session.authenticationToken == nil ? "signed-out" : "signed-in"
+        ].joined(separator: ":")
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if model.isLoading {
+                    LoadingState()
+                } else if let errorMessage = model.errorMessage {
+                    ErrorState(message: errorMessage, retry: model.refresh)
+                } else if model.announcements.isEmpty {
+                    EmptyState("お知らせはありません", systemImage: "bell")
+                } else {
+                    List {
+                        let unread = model.announcements.filter {
+                            !model.readIDs.contains($0.id)
+                        }
+                        let read = model.announcements.filter {
+                            model.readIDs.contains($0.id)
+                        }
+                        if !unread.isEmpty {
+                            Section("未読 \(unread.count)件") {
+                                ForEach(unread) { announcement in
+                                    announcementRow(announcement, isRead: false)
+                                }
+                            }
+                        }
+                        if !read.isEmpty {
+                            Section("既読") {
+                                ForEach(read) { announcement in
+                                    announcementRow(announcement, isRead: true)
+                                }
+                            }
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle("お知らせ")
+            .toolbar {
+                Button("更新", action: model.refresh)
+            }
+            .task(id: refreshIdentity) {
+                model.refresh()
+            }
+            .sheet(item: $model.selected) { announcement in
+                AnnouncementDetailView(announcement: announcement)
+            }
+        }
+    }
+
+    private func announcementRow(
+        _ announcement: Announcement,
+        isRead: Bool
+    ) -> some View {
+        Button {
+            model.open(announcement)
+        } label: {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: isRead ? "envelope.open" : "envelope.badge")
+                    .foregroundStyle(isRead ? Color.secondary : Color.green)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(announcement.title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text(announcement.body)
+                        .lineLimit(2)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct AnnouncementDetailView: View {
+    let announcement: Announcement
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text(announcement.title).font(.title2.bold())
+                    if let createdAt = announcement.createdAt {
+                        Text(createdAt.formatted(date: .abbreviated, time: .shortened))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    Divider()
+                    Text(announcement.body)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    ForEach(
+                        Array(announcement.attachments.enumerated()),
+                        id: \.offset
+                    ) { _, attachment in
+                        Link(attachment.name, destination: attachment.url)
+                            .buttonStyle(.bordered)
+                    }
+                    if let zoomURL = announcement.zoomURL {
+                        Link("Zoomを開く", destination: zoomURL)
+                            .buttonStyle(.bordered)
+                    }
+                    if let videoURL = announcement.videoURL {
+                        Link("動画を開く", destination: videoURL)
+                            .buttonStyle(.bordered)
+                    }
+                    ShareLink(
+                        item: "\(announcement.title)\n\n\(announcement.body)",
+                        subject: Text(announcement.title)
+                    ) {
+                        Label("共有", systemImage: "square.and.arrow.up")
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding(24)
+            }
+            .navigationTitle("お知らせ")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("閉じる") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
 private struct CommunityRootView: View {
     @ObservedObject var model: CommunityFeatureModel
 
@@ -354,6 +619,15 @@ private struct CommunityRootView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    if model.isLoading { ProgressView() }
+                    if let message = model.message {
+                        Text(message)
+                            .foregroundStyle(.secondary)
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.secondary.opacity(0.08))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
                     publicCommunitySection
                     if !model.isLoggedIn {
                         ContentUnavailableView(
@@ -367,10 +641,6 @@ private struct CommunityRootView: View {
                             applicationReviewSection
                         }
                         joinSection
-                    }
-                    if model.isLoading { ProgressView() }
-                    if let message = model.message {
-                        Text(message).foregroundStyle(.secondary)
                     }
                 }
                 .padding(24)
@@ -413,16 +683,30 @@ private struct CommunityRootView: View {
                         if let homepage = community.homepageURL {
                             Link("ホームページを見る", destination: homepage)
                         }
-                        Text(community.joinEnabled ? "参加申請受付中" : "現在は参加申請受付外")
+                        let membershipStatus = model.membershipStatus(for: community.id)
+                        Text(publicStatusText(
+                            membershipStatus: membershipStatus,
+                            joinEnabled: community.joinEnabled
+                        ))
                             .font(.footnote)
-                            .foregroundStyle(
-                                community.joinEnabled ? Color.green : Color.secondary
-                            )
-                        Button("このコミュニティへ参加") {
-                            model.prepareApplication(for: community)
+                            .foregroundStyle(publicStatusColor(membershipStatus))
+                        if membershipStatus == .approved {
+                            Button(
+                                model.session.selectedCommunityId == community.id
+                                    ? "選択中のコミュニティ"
+                                    : "このコミュニティへ切替"
+                            ) {
+                                model.selectCommunity(community.id)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(model.session.selectedCommunityId == community.id)
+                        } else if membershipStatus == nil {
+                            Button("このコミュニティへ参加申請") {
+                                model.apply(to: community)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(!community.joinEnabled || model.isLoading)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(!community.joinEnabled)
                     }
                     .padding(.top, 8)
                 } label: {
@@ -566,6 +850,22 @@ private struct CommunityRootView: View {
         case .approved: .green
         case .rejected: .red
         }
+    }
+
+    private func publicStatusText(
+        membershipStatus: CommunityMembershipStatus?,
+        joinEnabled: Bool
+    ) -> String {
+        if let membershipStatus {
+            return statusText(membershipStatus)
+        }
+        return joinEnabled ? "参加申請受付中" : "現在は参加申請受付外"
+    }
+
+    private func publicStatusColor(
+        _ membershipStatus: CommunityMembershipStatus?
+    ) -> Color {
+        membershipStatus.map(statusColor) ?? .secondary
     }
 }
 

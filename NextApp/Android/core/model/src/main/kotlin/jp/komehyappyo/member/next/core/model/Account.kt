@@ -45,6 +45,53 @@ data class CommunityMembership(
     val applicantFurigana: String? = null,
     val applicantEmail: String? = null,
     val createdAt: String? = null,
+    val categoryIds: Set<String> = emptySet(),
+)
+
+enum class AnnouncementPublishScope {
+    Public,
+    MemberAll,
+    Category,
+    Individual,
+}
+
+data class AnnouncementAttachment(
+    val type: String,
+    val name: String,
+    val url: String,
+)
+
+data class Announcement(
+    val id: String,
+    val communityId: String,
+    val title: String,
+    val body: String,
+    val publishScope: AnnouncementPublishScope,
+    val targetCategoryIds: Set<String> = emptySet(),
+    val targetUserIds: Set<String> = emptySet(),
+    val attachments: List<AnnouncementAttachment> = emptyList(),
+    val zoomUrl: String? = null,
+    val videoUrl: String? = null,
+    val createdAt: String? = null,
+) {
+    fun isVisibleTo(
+        userId: String?,
+        categoryIds: Set<String>,
+        isApprovedMember: Boolean,
+    ): Boolean = when (publishScope) {
+        AnnouncementPublishScope.Public -> true
+        AnnouncementPublishScope.MemberAll -> isApprovedMember
+        AnnouncementPublishScope.Category ->
+            isApprovedMember && targetCategoryIds.any(categoryIds::contains)
+        AnnouncementPublishScope.Individual ->
+            isApprovedMember && userId != null && userId in targetUserIds
+    }
+}
+
+data class AnnouncementReadState(
+    val userId: String,
+    val announcementId: String,
+    val readAt: String,
 )
 
 data class CommunityAdminAccess(

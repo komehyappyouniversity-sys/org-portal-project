@@ -7,6 +7,309 @@ public enum FirebaseEnvironment: String, Sendable {
     case production
 }
 
+public protocol AnnouncementRepository: Sendable {
+    func announcements(
+        communityId: String?,
+        membership: CommunityMembership?,
+        userId: String?,
+        idToken: String?
+    ) async throws -> [Announcement]
+
+    func readAnnouncementIDs(userId: String, idToken: String) async throws -> Set<String>
+
+    func markRead(
+        userId: String,
+        announcementId: String,
+        idToken: String
+    ) async throws
+}
+
+public struct FirebaseRESTAnnouncementRepository: AnnouncementRepository {
+    private let projectId: String
+    private let session: URLSession
+
+    public init(projectId: String, session: URLSession = .shared) {
+        self.projectId = projectId
+        self.session = session
+    }
+
+    public func announcements(
+        communityId: String?,
+        membership: CommunityMembership?,
+        userId: String?,
+        idToken: String?
+    ) async throws -> [Announcement] {
+        let approved = membership?.status == .approved
+        let documents: [(String, [String: Any])]
+        if let communityId, approved, let idToken {
+            let canonical = try await listDocuments(
+                communityId: communityId,
+                collection: "announcements",
+                idToken: idToken
+            )
+            let legacy = try await listDocuments(
+                communityId: communityId,
+                collection: "messages",
+                idToken: idToken
+            )
+            documents = canonical + legacy
+        } else {
+            let canonical = try await publicDocuments(
+                collection: "announcements",
+                field: "publishScope",
+                value: "public"
+            )
+            let publicLegacy = try await publicDocuments(
+                collection: "messages",
+                field: "messageType",
+                value: "publicAnnouncement"
+            )
+            let visibleLegacy = try await publicDocuments(
+                collection: "messages",
+                field: "visibility",
+                value: "public"
+            )
+            documents = canonical + publicLegacy + visibleLegacy
+        }
+        var seen = Set<String>()
+        return documents
+            .compactMap(parseAnnouncement)
+            .filter { seen.insert($0.id).inserted }
+            .filter {
+                $0.isVisible(
+                    userId: userId,
+                    categoryIds: membership?.categoryIds ?? [],
+                    isApprovedMember: approved
+                )
+            }
+            .sorted { ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast) }
+    }
+
+    public func readAnnouncementIDs(
+        userId: String,
+        idToken: String
+    ) async throws -> Set<String> {
+        let response = try await requestJSON(
+            path: "documents/memberPrivate/\(userId)"
+                + "/announcementReadStates?pageSize=1000",
+            method: "GET",
+            idToken: idToken
+        ) as? [String: Any]
+        let documents = response?["documents"] as? [[String: Any]] ?? []
+        return Set(documents.compactMap { document in
+            guard let fields = document["fields"] as? [String: Any] else { return nil }
+            return string(fields, "announcementId")
+        })
+    }
+
+    public func markRead(
+        userId: String,
+        announcementId: String,
+        idToken: String
+    ) async throws {
+        let documentID = announcementId
+            .replacingOccurrences(
+                of: "[^A-Za-z0-9_-]",
+                with: "_",
+                options: .regularExpression
+            )
+        let fields: [String: Any] = [
+            "userId": stringValue(userId),
+            "announcementId": stringValue(announcementId),
+            "readAt": timestampValue(ISO8601DateFormatter().string(from: Date()))
+        ]
+        _ = try await requestJSON(
+            path: "documents/memberPrivate/\(userId)"
+                + "/announcementReadStates/\(documentID)",
+            method: "PATCH",
+            idToken: idToken,
+            body: ["fields": fields]
+        )
+    }
+
+    private func listDocuments(
+        communityId: String,
+        collection: String,
+        idToken: String
+    ) async throws -> [(String, [String: Any])] {
+        let result = try await requestJSON(
+            path: "documents/organizations/\(communityId)/\(collection)?pageSize=1000",
+            method: "GET",
+            idToken: idToken
+        ) as? [String: Any]
+        return (result?["documents"] as? [[String: Any]] ?? []).map {
+            (collection, $0)
+        }
+    }
+
+    private func publicDocuments(
+        collection: String,
+        field: String,
+        value: String
+    ) async throws -> [(String, [String: Any])] {
+        let body: [String: Any] = [
+            "structuredQuery": [
+                "from": [[
+                    "collectionId": collection,
+                    "allDescendants": true
+                ]],
+                "where": [
+                    "fieldFilter": [
+                        "field": ["fieldPath": field],
+                        "op": "EQUAL",
+                        "value": stringValue(value)
+                    ]
+                ]
+            ]
+        ]
+        let rows = try await requestJSON(
+            path: "documents:runQuery",
+            method: "POST",
+            idToken: nil,
+            body: body
+        ) as? [[String: Any]] ?? []
+        return rows.compactMap {
+            guard let document = $0["document"] as? [String: Any] else { return nil }
+            return (collection, document)
+        }
+    }
+
+    private func parseAnnouncement(
+        _ sourceDocument: (String, [String: Any])
+    ) -> Announcement? {
+        let (source, document) = sourceDocument
+        guard let fields = document["fields"] as? [String: Any],
+              let name = document["name"] as? String else { return nil }
+        let path = name.split(separator: "/").map(String.init)
+        guard let organizationsIndex = path.lastIndex(of: "organizations"),
+              organizationsIndex + 1 < path.count,
+              let rawID = path.last else { return nil }
+        let communityId = path[organizationsIndex + 1]
+        let scope: AnnouncementPublishScope
+        if source == "announcements" {
+            switch string(fields, "publishScope") {
+            case "public": scope = .public
+            case "category": scope = .category
+            case "individual": scope = .individual
+            default: scope = .memberAll
+            }
+        } else if string(fields, "messageType") == "publicAnnouncement"
+                    || string(fields, "visibility") == "public"
+                    || string(fields, "deliveryType") == "公開お知らせ" {
+            scope = .public
+        } else if !(
+            stringArray(fields, "targetMemberUids")
+                + stringArray(fields, "toUids")
+        ).isEmpty {
+            scope = .individual
+        } else if !stringArray(fields, "categoryTargets").isEmpty {
+            scope = .category
+        } else {
+            scope = .memberAll
+        }
+        guard let title = string(fields, "title") else { return nil }
+        return Announcement(
+            id: "\(communityId):\(source):\(rawID)",
+            communityId: communityId,
+            title: title,
+            body: string(fields, "body") ?? "",
+            publishScope: scope,
+            targetCategoryIds: Set(
+                stringArray(fields, "targetCategoryIds")
+                    + stringArray(fields, "categoryTargets")
+                    + [string(fields, "targetCategoryId")].compactMap { $0 }
+            ),
+            targetUserIds: Set(
+                stringArray(fields, "targetUserIds")
+                    + stringArray(fields, "targetMemberUids")
+                    + stringArray(fields, "toUids")
+            ),
+            attachments: attachments(fields),
+            zoomURL: URL(
+                string: string(fields, "zoomUrl")
+                    ?? string(fields, "zoomURL")
+                    ?? ""
+            ),
+            videoURL: URL(
+                string: string(fields, "videoUrl")
+                    ?? string(fields, "videoURL")
+                    ?? ""
+            ),
+            createdAt: timestamp(fields, "createdAt")
+        )
+    }
+
+    private func attachments(_ fields: [String: Any]) -> [AnnouncementAttachment] {
+        guard let value = fields["attachments"] as? [String: Any],
+              let array = value["arrayValue"] as? [String: Any],
+              let values = array["values"] as? [[String: Any]] else { return [] }
+        return values.compactMap { value in
+            guard let map = value["mapValue"] as? [String: Any],
+                  let attachmentFields = map["fields"] as? [String: Any],
+                  let rawURL = string(attachmentFields, "url"),
+                  let url = URL(string: rawURL) else { return nil }
+            return AnnouncementAttachment(
+                type: string(attachmentFields, "type") ?? "url",
+                name: string(attachmentFields, "name") ?? "添付ファイル",
+                url: url
+            )
+        }
+    }
+
+    private func requestJSON(
+        path: String,
+        method: String,
+        idToken: String?,
+        body: [String: Any]? = nil
+    ) async throws -> Any {
+        guard let url = URL(
+            string: "https://firestore.googleapis.com/v1/projects/\(projectId)"
+                + "/databases/(default)/\(path)"
+        ) else { throw CommunityRepositoryError.invalidResponse }
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.timeoutInterval = 15
+        idToken.map { request.setValue("Bearer \($0)", forHTTPHeaderField: "Authorization") }
+        if let body {
+            request.setValue("application/json; charset=UTF-8", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        let (data, response) = try await session.data(for: request)
+        guard let response = response as? HTTPURLResponse else {
+            throw CommunityRepositoryError.requestFailed
+        }
+        guard (200...299).contains(response.statusCode) else {
+            throw CommunityRepositoryError.requestFailed
+        }
+        return try JSONSerialization.jsonObject(with: data)
+    }
+
+    private func stringValue(_ value: String) -> [String: Any] {
+        ["stringValue": value]
+    }
+
+    private func timestampValue(_ value: String) -> [String: Any] {
+        ["timestampValue": value]
+    }
+
+    private func string(_ fields: [String: Any], _ key: String) -> String? {
+        (fields[key] as? [String: Any])?["stringValue"] as? String
+    }
+
+    private func stringArray(_ fields: [String: Any], _ key: String) -> [String] {
+        guard let value = fields[key] as? [String: Any],
+              let array = value["arrayValue"] as? [String: Any],
+              let values = array["values"] as? [[String: Any]] else { return [] }
+        return values.compactMap { $0["stringValue"] as? String }
+    }
+
+    private func timestamp(_ fields: [String: Any], _ key: String) -> Date? {
+        guard let value = (fields[key] as? [String: Any])?["timestampValue"]
+            as? String else { return nil }
+        return ISO8601DateFormatter().date(from: value)
+    }
+}
+
 public struct FirebaseRuntimeConfiguration: Sendable {
     public let environment: FirebaseEnvironment
     public let projectId: String
@@ -773,7 +1076,12 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
             applicantName: string(fields, "applicantName"),
             applicantFurigana: string(fields, "applicantFurigana"),
             applicantEmail: string(fields, "applicantEmail"),
-            createdAt: timestamp(fields, "createdAt")
+            createdAt: timestamp(fields, "createdAt"),
+            categoryIds: Set(
+                stringArray(fields, "categoryIds")
+                    + stringArray(fields, "categories")
+                    + [string(fields, "categoryId")].compactMap { $0 }
+            )
         )
     }
 
@@ -808,6 +1116,15 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
             return nil
         }
         return ISO8601DateFormatter().date(from: value)
+    }
+
+    private func stringArray(_ fields: [String: Any], _ key: String) -> [String] {
+        guard let value = fields[key] as? [String: Any],
+              let array = value["arrayValue"] as? [String: Any],
+              let values = array["values"] as? [[String: Any]] else {
+            return []
+        }
+        return values.compactMap { $0["stringValue"] as? String }
     }
 
     private func requestJSON(

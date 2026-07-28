@@ -49,6 +49,8 @@ fun CommunityRoot(model: CommunityFeatureModel) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text("つながる")
+        if (state.isLoading) CircularProgressIndicator()
+        state.message?.let { Text(it) }
         Text("コミュニティを探す")
         Text("公開中のコミュニティを見て回れます。")
         OutlinedTextField(
@@ -65,6 +67,9 @@ fun CommunityRoot(model: CommunityFeatureModel) {
             Text("公開中のコミュニティは見つかりませんでした。")
         }
         state.publicCommunities.forEach { community ->
+            val membership = state.memberships.firstOrNull {
+                it.second.id == community.id
+            }?.first
             Column(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -87,17 +92,41 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                     }
                 }
                 Text(
-                    if (community.joinEnabled) {
-                        "参加申請受付中"
-                    } else {
-                        "現在は参加申請受付外"
+                    when (membership?.status) {
+                        CommunityMembershipStatus.Pending -> "承認待ち"
+                        CommunityMembershipStatus.Approved -> "参加中"
+                        CommunityMembershipStatus.Rejected -> "承認されませんでした"
+                        null -> if (community.joinEnabled) {
+                            "参加申請受付中"
+                        } else {
+                            "現在は参加申請受付外"
+                        }
                     },
                 )
-                Button(
-                    onClick = { model.prepareApplication(community) },
-                    enabled = community.joinEnabled,
-                ) {
-                    Text("このコミュニティへ参加")
+                when (membership?.status) {
+                    CommunityMembershipStatus.Approved -> {
+                        Button(
+                            onClick = { model.selectCommunity(community.id) },
+                            enabled = sessionState.selectedCommunityId != community.id,
+                        ) {
+                            Text(
+                                if (sessionState.selectedCommunityId == community.id) {
+                                    "選択中のコミュニティ"
+                                } else {
+                                    "このコミュニティへ切替"
+                                },
+                            )
+                        }
+                    }
+                    null -> {
+                        Button(
+                            onClick = { model.applyTo(community) },
+                            enabled = community.joinEnabled && !state.isLoading,
+                        ) {
+                            Text("このコミュニティへ参加申請")
+                        }
+                    }
+                    else -> Unit
                 }
             }
             HorizontalDivider()
@@ -234,7 +263,5 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                 }
             }
         }
-        if (state.isLoading) CircularProgressIndicator()
-        state.message?.let { Text(it) }
     }
 }

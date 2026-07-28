@@ -61,3 +61,21 @@ firebase emulators:exec \
 ```
 
 `demo-`で始まるプロジェクトIDだけを使うため、この検証から本番Firebaseへ接続することはありません。
+
+### 開発Firebaseのコミュニティ初期データ
+
+実機でコミュニティコードによる参加申請を確認するには、開発Firebase
+`kome-org-portal-next-dev` の `organizations` に公開コミュニティ設定が必要です。
+本番の会員・管理者・申請・投稿データは複製せず、公開中かつ参加受付中の
+組織設定だけを次の手順で投入します。
+
+```sh
+# 対象確認（書き込みなし）
+node scripts/seed_development_communities.js
+
+# 開発Firebaseへ新規文書だけを投入
+node scripts/seed_development_communities.js --apply
+```
+
+スクリプトはコピー元・コピー先を固定し、許可リストに含まれる公開フィールド
+だけを扱います。コピー先に同じ組織文書がある場合は上書きせずスキップします。
