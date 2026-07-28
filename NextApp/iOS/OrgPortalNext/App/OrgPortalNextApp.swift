@@ -58,6 +58,7 @@ private struct AppBootstrapView: View {
     @StateObject private var meetingMinutesModel: MeetingMinutesFeatureModel
     @StateObject private var snsPostingAssistantModel: SnsPostingAssistantFeatureModel
     @StateObject private var favoriteBookmarkModel: FavoriteBookmarkFeatureModel
+    @StateObject private var appBackupModel: AppBackupFeatureModel
     @StateObject private var appSession: AppSession
     @StateObject private var accountModel: AccountFeatureModel
     @StateObject private var communityModel: CommunityFeatureModel
@@ -125,25 +126,42 @@ private struct AppBootstrapView: View {
             )
         )
         let meetingRecordingStore = LocalMeetingRecordingStore()
+        let meetingMinutesRepository = SwiftDataMeetingMinutesRepository(
+            modelContainer: modelContainer
+        )
         _meetingMinutesModel = StateObject(
             wrappedValue: MeetingMinutesFeatureModel(
-                repository: SwiftDataMeetingMinutesRepository(
-                    modelContainer: modelContainer
-                ),
+                repository: meetingMinutesRepository,
                 recordingStore: meetingRecordingStore
             )
         )
+        let snsCustomLinkRepository = SwiftDataSnsCustomLinkRepository(
+            modelContainer: modelContainer
+        )
         _snsPostingAssistantModel = StateObject(
             wrappedValue: SnsPostingAssistantFeatureModel(
-                repository: SwiftDataSnsCustomLinkRepository(
-                    modelContainer: modelContainer
-                )
+                repository: snsCustomLinkRepository
             )
+        )
+        let favoriteBookmarkRepository = SwiftDataFavoriteBookmarkRepository(
+            modelContainer: modelContainer
         )
         _favoriteBookmarkModel = StateObject(
             wrappedValue: FavoriteBookmarkFeatureModel(
-                repository: SwiftDataFavoriteBookmarkRepository(
-                    modelContainer: modelContainer
+                repository: favoriteBookmarkRepository
+            )
+        )
+        _appBackupModel = StateObject(
+            wrappedValue: AppBackupFeatureModel(
+                service: AppBackupService(
+                    scheduleRepository: scheduleRepository,
+                    diaryRepository: diaryRepository,
+                    photoStore: photoStore,
+                    cashDistributionRepository: cashDistributionRepository,
+                    meetingMinutesRepository: meetingMinutesRepository,
+                    recordingStore: meetingRecordingStore,
+                    snsCustomLinkRepository: snsCustomLinkRepository,
+                    favoriteBookmarkRepository: favoriteBookmarkRepository
                 )
             )
         )
@@ -156,7 +174,8 @@ private struct AppBootstrapView: View {
                 diaryModel: diaryModel,
                 cashDistributionModel: cashDistributionModel,
                 meetingMinutesModel: meetingMinutesModel,
-                favoriteBookmarkModel: favoriteBookmarkModel
+                favoriteBookmarkModel: favoriteBookmarkModel,
+                appBackupModel: appBackupModel
             ),
             tools: ToolsHubView(
                 scheduleModel: scheduleModel,

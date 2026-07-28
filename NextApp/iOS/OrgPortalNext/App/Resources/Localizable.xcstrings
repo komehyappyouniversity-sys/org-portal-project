@@ -1,100 +1,1094 @@
 {
   "sourceLanguage" : "ja",
   "strings" : {
-    "action.add" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "追加" } } } },
-    "action.add_to_calendar" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "端末カレンダーへ追加" } } } },
-    "action.cancel" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "キャンセル" } } } },
-    "action.close" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "閉じる" } } } },
-    "action.clear" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "すべてクリア" } } } },
-    "action.delete" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "削除" } } } },
-    "action.done" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "完了" } } } },
-    "action.edit" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "編集" } } } },
-    "action.retry" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "再試行" } } } },
-    "action.save" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "保存" } } } },
-    "action.share_csv" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "CSVを共有" } } } },
-    "alert.calendar_added" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "端末カレンダーへ追加しました" } } } },
-    "alert.delete_message" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "この予定を削除します。元に戻せません。" } } } },
-    "alert.delete_title" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "予定を削除しますか？" } } } },
-    "error.calendar" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "端末カレンダーへ追加できませんでした" } } } },
-    "error.diary.title_required" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "タイトルを入力してください" } } } },
-    "error.diary.too_many_photos" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "写真は5枚まで登録できます" } } } },
-    "error.schedule.date_order" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "終了日時は開始日時以降にしてください" } } } },
-    "error.schedule.reminder" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "通知時間を正しく入力してください" } } } },
-    "error.schedule.title_required" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "タイトルを入力してください" } } } },
-    "home.denomination.subtitle" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "配布額から必要な金種を計算し、現金の集計もできます。" } } } },
-    "home.denomination.title" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "金種計算" } } } },
-    "home.denomination.accessibility_hint" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "金種計算を開きます" } } } },
-    "home.diary.subtitle" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "できごとや写真を自分専用に残します。" } } } },
-    "home.diary.title" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "日記・写真日記" } } } },
-    "home.guest.badge" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "Guest" } } } },
-    "home.guest.message" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "会員登録なしで、毎日の便利ツールを利用できます。" } } } },
-    "home.guest.title" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "便利な一日を始めましょう" } } } },
-    "home.meeting_minutes.subtitle" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "録音と文字起こしを端末内に保存します。" } } } },
-    "home.meeting_minutes.title" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "会議録音・議事録" } } } },
-    "home.schedule.accessibility_hint" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "今日の予定を開きます" } } } },
-    "home.schedule.subtitle" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "今日することを確認できます。" } } } },
-    "home.schedule.title" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "今日の予定" } } } },
-    "home.status.coming_soon" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "準備中" } } } },
-    "placeholder.community" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "コミュニティ機能は後続タスクで追加します" } } } },
-    "placeholder.profile" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "マイページ機能は後続タスクで追加します" } } } },
-    "diary.backup" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "バックアップ" } } } },
-    "diary.backup.export" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "バックアップを書き出す" } } } },
-    "diary.backup.export_failed" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "バックアップを書き出せませんでした" } } } },
-    "diary.backup.import" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "バックアップを読み込む" } } } },
-    "diary.backup.import_failed" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "バックアップを読み込めませんでした。ファイルを確認してください。" } } } },
-    "diary.backup.import_succeeded" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "%d件の日記を読み込みました" } } } },
-    "diary.body" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "本文" } } } },
-    "diary.date" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "日付" } } } },
-    "diary.delete.message" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "この日記と写真を削除します。元に戻せません。" } } } },
-    "diary.delete.title" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "日記を削除しますか？" } } } },
-    "diary.empty" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "日記はまだありません" } } } },
-    "diary.mood" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "気分" } } } },
-    "diary.mood.bad" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "つらかった" } } } },
-    "diary.mood.good" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "よかった" } } } },
-    "diary.mood.neutral" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "ふつう" } } } },
-    "diary.mood.slightly_bad" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "少しつらかった" } } } },
-    "diary.mood.very_good" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "とてもよかった" } } } },
-    "diary.photo.enlarge" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "写真を全画面で表示します" } } } },
-    "diary.photo.remaining" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "あと%d枚追加できます" } } } },
-    "diary.photo.select" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "写真を選ぶ" } } } },
-    "diary.photos" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "写真" } } } },
-    "diary.title" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "タイトル" } } } },
-    "denomination.banknotes" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "紙幣" } } } },
-    "denomination.coins" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "硬貨" } } } },
-    "denomination.input_too_large" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "枚数が大きすぎます。入力を減らしてください。" } } } },
-    "denomination.total" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "合計金額" } } } },
-    "denomination.unit" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "枚" } } } },
-    "schedule.category" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "カテゴリ" } } } },
-    "schedule.completed" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "完了" } } } },
-    "schedule.empty" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "予定はまだありません" } } } },
-    "schedule.end" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "終了" } } } },
-    "schedule.location" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "場所" } } } },
-    "schedule.memo" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "メモ" } } } },
-    "schedule.recurrence" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "繰り返し" } } } },
-    "schedule.reminder" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "リマインダー" } } } },
-    "schedule.start" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "開始" } } } },
-    "schedule.time_of_day" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "時間帯" } } } },
-    "schedule.title" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "タイトル" } } } },
-    "schedule.today.empty" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "今日の予定はありません" } } } },
-    "screen.schedule.detail" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "予定詳細" } } } },
-    "screen.schedule.edit" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "予定を編集" } } } },
-    "screen.schedule.list" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "予定" } } } },
-    "screen.schedule.new" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "予定を追加" } } } },
-    "screen.schedule.today" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "今日の予定" } } } },
-    "screen.diary.edit" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "日記を編集" } } } },
-    "screen.diary.list" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "日記・写真日記" } } } },
-    "screen.diary.new" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "日記を追加" } } } },
-    "screen.denomination" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "金種計算" } } } },
-    "state.error" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "処理できませんでした" } } } },
-    "tab.community" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "つながる" } } } },
-    "tab.home" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "ホーム" } } } },
-    "tab.profile" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "マイページ" } } } },
-    "tab.tools" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "便利" } } } },
-    "time_of_day.afternoon" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "午後" } } } },
-    "time_of_day.all_day" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "終日" } } } },
-    "time_of_day.evening" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "夕方" } } } },
-    "time_of_day.morning" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "午前" } } } },
-    "time_of_day.specified" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "時間指定" } } } }
+    "action.add" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "追加"
+          }
+        }
+      }
+    },
+    "action.add_to_calendar" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "端末カレンダーへ追加"
+          }
+        }
+      }
+    },
+    "action.cancel" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "キャンセル"
+          }
+        }
+      }
+    },
+    "action.clear" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべてクリア"
+          }
+        }
+      }
+    },
+    "action.close" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "閉じる"
+          }
+        }
+      }
+    },
+    "action.delete" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "削除"
+          }
+        }
+      }
+    },
+    "action.done" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完了"
+          }
+        }
+      }
+    },
+    "action.edit" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "編集"
+          }
+        }
+      }
+    },
+    "action.retry" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再試行"
+          }
+        }
+      }
+    },
+    "action.save" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存"
+          }
+        }
+      }
+    },
+    "action.share_csv" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CSVを共有"
+          }
+        }
+      }
+    },
+    "alert.calendar_added" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "端末カレンダーへ追加しました"
+          }
+        }
+      }
+    },
+    "alert.delete_message" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この予定を削除します。元に戻せません。"
+          }
+        }
+      }
+    },
+    "alert.delete_title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "予定を削除しますか？"
+          }
+        }
+      }
+    },
+    "denomination.banknotes" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "紙幣"
+          }
+        }
+      }
+    },
+    "denomination.coins" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "硬貨"
+          }
+        }
+      }
+    },
+    "denomination.input_too_large" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "枚数が大きすぎます。入力を減らしてください。"
+          }
+        }
+      }
+    },
+    "denomination.total" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合計金額"
+          }
+        }
+      }
+    },
+    "denomination.unit" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "枚"
+          }
+        }
+      }
+    },
+    "diary.backup" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バックアップ"
+          }
+        }
+      }
+    },
+    "diary.backup.export" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バックアップを書き出す"
+          }
+        }
+      }
+    },
+    "diary.backup.export_failed" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バックアップを書き出せませんでした"
+          }
+        }
+      }
+    },
+    "diary.backup.import" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バックアップを読み込む"
+          }
+        }
+      }
+    },
+    "diary.backup.import_failed" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バックアップを読み込めませんでした。ファイルを確認してください。"
+          }
+        }
+      }
+    },
+    "diary.backup.import_succeeded" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d件の日記を読み込みました"
+          }
+        }
+      }
+    },
+    "diary.body" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本文"
+          }
+        }
+      }
+    },
+    "diary.date" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日付"
+          }
+        }
+      }
+    },
+    "diary.delete.message" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この日記と写真を削除します。元に戻せません。"
+          }
+        }
+      }
+    },
+    "diary.delete.title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日記を削除しますか？"
+          }
+        }
+      }
+    },
+    "diary.empty" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日記はまだありません"
+          }
+        }
+      }
+    },
+    "diary.mood" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "気分"
+          }
+        }
+      }
+    },
+    "diary.mood.bad" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "つらかった"
+          }
+        }
+      }
+    },
+    "diary.mood.good" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "よかった"
+          }
+        }
+      }
+    },
+    "diary.mood.neutral" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ふつう"
+          }
+        }
+      }
+    },
+    "diary.mood.slightly_bad" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "少しつらかった"
+          }
+        }
+      }
+    },
+    "diary.mood.very_good" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "とてもよかった"
+          }
+        }
+      }
+    },
+    "diary.photo.enlarge" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写真を全画面で表示します"
+          }
+        }
+      }
+    },
+    "diary.photo.remaining" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "あと%d枚追加できます"
+          }
+        }
+      }
+    },
+    "diary.photo.select" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写真を選ぶ"
+          }
+        }
+      }
+    },
+    "diary.photos" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写真"
+          }
+        }
+      }
+    },
+    "diary.title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "タイトル"
+          }
+        }
+      }
+    },
+    "error.calendar" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "端末カレンダーへ追加できませんでした"
+          }
+        }
+      }
+    },
+    "error.diary.title_required" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "タイトルを入力してください"
+          }
+        }
+      }
+    },
+    "error.diary.too_many_photos" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写真は5枚まで登録できます"
+          }
+        }
+      }
+    },
+    "error.schedule.date_order" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "終了日時は開始日時以降にしてください"
+          }
+        }
+      }
+    },
+    "error.schedule.reminder" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通知時間を正しく入力してください"
+          }
+        }
+      }
+    },
+    "error.schedule.title_required" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "タイトルを入力してください"
+          }
+        }
+      }
+    },
+    "home.denomination.accessibility_hint" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "金種計算を開きます"
+          }
+        }
+      }
+    },
+    "home.denomination.subtitle" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "配布額から必要な金種を計算し、現金の集計もできます。"
+          }
+        }
+      }
+    },
+    "home.denomination.title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "金種計算"
+          }
+        }
+      }
+    },
+    "home.diary.subtitle" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "できごとや写真を自分専用に残します。"
+          }
+        }
+      }
+    },
+    "home.diary.title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日記・写真日記"
+          }
+        }
+      }
+    },
+    "home.guest.badge" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guest"
+          }
+        }
+      }
+    },
+    "home.guest.message" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会員登録なしで、毎日の便利ツールを利用できます。"
+          }
+        }
+      }
+    },
+    "home.guest.title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "便利な一日を始めましょう"
+          }
+        }
+      }
+    },
+    "home.meeting_minutes.subtitle" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "録音と文字起こしを端末内に保存します。"
+          }
+        }
+      }
+    },
+    "home.meeting_minutes.title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会議録音・議事録"
+          }
+        }
+      }
+    },
+    "home.schedule.accessibility_hint" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今日の予定を開きます"
+          }
+        }
+      }
+    },
+    "home.schedule.subtitle" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今日することを確認できます。"
+          }
+        }
+      }
+    },
+    "home.schedule.title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今日の予定"
+          }
+        }
+      }
+    },
+    "home.status.coming_soon" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "準備中"
+          }
+        }
+      }
+    },
+    "placeholder.community" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "コミュニティ機能は後続タスクで追加します"
+          }
+        }
+      }
+    },
+    "placeholder.profile" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "マイページ機能は後続タスクで追加します"
+          }
+        }
+      }
+    },
+    "schedule.category" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "カテゴリ"
+          }
+        }
+      }
+    },
+    "schedule.completed" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完了"
+          }
+        }
+      }
+    },
+    "schedule.empty" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "予定はまだありません"
+          }
+        }
+      }
+    },
+    "schedule.end" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "終了"
+          }
+        }
+      }
+    },
+    "schedule.location" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "場所"
+          }
+        }
+      }
+    },
+    "schedule.memo" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "メモ"
+          }
+        }
+      }
+    },
+    "schedule.recurrence" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "繰り返し"
+          }
+        }
+      }
+    },
+    "schedule.reminder" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リマインダー"
+          }
+        }
+      }
+    },
+    "schedule.start" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "開始"
+          }
+        }
+      }
+    },
+    "schedule.time_of_day" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "時間帯"
+          }
+        }
+      }
+    },
+    "schedule.title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "タイトル"
+          }
+        }
+      }
+    },
+    "schedule.today.empty" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今日の予定はありません"
+          }
+        }
+      }
+    },
+    "screen.denomination" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "金種計算"
+          }
+        }
+      }
+    },
+    "screen.diary.edit" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日記を編集"
+          }
+        }
+      }
+    },
+    "screen.diary.list" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日記・写真日記"
+          }
+        }
+      }
+    },
+    "screen.diary.new" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日記を追加"
+          }
+        }
+      }
+    },
+    "screen.schedule.detail" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "予定詳細"
+          }
+        }
+      }
+    },
+    "screen.schedule.edit" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "予定を編集"
+          }
+        }
+      }
+    },
+    "screen.schedule.list" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "予定"
+          }
+        }
+      }
+    },
+    "screen.schedule.new" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "予定を追加"
+          }
+        }
+      }
+    },
+    "screen.schedule.today" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今日の予定"
+          }
+        }
+      }
+    },
+    "state.error" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "処理できませんでした"
+          }
+        }
+      }
+    },
+    "tab.community" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "つながる"
+          }
+        }
+      }
+    },
+    "tab.home" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ホーム"
+          }
+        }
+      }
+    },
+    "tab.profile" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "マイページ"
+          }
+        }
+      }
+    },
+    "tab.tools" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "便利"
+          }
+        }
+      }
+    },
+    "time_of_day.afternoon" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "午後"
+          }
+        }
+      }
+    },
+    "time_of_day.all_day" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "終日"
+          }
+        }
+      }
+    },
+    "time_of_day.evening" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "夕方"
+          }
+        }
+      }
+    },
+    "time_of_day.morning" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "午前"
+          }
+        }
+      }
+    },
+    "time_of_day.specified" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "時間指定"
+          }
+        }
+      }
+    },
+    "お知らせ" : {
+
+    },
+    "コード: %@" : {
+
+    },
+    "コミュニティ" : {
+
+    },
+    "コミュニティへの参加申請は承認されませんでした。申請先へご確認ください。" : {
+
+    },
+    "コミュニティへの参加申請を確認中です。承認後に会員向け機能が追加されます。" : {
+
+    },
+    "コミュニティへ参加" : {
+
+    },
+    "コミュニティを探す" : {
+
+    },
+    "パスワード再設定" : {
+
+    },
+    "マイページで会員登録またはログイン後に参加申請できます。" : {
+
+    },
+    "ログイン済みです。「つながる」からコミュニティコードまたはQRコードで参加申請できます。" : {
+
+    },
+    "会員としてログインしています。参加中のコミュニティ機能を利用できます。" : {
+
+    },
+    "公開中のコミュニティは見つかりませんでした。" : {
+
+    },
+    "公開中のコミュニティを見て回れます。" : {
+
+    },
+    "参加コミュニティ" : {
+
+    },
+    "参加申請の承認" : {
+
+    },
+    "参加申請はまだありません。" : {
+
+    },
+    "承認待ちの申請はありません。" : {
+
+    },
+    "現在はGuestとして利用しています。会員登録後も便利機能を引き続き利用できます。" : {
+
+    }
   },
   "version" : "1.0"
 }
