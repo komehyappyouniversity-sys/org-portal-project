@@ -23,6 +23,7 @@ import jp.komehyappyo.member.next.core.data.FirebaseRestAnnouncementRepository
 import jp.komehyappyo.member.next.core.data.FirebaseEnvironmentGuard
 import jp.komehyappyo.member.next.core.data.FirebaseRestAccountAuthRepository
 import jp.komehyappyo.member.next.core.data.FirebaseRestCommunityRepository
+import jp.komehyappyo.member.next.core.data.AppBackupService
 import jp.komehyappyo.member.next.core.data.LocalDiaryPhotoStore
 import jp.komehyappyo.member.next.core.data.OrgPortalDatabase
 import jp.komehyappyo.member.next.core.data.RoomDiaryRepository
@@ -36,6 +37,7 @@ import jp.komehyappyo.member.next.core.designsystem.OrgPortalTheme
 import jp.komehyappyo.member.next.core.navigation.AppShell
 import jp.komehyappyo.member.next.core.notifications.NotificationService
 import jp.komehyappyo.member.next.feature.tools.DiaryFeatureModel
+import jp.komehyappyo.member.next.feature.tools.AppBackupFeatureModel
 import jp.komehyappyo.member.next.feature.tools.CashDistributionFeatureModel
 import jp.komehyappyo.member.next.feature.tools.GuestHomeView
 import jp.komehyappyo.member.next.feature.tools.ScheduleFeatureModel
@@ -137,9 +139,12 @@ class MainActivity : FragmentActivity() {
         val meetingRecordingStore = remember {
             LocalMeetingRecordingStore(applicationContext)
         }
+        val meetingMinutesRepository = remember {
+            RoomMeetingMinutesRepository(database.meetingMinutesDao())
+        }
         val meetingMinutesFactory = remember {
             MeetingMinutesFeatureModel.Factory(
-                RoomMeetingMinutesRepository(database.meetingMinutesDao()),
+                meetingMinutesRepository,
                 meetingRecordingStore,
                 MeetingRecordingService(applicationContext),
             )
@@ -147,22 +152,39 @@ class MainActivity : FragmentActivity() {
         val meetingMinutesModel: MeetingMinutesFeatureModel = viewModel(
             factory = meetingMinutesFactory,
         )
+        val snsCustomLinkRepository = remember {
+            RoomSnsCustomLinkRepository(database.snsCustomLinkDao())
+        }
         val snsPostingAssistantFactory = remember {
-            SnsPostingAssistantFeatureModel.Factory(
-                RoomSnsCustomLinkRepository(database.snsCustomLinkDao()),
-            )
+            SnsPostingAssistantFeatureModel.Factory(snsCustomLinkRepository)
         }
         val snsPostingAssistantModel: SnsPostingAssistantFeatureModel = viewModel(
             factory = snsPostingAssistantFactory,
         )
+        val favoriteBookmarkRepository = remember {
+            RoomFavoriteBookmarkRepository(database.favoriteBookmarkDao())
+        }
         val favoriteBookmarkFactory = remember {
-            FavoriteBookmarkFeatureModel.Factory(
-                RoomFavoriteBookmarkRepository(database.favoriteBookmarkDao()),
-            )
+            FavoriteBookmarkFeatureModel.Factory(favoriteBookmarkRepository)
         }
         val favoriteBookmarkModel: FavoriteBookmarkFeatureModel = viewModel(
             factory = favoriteBookmarkFactory,
         )
+        val appBackupFactory = remember {
+            AppBackupFeatureModel.Factory(
+                AppBackupService(
+                    scheduleRepository = scheduleRepository,
+                    diaryRepository = diaryRepository,
+                    photoStore = diaryPhotoStore,
+                    cashDistributionRepository = cashDistributionRepository,
+                    meetingMinutesRepository = meetingMinutesRepository,
+                    recordingStore = meetingRecordingStore,
+                    snsCustomLinkRepository = snsCustomLinkRepository,
+                    favoriteBookmarkRepository = favoriteBookmarkRepository,
+                ),
+            )
+        }
+        val appBackupModel: AppBackupFeatureModel = viewModel(factory = appBackupFactory)
 
         AppShell(
             home = {
@@ -172,6 +194,7 @@ class MainActivity : FragmentActivity() {
                     cashDistributionModel,
                     meetingMinutesModel,
                     favoriteBookmarkModel,
+                    appBackupModel,
                 )
             },
             tools = {

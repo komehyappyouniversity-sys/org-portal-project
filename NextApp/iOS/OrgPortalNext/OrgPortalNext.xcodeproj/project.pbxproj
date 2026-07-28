@@ -373,7 +373,7 @@
 		D235F042131E05FA966D09A4 /* ToolsHubView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ToolsHubView.swift; sourceTree = "<group>"; };
 		D69CF8FA718DB75560F4697A /* LocalDiaryPhotoStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LocalDiaryPhotoStore.swift; sourceTree = "<group>"; };
 		E5E00CE13E442B4530F7E55F /* Navigation.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Navigation.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		EF7885AB16480E9F2163A479 /* Localizable.xcstrings */ = {isa = PBXFileReference; includeInIndex = 1; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		EF7885AB16480E9F2163A479 /* Localizable.xcstrings */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		F36B5563796E2877F4E4839E /* SwiftDataDiaryRepository.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SwiftDataDiaryRepository.swift; sourceTree = "<group>"; };
 		F4A75590EF96883F048F1BF4 /* SwiftDataCashDistributionRepository.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SwiftDataCashDistributionRepository.swift; sourceTree = "<group>"; };
 		FDFFB422F7DF6F7D776CD050 /* Testing.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Testing.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -728,7 +728,6 @@
 			children = (
 				524AA7A46246F512E566809D /* OrgPortalNextApp.swift */,
 			);
-			name = App;
 			path = App;
 			sourceTree = "<group>";
 		};
@@ -1036,6 +1035,45 @@
 			attributes = {
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2620;
+				TargetAttributes = {
+					0402BA1251370A86C9814B1F = {
+						ProvisioningStyle = Automatic;
+					};
+					0C42488ADD8822C9A2C00771 = {
+						ProvisioningStyle = Automatic;
+					};
+					23FCF93097CDE5662541A132 = {
+						ProvisioningStyle = Automatic;
+					};
+					498623129017142D0F6D8C42 = {
+						ProvisioningStyle = Automatic;
+					};
+					667F4684D8F5DDBEE0CF1095 = {
+						ProvisioningStyle = Automatic;
+					};
+					6C326D75FA15C425E6AFDE32 = {
+						ProvisioningStyle = Automatic;
+					};
+					77041187C99596AC660B084C = {
+						ProvisioningStyle = Automatic;
+					};
+					9E8878563233AC30FC2160C4 = {
+						ProvisioningStyle = Automatic;
+					};
+					B771A6FE7D889BB89649CF0E = {
+						DevelopmentTeam = D76B4Y2RXA;
+						ProvisioningStyle = Automatic;
+					};
+					C215468A9F6456A25813A7C0 = {
+						ProvisioningStyle = Automatic;
+					};
+					D3A2615FA4196597F299D655 = {
+						ProvisioningStyle = Automatic;
+					};
+					F1C77B9EF39F6126BD7382AF = {
+						ProvisioningStyle = Automatic;
+					};
+				};
 			};
 			buildConfigurationList = ECE211D3C85494CB0B15E3D3 /* Build configuration list for PBXProject "OrgPortalNext" */;
 			compatibilityVersion = "Xcode 3.2";
@@ -1046,8 +1084,6 @@
 				Base,
 			);
 			mainGroup = 7211DF63812849536860A8CF;
-			minimizedProjectReferenceProxies = 0;
-			preferredProjectObjectVersion = 77;
 			productRefGroup = 1494F8F8205DAE8A821DEDE9 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -1616,8 +1652,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
@@ -1657,7 +1692,7 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = D76B4Y2RXA;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				FIREBASE_PROJECT_ID = "kome-org-portal-next-dev";
 				FIREBASE_WEB_API_KEY = "AIzaSyDiVMzyOYl143PI43c6GwWPAQLXHEC9pIU";
@@ -1683,7 +1718,7 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = D76B4Y2RXA;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				FIREBASE_PROJECT_ID = "kome-org-portal-next-dev";
 				FIREBASE_WEB_API_KEY = "AIzaSyDiVMzyOYl143PI43c6GwWPAQLXHEC9pIU";
