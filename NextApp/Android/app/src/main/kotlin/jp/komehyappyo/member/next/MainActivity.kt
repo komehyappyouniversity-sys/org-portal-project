@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.fragment.app.FragmentActivity
 import jp.komehyappyo.member.next.core.data.FirebaseRestAnnouncementRepository
+import jp.komehyappyo.member.next.core.data.FirebaseRestPostRepository
 import jp.komehyappyo.member.next.core.data.FirebaseEnvironmentGuard
 import jp.komehyappyo.member.next.core.data.FirebaseRestAccountAuthRepository
 import jp.komehyappyo.member.next.core.data.FirebaseRestCommunityRepository
@@ -54,6 +55,8 @@ import jp.komehyappyo.member.next.feature.community.CommunityFeatureModel
 import jp.komehyappyo.member.next.feature.community.CommunityRoot
 import jp.komehyappyo.member.next.feature.messages.AnnouncementFeatureModel
 import jp.komehyappyo.member.next.feature.messages.AnnouncementRoot
+import jp.komehyappyo.member.next.feature.messages.PostFeatureModel
+import jp.komehyappyo.member.next.feature.messages.PostRoot
 
 class MainActivity : FragmentActivity() {
     private val notificationPermission =
@@ -109,6 +112,14 @@ class MainActivity : FragmentActivity() {
         val announcementModel: AnnouncementFeatureModel = viewModel(
             factory = announcementFactory,
         )
+        val postFactory = remember {
+            PostFeatureModel.Factory(
+                FirebaseRestPostRepository(BuildConfig.FIREBASE_PROJECT_ID),
+                appSession,
+                memberships = { communityModel.state.value.memberships.map { it.first } },
+            )
+        }
+        val postModel: PostFeatureModel = viewModel(factory = postFactory)
         val database = remember { OrgPortalDatabase.create(applicationContext) }
         val scheduleRepository = remember { RoomScheduleRepository(database.scheduleDao()) }
         val scheduleFactory = remember {
@@ -208,7 +219,7 @@ class MainActivity : FragmentActivity() {
                 )
             },
             connect = {
-                ConnectedRoot(communityModel, announcementModel)
+                ConnectedRoot(communityModel, postModel, announcementModel)
             },
             myPage = {
                 AccountRoot(accountModel, this@MainActivity)
@@ -219,12 +230,13 @@ class MainActivity : FragmentActivity() {
     @Composable
     private fun ConnectedRoot(
         communityModel: CommunityFeatureModel,
+        postModel: PostFeatureModel,
         announcementModel: AnnouncementFeatureModel,
     ) {
         var selectedSection by rememberSaveable { mutableIntStateOf(0) }
         Column(modifier = Modifier.fillMaxSize()) {
             TabRow(selectedTabIndex = selectedSection) {
-                listOf("コミュニティ", "お知らせ").forEachIndexed { index, title ->
+                listOf("コミュニティ", "投稿", "お知らせ").forEachIndexed { index, title ->
                     Tab(
                         selected = selectedSection == index,
                         onClick = { selectedSection = index },
@@ -234,6 +246,7 @@ class MainActivity : FragmentActivity() {
             }
             when (selectedSection) {
                 0 -> CommunityRoot(communityModel)
+                1 -> PostRoot(postModel)
                 else -> AnnouncementRoot(announcementModel)
             }
         }
