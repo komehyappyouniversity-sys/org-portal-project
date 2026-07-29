@@ -5,6 +5,7 @@ import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
 import androidx.room.Insert
+import androidx.room.Index
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
@@ -16,6 +17,8 @@ import jp.komehyappyo.member.next.core.model.Diary
 import jp.komehyappyo.member.next.core.model.DiaryMood
 import jp.komehyappyo.member.next.core.model.CashDistribution
 import jp.komehyappyo.member.next.core.model.FavoriteBookmark
+import jp.komehyappyo.member.next.core.model.FriendContact
+import jp.komehyappyo.member.next.core.model.FriendInteractionHistory
 import jp.komehyappyo.member.next.core.model.MeetingMinutes
 import jp.komehyappyo.member.next.core.model.RecurrenceFrequency
 import jp.komehyappyo.member.next.core.model.RecurrenceRule
@@ -115,6 +118,38 @@ data class FavoriteBookmarkEntity(
     val updatedAtEpochMillis: Long,
 )
 
+@Entity(tableName = "friend_exchange_friends")
+data class FriendContactEntity(
+    @PrimaryKey val id: String,
+    val userId: String,
+    val name: String,
+    val postalCode: String,
+    val prefecture: String,
+    val city: String,
+    val addressLine: String,
+    val birthDateEpochDay: Long?,
+    val phoneNumber: String,
+    val email: String,
+    val createdAtEpochMillis: Long,
+    val updatedAtEpochMillis: Long,
+)
+
+@Entity(
+    tableName = "friend_exchange_histories",
+    indices = [Index(value = ["friendId"])],
+)
+data class FriendInteractionHistoryEntity(
+    @PrimaryKey val id: String,
+    val friendId: String,
+    val interactionDateEpochMillis: Long,
+    val memo: String,
+    val photoUrlsJson: String,
+    val isPhoneCall: Boolean,
+    val phoneNumber: String,
+    val createdAtEpochMillis: Long,
+    val updatedAtEpochMillis: Long,
+)
+
 @Dao
 interface ScheduleDao {
     @Query("SELECT * FROM schedules ORDER BY startEpochMillis, title")
@@ -199,6 +234,36 @@ interface FavoriteBookmarkDao {
     suspend fun delete(id: String)
 }
 
+@Dao
+interface FriendContactDao {
+    @Query("SELECT * FROM friend_exchange_friends ORDER BY name, updatedAtEpochMillis DESC")
+    fun observeAll(): Flow<List<FriendContactEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(contact: FriendContactEntity)
+
+    @Query("DELETE FROM friend_exchange_friends WHERE id = :id")
+    suspend fun delete(id: String)
+}
+
+@Dao
+interface FriendInteractionHistoryDao {
+    @Query(
+        "SELECT * FROM friend_exchange_histories WHERE friendId = :friendId " +
+            "ORDER BY interactionDateEpochMillis DESC",
+    )
+    fun observeForFriend(friendId: String): Flow<List<FriendInteractionHistoryEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(history: FriendInteractionHistoryEntity)
+
+    @Query("DELETE FROM friend_exchange_histories WHERE id = :id")
+    suspend fun delete(id: String)
+
+    @Query("DELETE FROM friend_exchange_histories WHERE friendId = :friendId")
+    suspend fun deleteForFriend(friendId: String)
+}
+
 @Database(
     entities = [
         ScheduleEntity::class,
@@ -207,8 +272,10 @@ interface FavoriteBookmarkDao {
         MeetingMinutesEntity::class,
         SnsCustomLinkEntity::class,
         FavoriteBookmarkEntity::class,
+        FriendContactEntity::class,
+        FriendInteractionHistoryEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class OrgPortalDatabase : RoomDatabase() {
@@ -218,6 +285,8 @@ abstract class OrgPortalDatabase : RoomDatabase() {
     abstract fun meetingMinutesDao(): MeetingMinutesDao
     abstract fun snsCustomLinkDao(): SnsCustomLinkDao
     abstract fun favoriteBookmarkDao(): FavoriteBookmarkDao
+    abstract fun friendContactDao(): FriendContactDao
+    abstract fun friendInteractionHistoryDao(): FriendInteractionHistoryDao
 
     companion object {
         val migration1To2 = object : Migration(1, 2) {
@@ -332,6 +401,50 @@ abstract class OrgPortalDatabase : RoomDatabase() {
             }
         }
 
+        val migration7To8 = object : Migration(7, 8) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `friend_exchange_friends` (
+                        `id` TEXT NOT NULL,
+                        `userId` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `postalCode` TEXT NOT NULL,
+                        `prefecture` TEXT NOT NULL,
+                        `city` TEXT NOT NULL,
+                        `addressLine` TEXT NOT NULL,
+                        `birthDateEpochDay` INTEGER,
+                        `phoneNumber` TEXT NOT NULL,
+                        `email` TEXT NOT NULL,
+                        `createdAtEpochMillis` INTEGER NOT NULL,
+                        `updatedAtEpochMillis` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `friend_exchange_histories` (
+                        `id` TEXT NOT NULL,
+                        `friendId` TEXT NOT NULL,
+                        `interactionDateEpochMillis` INTEGER NOT NULL,
+                        `memo` TEXT NOT NULL,
+                        `photoUrlsJson` TEXT NOT NULL,
+                        `isPhoneCall` INTEGER NOT NULL,
+                        `phoneNumber` TEXT NOT NULL,
+                        `createdAtEpochMillis` INTEGER NOT NULL,
+                        `updatedAtEpochMillis` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_friend_exchange_histories_friendId` " +
+                        "ON `friend_exchange_histories` (`friendId`)",
+                )
+            }
+        }
+
         fun create(context: Context): OrgPortalDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
@@ -344,6 +457,7 @@ abstract class OrgPortalDatabase : RoomDatabase() {
                 migration4To5,
                 migration5To6,
                 migration6To7,
+                migration7To8,
             ).build()
     }
 }
@@ -359,6 +473,16 @@ object DiaryRepositories {
     fun createLocal(context: Context): DiaryRepository {
         val database = OrgPortalDatabase.create(context)
         return RoomDiaryRepository(database.diaryDao())
+    }
+}
+
+object FriendExchangeRepositories {
+    fun createLocal(context: Context): FriendExchangeRepository {
+        val database = OrgPortalDatabase.create(context)
+        return RoomFriendExchangeRepository(
+            contactDao = database.friendContactDao(),
+            historyDao = database.friendInteractionHistoryDao(),
+        )
     }
 }
 
@@ -631,6 +755,91 @@ private fun FavoriteBookmarkEntity.toDomain() = FavoriteBookmark(
     category = category,
     secondaryCategory = secondaryCategory,
     tertiaryCategory = tertiaryCategory,
+    createdAt = Instant.ofEpochMilli(createdAtEpochMillis),
+    updatedAt = Instant.ofEpochMilli(updatedAtEpochMillis),
+)
+
+class RoomFriendExchangeRepository(
+    private val contactDao: FriendContactDao,
+    private val historyDao: FriendInteractionHistoryDao,
+) : FriendExchangeRepository {
+    override fun observeContacts(): Flow<List<FriendContact>> =
+        contactDao.observeAll().map { contacts -> contacts.map(FriendContactEntity::toDomain) }
+
+    override fun observeHistories(friendId: UUID): Flow<List<FriendInteractionHistory>> =
+        historyDao.observeForFriend(friendId.toString()).map { histories ->
+            histories.map(FriendInteractionHistoryEntity::toDomain)
+        }
+
+    override suspend fun save(contact: FriendContact) {
+        contactDao.upsert(contact.validated(now = contact.updatedAt).toEntity())
+    }
+
+    override suspend fun save(history: FriendInteractionHistory) {
+        historyDao.upsert(history.validated(now = history.updatedAt).toEntity())
+    }
+
+    override suspend fun deleteContact(id: UUID) {
+        val value = id.toString()
+        historyDao.deleteForFriend(value)
+        contactDao.delete(value)
+    }
+
+    override suspend fun deleteHistory(id: UUID) {
+        historyDao.delete(id.toString())
+    }
+}
+
+private fun FriendContact.toEntity() = FriendContactEntity(
+    id = id.toString(),
+    userId = userId,
+    name = name,
+    postalCode = postalCode,
+    prefecture = prefecture,
+    city = city,
+    addressLine = addressLine,
+    birthDateEpochDay = birthDate?.toEpochDay(),
+    phoneNumber = phoneNumber,
+    email = email,
+    createdAtEpochMillis = createdAt.toEpochMilli(),
+    updatedAtEpochMillis = updatedAt.toEpochMilli(),
+)
+
+private fun FriendContactEntity.toDomain() = FriendContact(
+    id = UUID.fromString(id),
+    userId = userId,
+    name = name,
+    postalCode = postalCode,
+    prefecture = prefecture,
+    city = city,
+    addressLine = addressLine,
+    birthDate = birthDateEpochDay?.let(LocalDate::ofEpochDay),
+    phoneNumber = phoneNumber,
+    email = email,
+    createdAt = Instant.ofEpochMilli(createdAtEpochMillis),
+    updatedAt = Instant.ofEpochMilli(updatedAtEpochMillis),
+)
+
+private fun FriendInteractionHistory.toEntity() = FriendInteractionHistoryEntity(
+    id = id.toString(),
+    friendId = friendId.toString(),
+    interactionDateEpochMillis = interactionDate.toEpochMilli(),
+    memo = memo,
+    photoUrlsJson = photoUrls.joinToString(separator = "\n"),
+    isPhoneCall = isPhoneCall,
+    phoneNumber = phoneNumber,
+    createdAtEpochMillis = createdAt.toEpochMilli(),
+    updatedAtEpochMillis = updatedAt.toEpochMilli(),
+)
+
+private fun FriendInteractionHistoryEntity.toDomain() = FriendInteractionHistory(
+    id = UUID.fromString(id),
+    friendId = UUID.fromString(friendId),
+    interactionDate = Instant.ofEpochMilli(interactionDateEpochMillis),
+    memo = memo,
+    photoUrls = photoUrlsJson.lines().filter(String::isNotBlank),
+    isPhoneCall = isPhoneCall,
+    phoneNumber = phoneNumber,
     createdAt = Instant.ofEpochMilli(createdAtEpochMillis),
     updatedAt = Instant.ofEpochMilli(updatedAtEpochMillis),
 )

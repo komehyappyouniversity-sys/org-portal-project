@@ -36,7 +36,9 @@ struct OrgPortalNextApp: App {
                 CashDistributionRecord.self,
                 MeetingMinutesRecord.self,
                 SnsCustomLinkRecord.self,
-                FavoriteBookmarkRecord.self
+                FavoriteBookmarkRecord.self,
+                FriendContactRecord.self,
+                FriendInteractionHistoryRecord.self
             )
         } catch {
             fatalError("Unable to initialize local storage: \(error)")
