@@ -332,10 +332,15 @@ service cloud.firestore {
           || (isSignedIn() && resource.data.memberUid == request.auth.uid);
 
         allow create: if isSignedIn()
+          && isApprovedMember(organizationId)
           && request.resource.data.memberUid == request.auth.uid;
 
         allow update, delete: if isOrgStaff(organizationId)
-          || (isSignedIn() && resource.data.memberUid == request.auth.uid);
+          || (
+            isApprovedMember(organizationId)
+            && resource.data.memberUid == request.auth.uid
+            && request.resource.data.memberUid == request.auth.uid
+          );
 
         match /replies/{replyId} {
           allow read: if isOrgStaff(organizationId)
@@ -422,6 +427,11 @@ service cloud.firestore {
       match /{document=**} {
         allow read, write: if isSuperAdmin();
       }
+    }
+
+    match /{path=**}/publicPosts/{postId} {
+      allow read: if resource.data.isPublic == true;
+      allow create, update, delete: if false;
     }
 
     // 所属一覧のcollection-group取得用。利用者本人のデータだけを返す。

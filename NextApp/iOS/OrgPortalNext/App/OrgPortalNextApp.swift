@@ -63,6 +63,7 @@ private struct AppBootstrapView: View {
     @StateObject private var accountModel: AccountFeatureModel
     @StateObject private var communityModel: CommunityFeatureModel
     @StateObject private var announcementModel: AnnouncementFeatureModel
+    @StateObject private var postModel: PostFeatureModel
 
     init(modelContainer: ModelContainer) {
         let session = AppSession()
@@ -93,6 +94,13 @@ private struct AppBootstrapView: View {
         _announcementModel = StateObject(
             wrappedValue: AnnouncementFeatureModel(
                 repository: FirebaseRESTAnnouncementRepository(projectId: firebaseProjectID),
+                session: session,
+                memberships: { community.items.map(\.0) }
+            )
+        )
+        _postModel = StateObject(
+            wrappedValue: PostFeatureModel(
+                repository: FirebaseRESTPostRepository(projectId: firebaseProjectID),
                 session: session,
                 memberships: { community.items.map(\.0) }
             )
@@ -187,6 +195,7 @@ private struct AppBootstrapView: View {
             ),
             community: ConnectedRootView(
                 communityModel: communityModel,
+                postModel: postModel,
                 announcementModel: announcementModel
             ),
             profile: AccountRootView(model: accountModel)
@@ -471,6 +480,7 @@ private final class AnnouncementFeatureModel: ObservableObject {
 
 private struct ConnectedRootView: View {
     @ObservedObject var communityModel: CommunityFeatureModel
+    @ObservedObject var postModel: PostFeatureModel
     @ObservedObject var announcementModel: AnnouncementFeatureModel
     @State private var selection = 0
 
@@ -478,13 +488,16 @@ private struct ConnectedRootView: View {
         VStack(spacing: 0) {
             Picker("つながる", selection: $selection) {
                 Text("コミュニティ").tag(0)
-                Text("お知らせ").tag(1)
+                Text("投稿").tag(1)
+                Text("お知らせ").tag(2)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, 24)
             .padding(.top, 12)
             if selection == 0 {
                 CommunityRootView(model: communityModel)
+            } else if selection == 1 {
+                PostRootView(model: postModel)
             } else {
                 AnnouncementRootView(model: announcementModel)
             }
