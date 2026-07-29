@@ -60,6 +60,7 @@ private struct AppBootstrapView: View {
     @StateObject private var meetingMinutesModel: MeetingMinutesFeatureModel
     @StateObject private var snsPostingAssistantModel: SnsPostingAssistantFeatureModel
     @StateObject private var favoriteBookmarkModel: FavoriteBookmarkFeatureModel
+    @StateObject private var friendExchangeModel: FriendExchangeFeatureModel
     @StateObject private var appBackupModel: AppBackupFeatureModel
     @StateObject private var appSession: AppSession
     @StateObject private var accountModel: AccountFeatureModel
@@ -161,6 +162,11 @@ private struct AppBootstrapView: View {
                 repository: favoriteBookmarkRepository
             )
         )
+        _friendExchangeModel = StateObject(
+            wrappedValue: FriendExchangeFeatureModel(
+                repository: SwiftDataFriendExchangeRepository(modelContainer: modelContainer)
+            )
+        )
         _appBackupModel = StateObject(
             wrappedValue: AppBackupFeatureModel(
                 service: AppBackupService(
@@ -193,7 +199,8 @@ private struct AppBootstrapView: View {
                 cashDistributionModel: cashDistributionModel,
                 meetingMinutesModel: meetingMinutesModel,
                 snsPostingAssistantModel: snsPostingAssistantModel,
-                favoriteBookmarkModel: favoriteBookmarkModel
+                favoriteBookmarkModel: favoriteBookmarkModel,
+                friendExchangeModel: friendExchangeModel
             ),
             community: ConnectedRootView(
                 communityModel: communityModel,

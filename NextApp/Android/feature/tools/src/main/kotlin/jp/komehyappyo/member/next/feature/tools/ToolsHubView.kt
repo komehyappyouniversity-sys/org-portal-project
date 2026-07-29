@@ -10,6 +10,7 @@ import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Calculate
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material3.Button
@@ -32,6 +33,7 @@ private enum class ToolsDestination {
     MeetingMinutes,
     SnsPostingAssistant,
     Favorites,
+    Friends,
 }
 
 @Composable
@@ -42,6 +44,7 @@ fun ToolsHubRoot(
     meetingMinutesModel: MeetingMinutesFeatureModel,
     snsPostingAssistantModel: SnsPostingAssistantFeatureModel,
     favoriteBookmarkModel: FavoriteBookmarkFeatureModel,
+    friendExchangeModel: FriendExchangeFeatureModel,
 ) {
     var destination by remember { mutableStateOf<ToolsDestination?>(null) }
     when (destination) {
@@ -74,6 +77,11 @@ fun ToolsHubRoot(
             onBack = { destination = null },
         ) {
             FavoriteBookmarksRoot(favoriteBookmarkModel)
+        }
+        ToolsDestination.Friends -> ToolDestinationContainer(
+            onBack = { destination = null },
+        ) {
+            FriendExchangeRoot(friendExchangeModel)
         }
         null -> Column(
             modifier = Modifier
@@ -122,6 +130,13 @@ fun ToolsHubRoot(
                     title = "お気に入り",
                     description = "よく見るWebページを自分専用に保存します。",
                     icon = Icons.Outlined.Bookmark,
+                )
+            }
+            Button(onClick = { destination = ToolsDestination.Friends }) {
+                FeatureCard(
+                    title = "友達情報・交流履歴帳",
+                    description = "本人専用の友達情報と交流履歴を非公開で記録します。",
+                    icon = Icons.Outlined.People,
                 )
             }
         }
