@@ -157,6 +157,9 @@ private struct AppBootstrapView: View {
         let favoriteBookmarkRepository = SwiftDataFavoriteBookmarkRepository(
             modelContainer: modelContainer
         )
+        let friendExchangeRepository = SwiftDataFriendExchangeRepository(
+            modelContainer: modelContainer
+        )
         _favoriteBookmarkModel = StateObject(
             wrappedValue: FavoriteBookmarkFeatureModel(
                 repository: favoriteBookmarkRepository
@@ -164,7 +167,7 @@ private struct AppBootstrapView: View {
         )
         _friendExchangeModel = StateObject(
             wrappedValue: FriendExchangeFeatureModel(
-                repository: SwiftDataFriendExchangeRepository(modelContainer: modelContainer)
+                repository: friendExchangeRepository
             )
         )
         _appBackupModel = StateObject(
@@ -177,7 +180,8 @@ private struct AppBootstrapView: View {
                     meetingMinutesRepository: meetingMinutesRepository,
                     recordingStore: meetingRecordingStore,
                     snsCustomLinkRepository: snsCustomLinkRepository,
-                    favoriteBookmarkRepository: favoriteBookmarkRepository
+                    favoriteBookmarkRepository: favoriteBookmarkRepository,
+                    friendExchangeRepository: friendExchangeRepository
                 )
             )
         )

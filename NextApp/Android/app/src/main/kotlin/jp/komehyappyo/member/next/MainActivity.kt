@@ -206,6 +206,7 @@ class MainActivity : FragmentActivity() {
                     recordingStore = meetingRecordingStore,
                     snsCustomLinkRepository = snsCustomLinkRepository,
                     favoriteBookmarkRepository = favoriteBookmarkRepository,
+                    friendExchangeRepository = friendExchangeRepository,
                 ),
             )
         }
