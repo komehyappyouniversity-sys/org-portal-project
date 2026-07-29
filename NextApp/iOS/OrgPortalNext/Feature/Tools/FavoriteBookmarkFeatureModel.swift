@@ -90,3 +90,96 @@ public final class FavoriteBookmarkFeatureModel: ObservableObject {
         errorMessage = nil
     }
 }
+
+@MainActor
+public final class FriendExchangeFeatureModel: ObservableObject {
+    @Published public private(set) var contacts: [FriendContact] = []
+    @Published public private(set) var histories: [UUID: [FriendInteractionHistory]] = [:]
+    @Published public private(set) var isLoading = false
+    @Published public var errorMessage: String?
+
+    private let repository: FriendExchangeRepository
+
+    public init(repository: FriendExchangeRepository) {
+        self.repository = repository
+    }
+
+    public func loadContacts() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            contacts = try await repository.fetchContacts()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func loadHistories(friendId: UUID) async {
+        do {
+            histories[friendId] = try await repository.fetchHistories(friendId: friendId)
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func saveContact(_ contact: FriendContact) async -> Bool {
+        do {
+            try await repository.save(try contact.validated())
+            await loadContacts()
+            return true
+        } catch {
+            errorMessage = message(for: error)
+            return false
+        }
+    }
+
+    public func saveHistory(_ history: FriendInteractionHistory) async -> Bool {
+        do {
+            try await repository.save(try history.validated())
+            await loadHistories(friendId: history.friendId)
+            return true
+        } catch {
+            errorMessage = message(for: error)
+            return false
+        }
+    }
+
+    public func deleteContact(_ contact: FriendContact) async {
+        do {
+            try await repository.deleteContact(id: contact.id)
+            histories[contact.id] = nil
+            await loadContacts()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func deleteHistory(_ history: FriendInteractionHistory) async {
+        do {
+            try await repository.deleteHistory(id: history.id)
+            await loadHistories(friendId: history.friendId)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func clearError() {
+        errorMessage = nil
+    }
+
+    private func message(for error: Error) -> String {
+        guard let validation = error as? FriendExchangeValidationError else {
+            return error.localizedDescription
+        }
+        switch validation {
+        case .nameRequired:
+            return "名前を入力してください。"
+        case .historyContentRequired:
+            return "メモ・写真・電話記録のいずれかを入力してください。"
+        case .tooManyPhotos:
+            return "写真は2枚まで登録できます。"
+        }
+    }
+}

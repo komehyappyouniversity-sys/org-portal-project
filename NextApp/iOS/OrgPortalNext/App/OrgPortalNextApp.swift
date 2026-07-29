@@ -36,7 +36,9 @@ struct OrgPortalNextApp: App {
                 CashDistributionRecord.self,
                 MeetingMinutesRecord.self,
                 SnsCustomLinkRecord.self,
-                FavoriteBookmarkRecord.self
+                FavoriteBookmarkRecord.self,
+                FriendContactRecord.self,
+                FriendInteractionHistoryRecord.self
             )
         } catch {
             fatalError("Unable to initialize local storage: \(error)")
@@ -58,6 +60,7 @@ private struct AppBootstrapView: View {
     @StateObject private var meetingMinutesModel: MeetingMinutesFeatureModel
     @StateObject private var snsPostingAssistantModel: SnsPostingAssistantFeatureModel
     @StateObject private var favoriteBookmarkModel: FavoriteBookmarkFeatureModel
+    @StateObject private var friendExchangeModel: FriendExchangeFeatureModel
     @StateObject private var appBackupModel: AppBackupFeatureModel
     @StateObject private var appSession: AppSession
     @StateObject private var accountModel: AccountFeatureModel
@@ -154,9 +157,17 @@ private struct AppBootstrapView: View {
         let favoriteBookmarkRepository = SwiftDataFavoriteBookmarkRepository(
             modelContainer: modelContainer
         )
+        let friendExchangeRepository = SwiftDataFriendExchangeRepository(
+            modelContainer: modelContainer
+        )
         _favoriteBookmarkModel = StateObject(
             wrappedValue: FavoriteBookmarkFeatureModel(
                 repository: favoriteBookmarkRepository
+            )
+        )
+        _friendExchangeModel = StateObject(
+            wrappedValue: FriendExchangeFeatureModel(
+                repository: friendExchangeRepository
             )
         )
         _appBackupModel = StateObject(
@@ -169,7 +180,8 @@ private struct AppBootstrapView: View {
                     meetingMinutesRepository: meetingMinutesRepository,
                     recordingStore: meetingRecordingStore,
                     snsCustomLinkRepository: snsCustomLinkRepository,
-                    favoriteBookmarkRepository: favoriteBookmarkRepository
+                    favoriteBookmarkRepository: favoriteBookmarkRepository,
+                    friendExchangeRepository: friendExchangeRepository
                 )
             )
         )
@@ -191,7 +203,8 @@ private struct AppBootstrapView: View {
                 cashDistributionModel: cashDistributionModel,
                 meetingMinutesModel: meetingMinutesModel,
                 snsPostingAssistantModel: snsPostingAssistantModel,
-                favoriteBookmarkModel: favoriteBookmarkModel
+                favoriteBookmarkModel: favoriteBookmarkModel,
+                friendExchangeModel: friendExchangeModel
             ),
             community: ConnectedRootView(
                 communityModel: communityModel,

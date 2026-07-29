@@ -1,6 +1,8 @@
 package jp.komehyappyo.member.next.core.data
 
 import android.util.Base64
+import jp.komehyappyo.member.next.core.model.FriendContact
+import jp.komehyappyo.member.next.core.model.FriendInteractionHistory
 import jp.komehyappyo.member.next.core.model.MeetingMinutes
 import jp.komehyappyo.member.next.core.model.RecurrenceFrequency
 import jp.komehyappyo.member.next.core.model.RecurrenceRule
@@ -15,6 +17,7 @@ import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
 import java.time.Instant
+import java.time.LocalDate
 import java.util.UUID
 
 data class AppBackupImportSummary(
@@ -24,9 +27,12 @@ data class AppBackupImportSummary(
     val meetingMinutes: Int,
     val snsLinks: Int,
     val favorites: Int,
+    val friendContacts: Int,
+    val friendHistories: Int,
 ) {
     val total: Int
-        get() = schedules + diaries + cashDistributions + meetingMinutes + snsLinks + favorites
+        get() = schedules + diaries + cashDistributions + meetingMinutes + snsLinks + favorites +
+            friendContacts + friendHistories
 }
 
 data class AppBackupExportResult(
@@ -47,6 +53,7 @@ class AppBackupService(
     private val recordingStore: LocalMeetingRecordingStore,
     private val snsCustomLinkRepository: SnsCustomLinkRepository,
     favoriteBookmarkRepository: FavoriteBookmarkRepository,
+    private val friendExchangeRepository: FriendExchangeRepository,
 ) {
     private val diaryService = DiaryBackupService(diaryRepository, photoStore)
     private val cashService = CashDistributionBackupService(cashDistributionRepository)
@@ -108,6 +115,16 @@ class AppBackupService(
                 )
             }
         }
+        val friendContacts = friendExchangeRepository.observeContacts().first()
+        val friendContactEntries = JSONArray().also { array ->
+            friendContacts.forEach { contact -> array.put(contact.toBackupJson()) }
+        }
+        val friendHistoryEntries = JSONArray().also { array ->
+            friendContacts.forEach { contact ->
+                friendExchangeRepository.observeHistories(contact.id).first()
+                    .forEach { history -> array.put(history.toBackupJson()) }
+            }
+        }
         val data = JSONObject()
             .put("format", FORMAT_IDENTIFIER)
             .put("version", CURRENT_VERSION)
@@ -118,6 +135,8 @@ class AppBackupService(
             .put("schedules", schedules)
             .put("meetingMinutes", minutes)
             .put("snsCustomLinks", snsLinks)
+            .put("friendContacts", friendContactEntries)
+            .put("friendInteractionHistories", friendHistoryEntries)
             .toString(2)
             .toByteArray(Charsets.UTF_8)
         return AppBackupExportResult(
@@ -141,6 +160,8 @@ class AppBackupService(
             ?: throw AppBackupException.InvalidFormat
         val links = root.optJSONArray("snsCustomLinks")
             ?: throw AppBackupException.InvalidFormat
+        val friendContacts = root.optJSONArray("friendContacts") ?: JSONArray()
+        val friendHistories = root.optJSONArray("friendInteractionHistories") ?: JSONArray()
         val diaryData = decode(root.optString("diaryBackupBase64"))
         val cashData = decode(root.optString("cashDistributionBackupBase64"))
         val favoriteData = decode(root.optString("favoriteBookmarkBackupBase64"))
@@ -173,6 +194,21 @@ class AppBackupService(
                 minutes.optJSONObject(index) ?: throw AppBackupException.InvalidFormat,
             )
         }
+        val importedFriendIds = mutableSetOf<UUID>()
+        repeat(friendContacts.length()) { index ->
+            val contact = friendContacts.optJSONObject(index)?.toFriendContact()
+                ?: throw AppBackupException.InvalidFormat
+            friendExchangeRepository.save(contact)
+            importedFriendIds.add(contact.id)
+        }
+        repeat(friendHistories.length()) { index ->
+            val history = friendHistories.optJSONObject(index)?.toFriendHistory()
+                ?: throw AppBackupException.InvalidFormat
+            if (history.friendId !in importedFriendIds) {
+                throw AppBackupException.InvalidFormat
+            }
+            friendExchangeRepository.save(history)
+        }
         return AppBackupImportSummary(
             schedules = schedules.length(),
             diaries = diaryCount,
@@ -180,8 +216,75 @@ class AppBackupService(
             meetingMinutes = minutes.length(),
             snsLinks = links.length(),
             favorites = favoriteCount,
+            friendContacts = friendContacts.length(),
+            friendHistories = friendHistories.length(),
         )
     }
+
+    private fun FriendContact.toBackupJson(): JSONObject = JSONObject()
+        .put("id", id.toString())
+        .put("userId", userId)
+        .put("name", name)
+        .put("postalCode", postalCode)
+        .put("prefecture", prefecture)
+        .put("city", city)
+        .put("addressLine", addressLine)
+        .put("birthDate", birthDate?.toString() ?: JSONObject.NULL)
+        .put("phoneNumber", phoneNumber)
+        .put("email", email)
+        .put("createdAtEpochMillis", createdAt.toEpochMilli())
+        .put("updatedAtEpochMillis", updatedAt.toEpochMilli())
+
+    private fun FriendInteractionHistory.toBackupJson(): JSONObject = JSONObject()
+        .put("id", id.toString())
+        .put("friendId", friendId.toString())
+        .put("interactionDateEpochMillis", interactionDate.toEpochMilli())
+        .put("memo", memo)
+        .put("photoUrls", JSONArray(photoUrls))
+        .put("isPhoneCall", isPhoneCall)
+        .put("phoneNumber", phoneNumber)
+        .put("createdAtEpochMillis", createdAt.toEpochMilli())
+        .put("updatedAtEpochMillis", updatedAt.toEpochMilli())
+
+    private fun JSONObject.toFriendContact(): FriendContact = runCatching {
+        val updatedAt = Instant.ofEpochMilli(getLong("updatedAtEpochMillis"))
+        FriendContact(
+            id = UUID.fromString(getString("id")),
+            userId = optString("userId", "guest-local"),
+            name = getString("name"),
+            postalCode = optString("postalCode"),
+            prefecture = optString("prefecture"),
+            city = optString("city"),
+            addressLine = optString("addressLine"),
+            birthDate = if (isNull("birthDate")) {
+                null
+            } else {
+                optString("birthDate").takeIf(String::isNotBlank)?.let(LocalDate::parse)
+            },
+            phoneNumber = optString("phoneNumber"),
+            email = optString("email"),
+            createdAt = Instant.ofEpochMilli(getLong("createdAtEpochMillis")),
+            updatedAt = updatedAt,
+        ).validated(now = updatedAt)
+    }.getOrElse { throw AppBackupException.InvalidFormat }
+
+    private fun JSONObject.toFriendHistory(): FriendInteractionHistory = runCatching {
+        val updatedAt = Instant.ofEpochMilli(getLong("updatedAtEpochMillis"))
+        val photos = optJSONArray("photoUrls") ?: JSONArray()
+        FriendInteractionHistory(
+            id = UUID.fromString(getString("id")),
+            friendId = UUID.fromString(getString("friendId")),
+            interactionDate = Instant.ofEpochMilli(getLong("interactionDateEpochMillis")),
+            memo = optString("memo"),
+            photoUrls = buildList {
+                repeat(photos.length()) { index -> add(photos.getString(index)) }
+            },
+            isPhoneCall = optBoolean("isPhoneCall"),
+            phoneNumber = optString("phoneNumber"),
+            createdAt = Instant.ofEpochMilli(getLong("createdAtEpochMillis")),
+            updatedAt = updatedAt,
+        ).validated(now = updatedAt)
+    }.getOrElse { throw AppBackupException.InvalidFormat }
 
     private suspend fun restoreMeeting(entry: JSONObject) {
         val id = runCatching { UUID.fromString(entry.getString("id")) }

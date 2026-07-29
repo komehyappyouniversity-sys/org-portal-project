@@ -34,6 +34,7 @@ import jp.komehyappyo.member.next.core.data.LocalMeetingRecordingStore
 import jp.komehyappyo.member.next.core.data.RoomMeetingMinutesRepository
 import jp.komehyappyo.member.next.core.data.RoomSnsCustomLinkRepository
 import jp.komehyappyo.member.next.core.data.RoomFavoriteBookmarkRepository
+import jp.komehyappyo.member.next.core.data.RoomFriendExchangeRepository
 import jp.komehyappyo.member.next.core.designsystem.OrgPortalTheme
 import jp.komehyappyo.member.next.core.navigation.AppShell
 import jp.komehyappyo.member.next.core.notifications.NotificationService
@@ -47,6 +48,7 @@ import jp.komehyappyo.member.next.feature.tools.MeetingMinutesFeatureModel
 import jp.komehyappyo.member.next.feature.tools.MeetingRecordingService
 import jp.komehyappyo.member.next.feature.tools.SnsPostingAssistantFeatureModel
 import jp.komehyappyo.member.next.feature.tools.FavoriteBookmarkFeatureModel
+import jp.komehyappyo.member.next.feature.tools.FriendExchangeFeatureModel
 import jp.komehyappyo.member.next.core.session.AppSession
 import jp.komehyappyo.member.next.feature.account.AccountFeatureModel
 import jp.komehyappyo.member.next.feature.account.AccountRoot
@@ -181,6 +183,18 @@ class MainActivity : FragmentActivity() {
         val favoriteBookmarkModel: FavoriteBookmarkFeatureModel = viewModel(
             factory = favoriteBookmarkFactory,
         )
+        val friendExchangeRepository = remember {
+            RoomFriendExchangeRepository(
+                database.friendContactDao(),
+                database.friendInteractionHistoryDao(),
+            )
+        }
+        val friendExchangeFactory = remember {
+            FriendExchangeFeatureModel.Factory(friendExchangeRepository)
+        }
+        val friendExchangeModel: FriendExchangeFeatureModel = viewModel(
+            factory = friendExchangeFactory,
+        )
         val appBackupFactory = remember {
             AppBackupFeatureModel.Factory(
                 AppBackupService(
@@ -192,6 +206,7 @@ class MainActivity : FragmentActivity() {
                     recordingStore = meetingRecordingStore,
                     snsCustomLinkRepository = snsCustomLinkRepository,
                     favoriteBookmarkRepository = favoriteBookmarkRepository,
+                    friendExchangeRepository = friendExchangeRepository,
                 ),
             )
         }
@@ -216,6 +231,7 @@ class MainActivity : FragmentActivity() {
                     meetingMinutesModel,
                     snsPostingAssistantModel,
                     favoriteBookmarkModel,
+                    friendExchangeModel,
                 )
             },
             connect = {

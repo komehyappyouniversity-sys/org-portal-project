@@ -14,9 +14,12 @@ public struct AppBackupImportSummary: Equatable, Sendable {
     public let meetingMinutes: Int
     public let snsLinks: Int
     public let favorites: Int
+    public let friendContacts: Int
+    public let friendHistories: Int
 
     public var total: Int {
         schedules + diaries + cashDistributions + meetingMinutes + snsLinks + favorites
+            + friendContacts + friendHistories
     }
 }
 
@@ -55,6 +58,8 @@ private struct AppBackupEnvelope: Codable {
     let schedules: [AppBackupSchedule]
     let meetingMinutes: [AppBackupMeetingMinutes]
     let snsCustomLinks: [AppBackupSnsLink]
+    let friendContacts: [AppBackupFriendContact]?
+    let friendInteractionHistories: [AppBackupFriendInteractionHistory]?
 }
 
 private struct AppBackupSchedule: Codable {
@@ -116,6 +121,33 @@ private struct AppBackupSnsLink: Codable {
     let value: SnsCustomLink
 }
 
+private struct AppBackupFriendContact: Codable {
+    let id: String
+    let userId: String
+    let name: String
+    let postalCode: String
+    let prefecture: String
+    let city: String
+    let addressLine: String
+    let birthDate: String?
+    let phoneNumber: String
+    let email: String
+    let createdAtEpochMillis: Int64
+    let updatedAtEpochMillis: Int64
+}
+
+private struct AppBackupFriendInteractionHistory: Codable {
+    let id: String
+    let friendId: String
+    let interactionDateEpochMillis: Int64
+    let memo: String
+    let photoUrls: [String]
+    let isPhoneCall: Bool
+    let phoneNumber: String
+    let createdAtEpochMillis: Int64
+    let updatedAtEpochMillis: Int64
+}
+
 /// 端末内データを、アプリ削除前に1つのファイルへまとめるバックアップです。
 /// Firebase上の会員・コミュニティ情報は対象外です。
 @MainActor
@@ -130,6 +162,7 @@ public final class AppBackupService {
     private let recordingStore: LocalMeetingRecordingStore
     private let snsRepository: SnsCustomLinkRepository
     private let favoriteService: FavoriteBookmarkBackupService
+    private let friendExchangeRepository: FriendExchangeRepository
     private let fileManager: FileManager
 
     public init(
@@ -141,6 +174,7 @@ public final class AppBackupService {
         recordingStore: LocalMeetingRecordingStore,
         snsCustomLinkRepository: SnsCustomLinkRepository,
         favoriteBookmarkRepository: FavoriteBookmarkRepository,
+        friendExchangeRepository: FriendExchangeRepository,
         fileManager: FileManager = .default
     ) {
         self.scheduleRepository = scheduleRepository
@@ -157,11 +191,17 @@ public final class AppBackupService {
         favoriteService = FavoriteBookmarkBackupService(
             repository: favoriteBookmarkRepository
         )
+        self.friendExchangeRepository = friendExchangeRepository
         self.fileManager = fileManager
     }
 
     public func exportData(now: Date = .now) async throws -> AppBackupExportResult {
         let minutes = try await meetingRepository.fetchAll()
+        let friendContacts = try await friendExchangeRepository.fetchContacts()
+        var friendHistories: [FriendInteractionHistory] = []
+        for contact in friendContacts {
+            friendHistories += try await friendExchangeRepository.fetchHistories(friendId: contact.id)
+        }
         var skippedMeetingMinutes = 0
         let minuteEntries = minutes.compactMap { value -> AppBackupMeetingMinutes? in
             let audioURL = URL(fileURLWithPath: value.audioFileLocalPath)
@@ -250,7 +290,36 @@ public final class AppBackupService {
                 )
             },
             meetingMinutes: minuteEntries,
-            snsCustomLinks: try await snsRepository.fetchAll().map(AppBackupSnsLink.init)
+            snsCustomLinks: try await snsRepository.fetchAll().map(AppBackupSnsLink.init),
+            friendContacts: friendContacts.map {
+                AppBackupFriendContact(
+                    id: $0.id.uuidString,
+                    userId: $0.userId,
+                    name: $0.name,
+                    postalCode: $0.postalCode,
+                    prefecture: $0.prefecture,
+                    city: $0.city,
+                    addressLine: $0.addressLine,
+                    birthDate: $0.birthDate.map(Self.dateOnlyString),
+                    phoneNumber: $0.phoneNumber,
+                    email: $0.email,
+                    createdAtEpochMillis: Self.epochMillis($0.createdAt),
+                    updatedAtEpochMillis: Self.epochMillis($0.updatedAt)
+                )
+            },
+            friendInteractionHistories: friendHistories.map {
+                AppBackupFriendInteractionHistory(
+                    id: $0.id.uuidString,
+                    friendId: $0.friendId.uuidString,
+                    interactionDateEpochMillis: Self.epochMillis($0.interactionDate),
+                    memo: $0.memo,
+                    photoUrls: $0.photoUrls,
+                    isPhoneCall: $0.isPhoneCall,
+                    phoneNumber: $0.phoneNumber,
+                    createdAtEpochMillis: Self.epochMillis($0.createdAt),
+                    updatedAtEpochMillis: Self.epochMillis($0.updatedAt)
+                )
+            }
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .millisecondsSince1970
@@ -381,13 +450,72 @@ public final class AppBackupService {
                 )
             )
         }
+        let friendContacts = envelope.friendContacts ?? []
+        let friendHistories = envelope.friendInteractionHistories ?? []
+        var importedFriendIDs = Set<UUID>()
+        for entry in friendContacts {
+            guard let id = UUID(uuidString: entry.id) else {
+                throw AppBackupError.invalidFormat
+            }
+            let birthDate: Date?
+            if let birthDateValue = entry.birthDate {
+                birthDate = try Self.dateOnly(birthDateValue)
+            } else {
+                birthDate = nil
+            }
+            let updatedAt = Self.date(entry.updatedAtEpochMillis)
+            let contact = FriendContact(
+                id: id,
+                userId: entry.userId,
+                name: entry.name,
+                postalCode: entry.postalCode,
+                prefecture: entry.prefecture,
+                city: entry.city,
+                addressLine: entry.addressLine,
+                birthDate: birthDate,
+                phoneNumber: entry.phoneNumber,
+                email: entry.email,
+                createdAt: Self.date(entry.createdAtEpochMillis),
+                updatedAt: updatedAt
+            )
+            let restored = try contact.validated(
+                now: updatedAt,
+                calendar: Self.backupCalendar
+            )
+            try await friendExchangeRepository.save(restored)
+            importedFriendIDs.insert(id)
+        }
+        for entry in friendHistories {
+            guard
+                let id = UUID(uuidString: entry.id),
+                let friendID = UUID(uuidString: entry.friendId),
+                importedFriendIDs.contains(friendID)
+            else {
+                throw AppBackupError.invalidFormat
+            }
+            let updatedAt = Self.date(entry.updatedAtEpochMillis)
+            let history = FriendInteractionHistory(
+                id: id,
+                friendId: friendID,
+                interactionDate: Self.date(entry.interactionDateEpochMillis),
+                memo: entry.memo,
+                photoUrls: entry.photoUrls,
+                isPhoneCall: entry.isPhoneCall,
+                phoneNumber: entry.phoneNumber,
+                createdAt: Self.date(entry.createdAtEpochMillis),
+                updatedAt: updatedAt
+            )
+            try await friendExchangeRepository.save(try history.validated(now: updatedAt))
+        }
         return AppBackupImportSummary(
             schedules: envelope.schedules.count,
             diaries: diaryCount,
             cashDistributions: cashCount,
             meetingMinutes: envelope.meetingMinutes.count,
             snsLinks: envelope.snsCustomLinks.count,
-            favorites: favoriteCount
+            favorites: favoriteCount,
+            friendContacts: friendContacts.count,
+            friendHistories: friendHistories.count
         )
     }
 
@@ -401,6 +529,33 @@ public final class AppBackupService {
 
     private static func date(_ value: Int64) -> Date {
         Date(timeIntervalSince1970: TimeInterval(value) / 1_000)
+    }
+
+    private static var backupCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = Locale(identifier: "en_US_POSIX")
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }
+
+    private static func dateOnlyString(_ date: Date) -> String {
+        dateOnlyFormatter.string(from: date)
+    }
+
+    private static func dateOnly(_ value: String) throws -> Date {
+        guard let date = dateOnlyFormatter.date(from: value) else {
+            throw AppBackupError.invalidFormat
+        }
+        return date
+    }
+
+    private static var dateOnlyFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.calendar = backupCalendar
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
     }
 }
 
