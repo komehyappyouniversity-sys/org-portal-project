@@ -14,6 +14,9 @@ class GuestHomeToolTest {
                 GuestHomeTool.Denomination,
                 GuestHomeTool.MeetingMinutes,
                 GuestHomeTool.Favorites,
+                GuestHomeTool.YouTubeSearch,
+                GuestHomeTool.PersonalVideos,
+                GuestHomeTool.Manual,
             ),
             GuestHomeTool.ordered,
         )
@@ -26,5 +29,8 @@ class GuestHomeToolTest {
         assertTrue(GuestHomeTool.Denomination.isAvailable)
         assertTrue(GuestHomeTool.MeetingMinutes.isAvailable)
         assertTrue(GuestHomeTool.Favorites.isAvailable)
+        assertTrue(GuestHomeTool.YouTubeSearch.isAvailable)
+        assertTrue(GuestHomeTool.PersonalVideos.isAvailable)
+        assertTrue(GuestHomeTool.Manual.isAvailable)
     }
 }

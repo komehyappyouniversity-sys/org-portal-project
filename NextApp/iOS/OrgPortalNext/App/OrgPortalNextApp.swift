@@ -37,6 +37,8 @@ struct OrgPortalNextApp: App {
                 MeetingMinutesRecord.self,
                 SnsCustomLinkRecord.self,
                 FavoriteBookmarkRecord.self,
+                PersonalVideoRecord.self,
+                VideoMemoRecord.self,
                 FriendContactRecord.self,
                 FriendInteractionHistoryRecord.self
             )
@@ -60,6 +62,8 @@ private struct AppBootstrapView: View {
     @StateObject private var meetingMinutesModel: MeetingMinutesFeatureModel
     @StateObject private var snsPostingAssistantModel: SnsPostingAssistantFeatureModel
     @StateObject private var favoriteBookmarkModel: FavoriteBookmarkFeatureModel
+    @StateObject private var personalVideoModel: PersonalVideoFeatureModel
+    @StateObject private var videoQuestionModel: VideoQuestionFeatureModel
     @StateObject private var friendExchangeModel: FriendExchangeFeatureModel
     @StateObject private var appBackupModel: AppBackupFeatureModel
     @StateObject private var appSession: AppSession
@@ -165,6 +169,21 @@ private struct AppBootstrapView: View {
                 repository: favoriteBookmarkRepository
             )
         )
+        let personalVideoRepository = SwiftDataPersonalVideoRepository(modelContainer: modelContainer)
+        _personalVideoModel = StateObject(
+            wrappedValue: PersonalVideoFeatureModel(
+                repository: personalVideoRepository
+            )
+        )
+        let videoQuestionRepository = FirebaseRESTVideoQuestionRepository(
+            projectId: firebaseProjectID
+        )
+        _videoQuestionModel = StateObject(
+            wrappedValue: VideoQuestionFeatureModel(
+                repository: videoQuestionRepository,
+                session: session
+            )
+        )
         _friendExchangeModel = StateObject(
             wrappedValue: FriendExchangeFeatureModel(
                 repository: friendExchangeRepository
@@ -181,6 +200,7 @@ private struct AppBootstrapView: View {
                     recordingStore: meetingRecordingStore,
                     snsCustomLinkRepository: snsCustomLinkRepository,
                     favoriteBookmarkRepository: favoriteBookmarkRepository,
+                    personalVideoRepository: personalVideoRepository,
                     friendExchangeRepository: friendExchangeRepository
                 )
             )
@@ -195,6 +215,7 @@ private struct AppBootstrapView: View {
                 cashDistributionModel: cashDistributionModel,
                 meetingMinutesModel: meetingMinutesModel,
                 favoriteBookmarkModel: favoriteBookmarkModel,
+                personalVideoModel: personalVideoModel,
                 appBackupModel: appBackupModel
             ),
             tools: ToolsHubView(
@@ -204,7 +225,9 @@ private struct AppBootstrapView: View {
                 meetingMinutesModel: meetingMinutesModel,
                 snsPostingAssistantModel: snsPostingAssistantModel,
                 favoriteBookmarkModel: favoriteBookmarkModel,
-                friendExchangeModel: friendExchangeModel
+                friendExchangeModel: friendExchangeModel,
+                personalVideoModel: personalVideoModel,
+                videoQuestionModel: videoQuestionModel,
             ),
             community: ConnectedRootView(
                 communityModel: communityModel,

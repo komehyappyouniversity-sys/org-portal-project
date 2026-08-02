@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.SettingsBackupRestore
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -77,6 +78,24 @@ enum class GuestHomeTool(
         icon = Icons.Outlined.Bookmark,
         isAvailable = true,
     ),
+    YouTubeSearch(
+        title = "YouTube検索・登録",
+        description = "検索して気になる動画をお気に入りに追加できます。",
+        icon = Icons.Outlined.Search,
+        isAvailable = true,
+    ),
+    PersonalVideos(
+        title = "YouTube動画メモ",
+        description = "保存したYouTubeを一覧表示してタイトルやカテゴリを編集できます。",
+        icon = Icons.Outlined.Bookmark,
+        isAvailable = true,
+    ),
+    Manual(
+        title = "使い方マニュアル",
+        description = "アプリの使い方を一覧で確認できます。",
+        icon = Icons.AutoMirrored.Outlined.MenuBook,
+        isAvailable = true,
+    ),
     ;
 
     companion object {
@@ -90,6 +109,9 @@ private enum class GuestHomeDestination {
     Denomination,
     MeetingMinutes,
     Favorites,
+    YouTubeSearch,
+    PersonalVideos,
+    Manual,
     AppBackup,
 }
 
@@ -100,6 +122,7 @@ fun GuestHomeView(
     cashDistributionModel: CashDistributionFeatureModel,
     meetingMinutesModel: MeetingMinutesFeatureModel,
     favoriteBookmarkModel: FavoriteBookmarkFeatureModel,
+    personalVideoFeatureModel: PersonalVideoFeatureModel,
     appBackupModel: AppBackupFeatureModel,
 ) {
     var destination by rememberSaveable { mutableStateOf<GuestHomeDestination?>(null) }
@@ -119,6 +142,12 @@ fun GuestHomeView(
                         MeetingMinutesRoot(meetingMinutesModel)
                     GuestHomeDestination.Favorites ->
                         FavoriteBookmarksRoot(favoriteBookmarkModel)
+                    GuestHomeDestination.YouTubeSearch ->
+                        YoutubeSearchRoot()
+                    GuestHomeDestination.PersonalVideos ->
+                        YoutubeMenuRoot(model = personalVideoFeatureModel)
+                    GuestHomeDestination.Manual ->
+                        ManualListRoot()
                     GuestHomeDestination.AppBackup ->
                         AppBackupRoot(appBackupModel)
                     null -> Unit
@@ -208,6 +237,30 @@ fun GuestHomeView(
                             Text("お気に入りを開く")
                         }
                     }
+                    GuestHomeTool.YouTubeSearch -> {
+                        TextButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { destination = GuestHomeDestination.YouTubeSearch },
+                        ) {
+                            Text("検索画面を開く")
+                        }
+                    }
+                    GuestHomeTool.PersonalVideos -> {
+                        TextButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { destination = GuestHomeDestination.PersonalVideos },
+                        ) {
+                            Text("動画メモを開く")
+                        }
+                    }
+                    GuestHomeTool.Manual -> {
+                        TextButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { destination = GuestHomeDestination.Manual },
+                        ) {
+                            Text("アプリ説明を見る")
+                        }
+                    }
                 }
             }
         }
@@ -281,7 +334,7 @@ private fun AppBackupRoot(model: AppBackupFeatureModel) {
         )
         FeatureCard(
             title = "バックアップされる内容",
-            description = "予定、日記・写真、金種計算、会議録音・議事録・PDF、SNSリンク、お気に入りURL・メモ・3段階カテゴリ",
+            description = "予定、日記・写真、金種計算、会議録音・議事録・PDF、SNSリンク、お気に入りURL・メモ・3段階カテゴリ、個人動画（YouTube）、友達情報・交流履歴",
             icon = Icons.Outlined.SettingsBackupRestore,
         )
         Text(

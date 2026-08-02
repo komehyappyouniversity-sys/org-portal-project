@@ -9,6 +9,9 @@ public enum GuestHomeTool: String, CaseIterable, Identifiable, Sendable {
     case denomination
     case meetingMinutes
     case favorites
+    case youTubeSearch
+    case personalVideos
+    case manual
 
     public var id: String { rawValue }
 
@@ -17,7 +20,10 @@ public enum GuestHomeTool: String, CaseIterable, Identifiable, Sendable {
         .diary,
         .denomination,
         .meetingMinutes,
-        .favorites
+        .favorites,
+        .youTubeSearch,
+        .personalVideos,
+        .manual,
     ]
 
     public var isAvailable: Bool {
@@ -31,6 +37,9 @@ public enum GuestHomeTool: String, CaseIterable, Identifiable, Sendable {
         case .denomination: "home.denomination.title"
         case .meetingMinutes: "home.meeting_minutes.title"
         case .favorites: "お気に入り"
+        case .youTubeSearch: "YouTube検索・登録"
+        case .personalVideos: "YouTube動画メモ"
+        case .manual: "使い方マニュアル"
         }
     }
 
@@ -41,6 +50,9 @@ public enum GuestHomeTool: String, CaseIterable, Identifiable, Sendable {
         case .denomination: "home.denomination.subtitle"
         case .meetingMinutes: "home.meeting_minutes.subtitle"
         case .favorites: "よく見るWebページを自分専用に保存します。"
+        case .youTubeSearch: "検索結果から開いた動画をお気に入りに登録できます。"
+        case .personalVideos: "タイトル・URL・再生位置メモを端末内で管理します。"
+        case .manual: "アプリの主要機能をすばやく確認できます。"
         }
     }
 
@@ -51,6 +63,9 @@ public enum GuestHomeTool: String, CaseIterable, Identifiable, Sendable {
         case .denomination: "yensign.circle"
         case .meetingMinutes: "mic"
         case .favorites: "bookmark"
+        case .youTubeSearch: "magnifyingglass"
+        case .personalVideos: "play.rectangle"
+        case .manual: "book.closed"
         }
     }
 }
@@ -61,12 +76,16 @@ public struct GuestHomeView: View {
     @ObservedObject private var cashDistributionModel: CashDistributionFeatureModel
     @ObservedObject private var meetingMinutesModel: MeetingMinutesFeatureModel
     @ObservedObject private var favoriteBookmarkModel: FavoriteBookmarkFeatureModel
+    @ObservedObject private var personalVideoModel: PersonalVideoFeatureModel
     @ObservedObject private var appBackupModel: AppBackupFeatureModel
     @State private var isShowingTodaySchedule = false
     @State private var isShowingDiary = false
     @State private var isShowingDenomination = false
     @State private var isShowingMeetingMinutes = false
     @State private var isShowingFavorites = false
+    @State private var isShowingPersonalVideos = false
+    @State private var isShowingManual = false
+    @State private var isShowingYoutubeSearch = false
     @State private var isShowingAppBackup = false
 
     public init(
@@ -75,6 +94,7 @@ public struct GuestHomeView: View {
         cashDistributionModel: CashDistributionFeatureModel,
         meetingMinutesModel: MeetingMinutesFeatureModel,
         favoriteBookmarkModel: FavoriteBookmarkFeatureModel,
+        personalVideoModel: PersonalVideoFeatureModel,
         appBackupModel: AppBackupFeatureModel
     ) {
         self.scheduleModel = scheduleModel
@@ -82,6 +102,7 @@ public struct GuestHomeView: View {
         self.cashDistributionModel = cashDistributionModel
         self.meetingMinutesModel = meetingMinutesModel
         self.favoriteBookmarkModel = favoriteBookmarkModel
+        self.personalVideoModel = personalVideoModel
         self.appBackupModel = appBackupModel
     }
 
@@ -147,9 +168,42 @@ public struct GuestHomeView: View {
                                 )
                             }
                             .buttonStyle(.plain)
-                        } else {
+                        } else if tool == .favorites {
                             Button {
                                 isShowingFavorites = true
+                            } label: {
+                                FeatureCard(
+                                    tool.title,
+                                    subtitle: tool.subtitle,
+                                    systemImage: tool.systemImage
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        } else if tool == .youTubeSearch {
+                            Button {
+                                isShowingYoutubeSearch = true
+                            } label: {
+                                FeatureCard(
+                                    tool.title,
+                                    subtitle: tool.subtitle,
+                                    systemImage: tool.systemImage
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        } else if tool == .personalVideos {
+                            Button {
+                                isShowingPersonalVideos = true
+                            } label: {
+                                FeatureCard(
+                                    tool.title,
+                                    subtitle: tool.subtitle,
+                                    systemImage: tool.systemImage
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        } else if tool == .manual {
+                            Button {
+                                isShowingManual = true
                             } label: {
                                 FeatureCard(
                                     tool.title,
@@ -166,7 +220,7 @@ public struct GuestHomeView: View {
                     } label: {
                         FeatureCard(
                             "アプリ削除前のバックアップ",
-                            subtitle: "予定・日記と写真・金種計算・会議録音・SNSリンク・お気に入りを1つのファイルにまとめます。",
+                            subtitle: "予定・日記と写真・金種計算・会議録音・SNSリンク・お気に入り・友達情報・交流履歴・個人動画をまとめて保存します。",
                             systemImage: "externaldrive.badge.timemachine"
                         )
                     }
@@ -191,9 +245,56 @@ public struct GuestHomeView: View {
         .sheet(isPresented: $isShowingFavorites) {
             FavoriteBookmarksView(model: favoriteBookmarkModel)
         }
+        .sheet(isPresented: $isShowingPersonalVideos) {
+            PersonalVideosView(model: personalVideoModel)
+        }
+        .sheet(isPresented: $isShowingManual) {
+            ManualListView()
+        }
+        .sheet(isPresented: $isShowingYoutubeSearch) {
+            YoutubeSearchView()
+        }
         .sheet(isPresented: $isShowingAppBackup) {
             AppBackupView(model: appBackupModel)
         }
+    }
+}
+
+private struct YoutubeSearchView: View {
+    @State private var keyword = ""
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("YouTube検索") {
+                    TextField("検索ワード", text: $keyword)
+                    Button {
+                        openYouTubeSearch()
+                    } label: {
+                        Label("YouTubeで検索", systemImage: "magnifyingglass")
+                    }
+                    .disabled(keyword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+
+                Section("使い方") {
+                    Text("検索結果から開いた動画URLを『お気に入り』画面で保存できます。")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("YouTube検索・登録")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private func openYouTubeSearch() {
+        let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://www.youtube.com/results?search_query=\(encoded)") else {
+            return
+        }
+        openURL(url)
     }
 }
 
@@ -277,7 +378,7 @@ private struct AppBackupView: View {
         NavigationStack {
             Form {
                 Section("バックアップ対象") {
-                    Text("予定、日記・写真、金種計算、会議録音・議事録、SNS独自リンク、お気に入りURL")
+                    Text("予定、日記・写真、金種計算、会議録音・議事録、SNS独自リンク、お気に入りURL/メモ/カテゴリ、個人動画、友達情報、交流履歴")
                     Text("会員情報・コミュニティ・お知らせはFirebaseに保存されているため、このファイルには含みません。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)

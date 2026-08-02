@@ -1,9 +1,13 @@
 package jp.komehyappyo.member.next.feature.tools
 
+import android.content.Intent
+import android.net.Uri
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
@@ -13,14 +17,16 @@ import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Bookmark
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.QuestionAnswer
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -34,6 +40,10 @@ private enum class ToolsDestination {
     SnsPostingAssistant,
     Favorites,
     Friends,
+    Manual,
+    YouTubeSearch,
+    PersonalVideos,
+    VideoQuestions,
 }
 
 @Composable
@@ -45,6 +55,8 @@ fun ToolsHubRoot(
     snsPostingAssistantModel: SnsPostingAssistantFeatureModel,
     favoriteBookmarkModel: FavoriteBookmarkFeatureModel,
     friendExchangeModel: FriendExchangeFeatureModel,
+    personalVideoFeatureModel: PersonalVideoFeatureModel,
+    videoQuestionFeatureModel: VideoQuestionFeatureModel,
 ) {
     var destination by remember { mutableStateOf<ToolsDestination?>(null) }
     when (destination) {
@@ -82,6 +94,26 @@ fun ToolsHubRoot(
             onBack = { destination = null },
         ) {
             FriendExchangeRoot(friendExchangeModel)
+        }
+        ToolsDestination.YouTubeSearch -> ToolDestinationContainer(
+            onBack = { destination = null },
+        ) {
+            YoutubeSearchRoot()
+        }
+        ToolsDestination.PersonalVideos -> ToolDestinationContainer(
+            onBack = { destination = null },
+        ) {
+            YoutubeMenuRoot(model = personalVideoFeatureModel)
+        }
+        ToolsDestination.VideoQuestions -> ToolDestinationContainer(
+            onBack = { destination = null },
+        ) {
+            VideoQuestionRoot(videoQuestionFeatureModel)
+        }
+        ToolsDestination.Manual -> ToolDestinationContainer(
+            onBack = { destination = null },
+        ) {
+            ManualListRoot()
         }
         null -> Column(
             modifier = Modifier
@@ -132,6 +164,34 @@ fun ToolsHubRoot(
                     icon = Icons.Outlined.Bookmark,
                 )
             }
+            Button(onClick = { destination = ToolsDestination.Manual }) {
+                FeatureCard(
+                    title = "使い方マニュアル",
+                    description = "アプリの主要機能をすばやく確認できます。",
+                    icon = Icons.AutoMirrored.Outlined.MenuBook,
+                )
+            }
+            Button(onClick = { destination = ToolsDestination.YouTubeSearch }) {
+                FeatureCard(
+                    title = "YouTube検索・登録",
+                    description = "キーワードでYouTubeを開きます。",
+                    icon = Icons.Outlined.Search,
+                )
+            }
+            Button(onClick = { destination = ToolsDestination.PersonalVideos }) {
+                FeatureCard(
+                    title = "YouTube動画メモ",
+                    description = "保存済みYouTubeを開く/タイトル編集/3段階カテゴリ/時間メモができます。",
+                    icon = Icons.Outlined.Bookmark,
+                )
+            }
+            Button(onClick = { destination = ToolsDestination.VideoQuestions }) {
+                FeatureCard(
+                    title = "動画質問",
+                    description = "自分の質問を送信し、回答を確認します。",
+                    icon = Icons.Outlined.QuestionAnswer,
+                )
+            }
             Button(onClick = { destination = ToolsDestination.Friends }) {
                 FeatureCard(
                     title = "友達情報・交流履歴帳",
@@ -151,5 +211,45 @@ private fun ToolDestinationContainer(
     Column(modifier = Modifier.fillMaxSize()) {
         TextButton(onClick = onBack) { Text("便利に戻る") }
         Box(modifier = Modifier.weight(1f)) { content() }
+    }
+}
+
+@Composable
+fun YoutubeSearchRoot() {
+    var keyword by remember { mutableStateOf("") }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            "YouTube検索",
+            style = MaterialTheme.typography.headlineSmall,
+        )
+        androidx.compose.material3.OutlinedTextField(
+            value = keyword,
+            onValueChange = { keyword = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("検索ワード") },
+            singleLine = true,
+        )
+        Button(
+            modifier = Modifier.fillMaxWidth(),
+            enabled = keyword.isNotBlank(),
+            onClick = {
+                val query = Uri.encode(keyword)
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=${query}"))
+                context.startActivity(intent)
+            },
+        ) {
+            Text("YouTubeで検索")
+        }
+        Text(
+            "検索結果から動画を開いて、\"お気に入り\"画面でURLを登録してください。",
+            style = MaterialTheme.typography.bodyMedium,
+        )
     }
 }

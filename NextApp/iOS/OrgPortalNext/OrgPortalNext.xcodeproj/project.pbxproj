@@ -47,6 +47,7 @@
 		4DC5B81A7296D291ABB83513 /* Notifications.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3FDD79EF8D3D216ED509E2CF /* Notifications.framework */; };
 		4EE3437DFA38F357CCABC521 /* DataLayer.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 99C5997017C6EB672666414D /* DataLayer.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		53D2F2F77331AE33D45ABE39 /* ToolsHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6E34BA5A4ED5E551F05DC08 /* ToolsHubView.swift */; };
+		4C6F0C9D1A4B5C7D8E9F1234 /* ManualViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* ManualViews.swift */; };
 		544887F6A8EB7A6B826C80C9 /* DeviceCalendarClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6B46309F5F1212AEEEDD8BF /* DeviceCalendarClient.swift */; };
 		55BCF28317366AA1A86BF870 /* FeatureTools.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BE1DDE2F07CB45AA8F8C435A /* FeatureTools.framework */; };
 		575A4AD42A50F2C1DC2E0BC7 /* Session.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 234963ECD4AA03964F2B19FB /* Session.framework */; };
@@ -368,6 +369,7 @@
 		B4CC04A86D03A0EA3652BB95 /* MeetingRecordingService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeetingRecordingService.swift; sourceTree = "<group>"; };
 		B4D6A957B46820C064916222 /* MeetingMinutesViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeetingMinutesViews.swift; sourceTree = "<group>"; };
 		B519953FE619165551B880C6 /* FavoriteBookmarkViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FavoriteBookmarkViews.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5C /* ManualViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ManualViews.swift; sourceTree = "<group>"; };
 		B6748629D55D8EFE17834058 /* SnsCustomLink.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SnsCustomLink.swift; sourceTree = "<group>"; };
 		B6E34BA5A4ED5E551F05DC08 /* ToolsHubView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ToolsHubView.swift; sourceTree = "<group>"; };
 		BA5E84C02189D8DA17414ED0 /* DesignTokens.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
@@ -617,6 +619,7 @@
 				C0641F19A5686098BD2DEF48 /* ScheduleViews.swift */,
 				39D98BB36351EEE73C31FE86 /* SnsPostingAssistantFeatureModel.swift */,
 				A69518FBB7E3C6CFF1D212B8 /* SnsPostingAssistantViews.swift */,
+				A1B2C3D4E5F60718293A4B5C /* ManualViews.swift */,
 				B6E34BA5A4ED5E551F05DC08 /* ToolsHubView.swift */,
 			);
 			name = "Feature Tools";
@@ -1244,6 +1247,7 @@
 				760AB71A6C58F33A62AF3163 /* ScheduleViews.swift in Sources */,
 				EEC1FDC5D2124E0C57154DDD /* SnsPostingAssistantFeatureModel.swift in Sources */,
 				BA438F607E257A484FA99DAD /* SnsPostingAssistantViews.swift in Sources */,
+				4C6F0C9D1A4B5C7D8E9F1234 /* ManualViews.swift in Sources */,
 				53D2F2F77331AE33D45ABE39 /* ToolsHubView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

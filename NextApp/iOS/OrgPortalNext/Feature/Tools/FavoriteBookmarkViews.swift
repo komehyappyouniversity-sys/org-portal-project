@@ -206,6 +206,299 @@ public struct FavoriteBookmarksView: View {
     }
 }
 
+public struct PersonalVideosView: View {
+    @ObservedObject private var model: PersonalVideoFeatureModel
+    @State private var showsEditor = false
+    @State private var editingVideo: PersonalVideo?
+
+    public init(model: PersonalVideoFeatureModel) {
+        self.model = model
+    }
+
+    public var body: some View {
+        NavigationStack {
+            Group {
+                if model.isLoading, model.videos.isEmpty {
+                    LoadingState()
+                } else if let error = model.errorMessage, model.videos.isEmpty {
+                    ErrorState(message: error) { Task { await model.loadVideos() } }
+                } else if model.videos.isEmpty {
+                    EmptyState(
+                        title: "登録動画はまだありません",
+                        message: "YouTube動画を登録すると、再生位置や時間メモを残せます。",
+                        systemImage: "play.rectangle"
+                    )
+                } else {
+                    List {
+                        ForEach(model.videos) { video in
+                            NavigationLink {
+                                PersonalVideoDetailView(model: model, video: video)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(video.title).font(.headline)
+                                    if !video.categoryPath.isEmpty {
+                                        Text(video.categoryPath)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    if video.savedPositionSeconds > 0 {
+                                        Label(
+                                            PersonalVideoTime.format(video.savedPositionSeconds),
+                                            systemImage: "bookmark.fill"
+                                        )
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            .swipeActions {
+                                Button("削除", role: .destructive) {
+                                    Task { await model.deleteVideo(video) }
+                                }
+                                Button("編集") {
+                                    editingVideo = video
+                                    showsEditor = true
+                                }
+                                .tint(.blue)
+                            }
+                        }
+                    }
+                    .listStyle(.insetGrouped)
+                }
+            }
+            .navigationTitle("動画メモ")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        editingVideo = nil
+                        showsEditor = true
+                    } label: {
+                        Label("動画を追加", systemImage: "plus")
+                    }
+                }
+            }
+            .task { await model.loadVideos() }
+            .refreshable { await model.loadVideos() }
+            .sheet(isPresented: $showsEditor) {
+                PersonalVideoEditorView(model: model, video: editingVideo)
+            }
+            .alert("お知らせ", isPresented: Binding(
+                get: { model.notice != nil },
+                set: { if !$0 { model.clearNotice() } }
+            )) {
+                Button("OK") { model.clearNotice() }
+            } message: {
+                Text(model.notice ?? "")
+            }
+            .alert("エラー", isPresented: Binding(
+                get: { model.errorMessage != nil },
+                set: { if !$0 { model.clearError() } }
+            )) {
+                Button("OK") { model.clearError() }
+            } message: {
+                Text(model.errorMessage ?? "")
+            }
+        }
+    }
+}
+
+private struct PersonalVideoEditorView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var model: PersonalVideoFeatureModel
+    let video: PersonalVideo?
+
+    @State private var title: String
+    @State private var urlOrId: String
+    @State private var note: String
+    @State private var savedTime: String
+    @State private var category: String
+    @State private var secondaryCategory: String
+    @State private var tertiaryCategory: String
+    @State private var localError: String?
+    @State private var isSaving = false
+
+    init(model: PersonalVideoFeatureModel, video: PersonalVideo?) {
+        self.model = model
+        self.video = video
+        _title = State(initialValue: video?.title ?? "")
+        _urlOrId = State(initialValue: video?.originalURL ?? "")
+        _note = State(initialValue: video?.note ?? "")
+        _savedTime = State(initialValue: PersonalVideoTime.format(video?.savedPositionSeconds ?? 0))
+        _category = State(initialValue: video?.category ?? "")
+        _secondaryCategory = State(initialValue: video?.secondaryCategory ?? "")
+        _tertiaryCategory = State(initialValue: video?.tertiaryCategory ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("動画") {
+                    TextField("タイトル", text: $title)
+                    TextField("YouTube URLまたは動画ID", text: $urlOrId)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    TextField("保存位置（例 12:34）", text: $savedTime)
+                        .keyboardType(.numbersAndPunctuation)
+                    TextField("動画全体のメモ", text: $note, axis: .vertical)
+                        .lineLimit(3...8)
+                }
+                Section("3段階カテゴリ") {
+                    TextField("第1カテゴリ", text: $category)
+                        .onChange(of: category) { _, value in
+                            if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                secondaryCategory = ""
+                                tertiaryCategory = ""
+                            }
+                        }
+                    TextField("第2カテゴリ", text: $secondaryCategory)
+                        .disabled(category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .onChange(of: secondaryCategory) { _, value in
+                            if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                tertiaryCategory = ""
+                            }
+                        }
+                    TextField("第3カテゴリ", text: $tertiaryCategory)
+                        .disabled(secondaryCategory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .navigationTitle(video == nil ? "動画を追加" : "動画を編集")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") { save() }.disabled(isSaving)
+                }
+            }
+            .alert("入力を確認してください", isPresented: Binding(
+                get: { localError != nil }, set: { if !$0 { localError = nil } }
+            )) {
+                Button("OK") { localError = nil }
+            } message: {
+                Text(localError ?? "")
+            }
+        }
+    }
+
+    private func save() {
+        guard let seconds = PersonalVideoTime.parse(savedTime) else {
+            localError = "保存位置は 12:34 または 1:02:03 の形式で入力してください。"
+            return
+        }
+        isSaving = true
+        Task {
+            let succeeded = await model.saveVideo(
+                existing: video,
+                title: title,
+                urlOrId: urlOrId,
+                note: note,
+                savedPositionSeconds: seconds,
+                category: category,
+                secondaryCategory: secondaryCategory,
+                tertiaryCategory: tertiaryCategory
+            )
+            isSaving = false
+            if succeeded { dismiss() }
+        }
+    }
+}
+
+private struct PersonalVideoDetailView: View {
+    @Environment(\.openURL) private var openURL
+    @ObservedObject var model: PersonalVideoFeatureModel
+    let video: PersonalVideo
+    @State private var memoText = ""
+    @State private var memoTime = "0:00"
+
+    var body: some View {
+        List {
+            Section("動画") {
+                Text(video.title).font(.headline)
+                if !video.categoryPath.isEmpty {
+                    LabeledContent("カテゴリ", value: video.categoryPath)
+                }
+                if !video.note.isEmpty { Text(video.note) }
+                Button("YouTubeで開く") {
+                    openURL(video.canonicalURL)
+                }
+                if video.savedPositionSeconds > 0 {
+                    Button("保存位置 \(PersonalVideoTime.format(video.savedPositionSeconds)) から再生") {
+                        openURL(video.timestampedURL)
+                    }
+                }
+            }
+            Section("時間メモを追加") {
+                TextField("時刻（例 4:11）", text: $memoTime)
+                    .keyboardType(.numbersAndPunctuation)
+                TextField("この時点のメモ", text: $memoText, axis: .vertical)
+                Button("メモを保存") {
+                    guard let seconds = PersonalVideoTime.parse(memoTime) else {
+                        model.errorMessage = "時刻は 4:11 または 1:02:03 の形式で入力してください。"
+                        return
+                    }
+                    Task {
+                        if await model.saveMemo(videoId: video.id, text: memoText, positionSeconds: seconds) {
+                            memoText = ""
+                        }
+                    }
+                }
+            }
+            Section("保存済み時間メモ") {
+                let memos = model.memosByVideo[video.id] ?? []
+                if memos.isEmpty {
+                    Text("時間メモはまだありません。").foregroundStyle(.secondary)
+                } else {
+                    ForEach(memos) { memo in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Button(PersonalVideoTime.format(memo.positionSeconds)) {
+                                if let url = URL(string: "https://www.youtube.com/watch?v=\(video.providerVideoId)&t=\(memo.positionSeconds)s") {
+                                    openURL(url)
+                                }
+                            }
+                            Text(memo.text)
+                        }
+                        .swipeActions {
+                            Button("削除", role: .destructive) {
+                                Task { await model.deleteMemo(memo) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("動画メモ")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await model.loadMemos(videoId: video.id) }
+    }
+}
+
+private enum PersonalVideoTime {
+    static func format(_ seconds: Int) -> String {
+        let value = max(0, seconds)
+        let hours = value / 3_600
+        let minutes = value % 3_600 / 60
+        let remaining = value % 60
+        return hours > 0
+            ? String(format: "%d:%02d:%02d", hours, minutes, remaining)
+            : String(format: "%d:%02d", minutes, remaining)
+    }
+
+    static func parse(_ text: String) -> Int? {
+        let parts = text.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ":")
+        guard (1...3).contains(parts.count), parts.allSatisfy({ Int($0) != nil }) else { return nil }
+        let values = parts.compactMap { Int($0) }
+        guard values.allSatisfy({ $0 >= 0 }) else { return nil }
+        switch values.count {
+        case 1: return values[0]
+        case 2 where values[1] < 60: return values[0] * 60 + values[1]
+        case 3 where values[1] < 60 && values[2] < 60:
+            return values[0] * 3_600 + values[1] * 60 + values[2]
+        default: return nil
+        }
+    }
+}
+
 private struct FavoriteBookmarkRow: View {
     let favorite: FavoriteBookmark
     let onOpen: () -> Void
