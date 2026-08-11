@@ -14,6 +14,7 @@ class GuestHomeToolTest {
                 GuestHomeTool.Denomination,
                 GuestHomeTool.MeetingMinutes,
                 GuestHomeTool.Favorites,
+                GuestHomeTool.Manual,
             ),
             GuestHomeTool.ordered,
         )
@@ -26,5 +27,6 @@ class GuestHomeToolTest {
         assertTrue(GuestHomeTool.Denomination.isAvailable)
         assertTrue(GuestHomeTool.MeetingMinutes.isAvailable)
         assertTrue(GuestHomeTool.Favorites.isAvailable)
+        assertTrue(GuestHomeTool.Manual.isAvailable)
     }
 }

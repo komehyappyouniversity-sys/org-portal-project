@@ -668,20 +668,36 @@ public enum FirebaseRESTAuthError: LocalizedError, Sendable {
         case .biometricCredentialExpired:
             return "生体認証ログインの有効期限が切れました。パスワードで再度ログインしてください。"
         case .server(let code):
-            switch code {
+            let normalizedCode = code.trimmingCharacters(in: .whitespacesAndNewlines)
+            let codeDescription = normalizedCode.isEmpty
+                ? ""
+                : "（Firebase: \(normalizedCode)）"
+            switch normalizedCode {
             case "EMAIL_EXISTS":
-                return "このメールアドレスはすでに登録されています。"
+                return "このメールアドレスはすでに登録されています。\(codeDescription)"
             case "EMAIL_NOT_FOUND", "INVALID_LOGIN_CREDENTIALS", "INVALID_PASSWORD":
-                return "メールアドレスまたはパスワードが正しくありません。"
+                return "メールアドレスまたはパスワードが正しくありません。\(codeDescription)"
             case "USER_DISABLED":
-                return "このアカウントは利用停止中です。"
+                return "このアカウントは利用停止中です。\(codeDescription)"
             case "TOO_MANY_ATTEMPTS_TRY_LATER":
-                return "試行回数が多すぎます。時間をおいて再度お試しください。"
+                return "試行回数が多すぎます。時間をおいて再度お試しください。\(codeDescription)"
+            case "OPERATION_NOT_ALLOWED":
+                return "Firebaseでメール/パスワード認証が有効になっていません。\(codeDescription)"
+            case "INVALID_EMAIL", "MISSING_EMAIL":
+                return "メールアドレスの形式を確認してください。\(codeDescription)"
+            case "RESET_PASSWORD_EXCEED_LIMIT":
+                return "再設定メールの送信回数が上限に達しています。時間をおいて再度お試しください。\(codeDescription)"
+            case "API_KEY_INVALID":
+                return "Firebase APIキーが正しくありません。アプリの設定を確認してください。\(codeDescription)"
+            case "PROJECT_NOT_FOUND":
+                return "Firebaseプロジェクトが見つかりません。接続先の設定を確認してください。\(codeDescription)"
+            case "QUOTA_EXCEEDED":
+                return "Firebaseの利用上限に達しています。時間をおいて再度お試しください。\(codeDescription)"
             default:
-                if code.hasPrefix("WEAK_PASSWORD") {
-                    return "パスワードは8文字以上で入力してください。"
+                if normalizedCode.hasPrefix("WEAK_PASSWORD") {
+                    return "パスワードは8文字以上で入力してください。\(codeDescription)"
                 }
-                return "認証処理に失敗しました。通信環境を確認して再度お試しください。"
+                return "Firebase認証エラーです。通信環境とFirebase設定を確認してください。\(codeDescription)"
             }
         }
     }
@@ -707,8 +723,117 @@ public protocol CommunityRepository: Sendable {
         applicantUserId: String,
         reviewerUserId: String,
         status: CommunityMembershipStatus,
+        auditAction: String?,
         idToken: String
     ) async throws
+    func administrators(
+        communityId: String,
+        idToken: String
+    ) async throws -> [CommunityAdmin]
+    func saveAdministrator(
+        communityId: String,
+        adminUserId: String,
+        role: String,
+        permissions: Set<String>,
+        isActive: Bool,
+        actorUserId: String,
+        idToken: String
+    ) async throws
+    func communityMembers(
+        communityId: String,
+        idToken: String
+    ) async throws -> [CommunityMembership]
+    func auditLogs(
+        communityId: String,
+        idToken: String
+    ) async throws -> [CommunityAuditLog]
+    func communityVideos(
+        communityId: String,
+        idToken: String
+    ) async throws -> [DistributedVideo]
+    func videoMemos(userId: String, idToken: String) async throws -> [String: String]
+    func saveVideoMemo(
+        userId: String,
+        communityId: String,
+        videoId: String,
+        memo: String,
+        idToken: String
+    ) async throws
+    func videoQuestions(
+        communityId: String,
+        memberUid: String,
+        idToken: String
+    ) async throws -> [VideoQuestion]
+    func saveVideoQuestion(
+        communityId: String,
+        memberUid: String,
+        video: DistributedVideo,
+        memoText: String,
+        questionText: String,
+        playbackSeconds: Double,
+        idToken: String
+    ) async throws
+    func adminCommunityVideos(
+        communityId: String,
+        idToken: String
+    ) async throws -> [DistributedVideo]
+    func vimeoLibraryVideos(
+        communityId: String,
+        idToken: String
+    ) async throws -> [DistributedVideo]
+    func vimeoFolders(
+        communityId: String,
+        idToken: String
+    ) async throws -> [VimeoFolder]
+    func vimeoFolderVideos(
+        communityId: String,
+        folderId: String,
+        idToken: String
+    ) async throws -> [DistributedVideo]
+    func vimeoConfiguration(
+        communityId: String,
+        idToken: String
+    ) async throws -> VimeoConfiguration
+    func saveVimeoConfiguration(
+        communityId: String,
+        accessToken: String,
+        userId: String,
+        query: String,
+        idToken: String
+    ) async throws
+    func saveCommunityVideo(
+        communityId: String,
+        videoId: String,
+        title: String,
+        description: String,
+        vimeoVideoId: String,
+        vimeoURL: String,
+        thumbnailURL: String,
+        isPublished: Bool,
+        idToken: String
+    ) async throws
+}
+
+public struct VimeoConfiguration: Equatable, Sendable {
+    public let hasAccessToken: Bool
+    public let userId: String
+    public let query: String
+
+    public init(hasAccessToken: Bool = false, userId: String = "", query: String = "") {
+        self.hasAccessToken = hasAccessToken
+        self.userId = userId
+        self.query = query
+    }
+}
+
+public struct VimeoFolder: Identifiable, Equatable, Sendable {
+    public let id: String
+    public let name: String
+
+    public init(id: String, name: String) {
+        self.id = id
+        self.name = name
+    }
 }
 
 public enum CommunityRepositoryError: LocalizedError, Equatable {
@@ -942,6 +1067,7 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
         applicantUserId: String,
         reviewerUserId: String,
         status: CommunityMembershipStatus,
+        auditAction: String?,
         idToken: String
     ) async throws {
         guard status == .approved || status == .rejected else {
@@ -978,7 +1104,7 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
                     "update": [
                         "name": "\(databaseRoot)/organizations/\(communityId)/auditLogs/\(auditId)",
                         "fields": [
-                            "action": ["stringValue": "membership.\(status.rawValue)"],
+                            "action": ["stringValue": auditAction ?? "membership.\(status.rawValue)"],
                             "actorUserId": ["stringValue": reviewerUserId],
                             "targetUserId": ["stringValue": applicantUserId],
                             "communityId": ["stringValue": communityId]
@@ -999,6 +1125,523 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
             method: "POST",
             idToken: idToken,
             body: body
+        )
+    }
+
+    public func administrators(
+        communityId: String,
+        idToken: String
+    ) async throws -> [CommunityAdmin] {
+        let response = try await requestJSON(
+            path: "documents/organizations/\(communityId)/admins?pageSize=1000",
+            method: "GET",
+            idToken: idToken
+        ) as? [String: Any]
+        let documents = response?["documents"] as? [[String: Any]] ?? []
+        return documents.compactMap { document in
+            guard let fields = document["fields"] as? [String: Any],
+                  let name = document["name"] as? String else { return nil }
+            let userId = name.split(separator: "/").last.map(String.init) ?? ""
+            guard !userId.isEmpty else { return nil }
+            return CommunityAdmin(
+                userId: userId,
+                role: string(fields, "role") ?? "admin",
+                permissions: Set(permissionValues(fields, "permissions")),
+                isActive: bool(fields, "isActive") ?? true
+            )
+        }.sorted { $0.userId < $1.userId }
+    }
+
+    public func saveAdministrator(
+        communityId: String,
+        adminUserId: String,
+        role: String,
+        permissions: Set<String>,
+        isActive: Bool,
+        actorUserId: String,
+        idToken: String
+    ) async throws {
+        let normalizedUserId = adminUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedActorUserId = actorUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedUserId.isEmpty, !normalizedActorUserId.isEmpty else {
+            throw CommunityRepositoryError.invalidResponse
+        }
+        let fields: [String: Any] = [
+            "uid": stringValue(normalizedUserId),
+            "role": stringValue(role.isEmpty ? "admin" : role),
+            "isActive": ["booleanValue": isActive],
+            "permissions": [
+                "arrayValue": [
+                    "values": permissions.sorted().map { stringValue($0) }
+                ]
+            ]
+        ]
+        let databaseRoot = "projects/\(projectId)/databases/(default)/documents"
+        let auditId = UUID().uuidString.lowercased()
+        let auditAction = isActive ? "administrator.added" : "administrator.deactivated"
+        _ = try await requestJSON(
+            path: "documents:commit",
+            method: "POST",
+            idToken: idToken,
+            body: [
+                "writes": [
+                    [
+                        "update": [
+                            "name": "\(databaseRoot)/organizations/\(communityId)/admins/\(normalizedUserId)",
+                            "fields": fields
+                        ],
+                        "updateTransforms": [
+                            [
+                                "fieldPath": "updatedAt",
+                                "setToServerValue": "REQUEST_TIME"
+                            ]
+                        ]
+                    ],
+                    [
+                        "update": [
+                            "name": "\(databaseRoot)/organizations/\(communityId)/auditLogs/\(auditId)",
+                            "fields": [
+                                "action": ["stringValue": auditAction],
+                                "actorUserId": ["stringValue": normalizedActorUserId],
+                                "targetUserId": ["stringValue": normalizedUserId],
+                                "communityId": ["stringValue": communityId]
+                            ]
+                        ],
+                        "updateTransforms": [
+                            [
+                                "fieldPath": "createdAt",
+                                "setToServerValue": "REQUEST_TIME"
+                            ]
+                        ],
+                        "currentDocument": ["exists": false]
+                    ]
+                ]
+            ]
+        )
+    }
+
+    public func communityMembers(
+        communityId: String,
+        idToken: String
+    ) async throws -> [CommunityMembership] {
+        let response = try await requestJSON(
+            path: "documents/organizations/\(communityId)/members?pageSize=1000",
+            method: "GET",
+            idToken: idToken
+        ) as? [String: Any]
+        let documents = response?["documents"] as? [[String: Any]] ?? []
+        return documents.compactMap { document in
+            let userId = (document["name"] as? String)?
+                .split(separator: "/")
+                .last
+                .map(String.init) ?? ""
+            return parseMembership(document, userId: userId)
+        }
+            .sorted { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }
+    }
+
+    public func auditLogs(
+        communityId: String,
+        idToken: String
+    ) async throws -> [CommunityAuditLog] {
+        let response = try await requestJSON(
+            path: "documents/organizations/\(communityId)/auditLogs?pageSize=100",
+            method: "GET",
+            idToken: idToken
+        ) as? [String: Any]
+        let documents = response?["documents"] as? [[String: Any]] ?? []
+        return documents.compactMap(parseAuditLog)
+            .sorted { ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast) }
+    }
+
+    public func communityVideos(
+        communityId: String,
+        idToken: String
+    ) async throws -> [DistributedVideo] {
+        let response = try await requestJSON(
+            path: "documents/organizations/\(communityId)/videos?pageSize=1000",
+            method: "GET",
+            idToken: idToken
+        ) as? [String: Any]
+        let documents = response?["documents"] as? [[String: Any]] ?? []
+        return documents.compactMap { document in
+            guard let fields = document["fields"] as? [String: Any],
+                  let vimeoVideoId = string(fields, "vimeoVideoId"),
+                  bool(fields, "isPublished") == true else { return nil }
+            let id = (document["name"] as? String)?.split(separator: "/").last.map(String.init) ?? vimeoVideoId
+            return DistributedVideo(
+                id: id,
+                communityId: communityId,
+                title: string(fields, "title") ?? "Vimeo動画",
+                description: string(fields, "description") ?? "",
+                videoURL: (string(fields, "vimeoUrl") ?? string(fields, "videoUrl"))
+                    .flatMap(URL.init(string:)),
+                vimeoVideoId: vimeoVideoId,
+                thumbnailURL: string(fields, "thumbnailUrl").flatMap(URL.init(string:)),
+                isPublished: true,
+                isMembersOnly: bool(fields, "isMembersOnly") ?? false,
+                sortOrder: Int(string(fields, "sortOrder") ?? "0") ?? 0
+            )
+        }.sorted {
+            $0.sortOrder == $1.sortOrder
+                ? $0.title < $1.title
+                : $0.sortOrder < $1.sortOrder
+        }
+    }
+
+    public func videoMemos(
+        userId: String,
+        idToken: String
+    ) async throws -> [String: String] {
+        let response = try await requestJSON(
+            path: "documents/memberPrivate/\(userId)/videoMemos?pageSize=1000",
+            method: "GET",
+            idToken: idToken
+        ) as? [String: Any]
+        let documents = response?["documents"] as? [[String: Any]] ?? []
+        return documents.reduce(into: [String: String]()) { result, document in
+            guard let fields = document["fields"] as? [String: Any],
+                  let communityId = string(fields, "communityId"),
+                  let videoId = string(fields, "videoId"),
+                  let memo = string(fields, "memo") else { return }
+            result["\(communityId):\(videoId)"] = memo
+        }
+    }
+
+    public func saveVideoMemo(
+        userId: String,
+        communityId: String,
+        videoId: String,
+        memo: String,
+        idToken: String
+    ) async throws {
+        let documentId = "\(communityId)-\(videoId)"
+            .replacingOccurrences(of: "[^A-Za-z0-9_-]", with: "_", options: .regularExpression)
+        let path = "documents/memberPrivate/\(userId)/videoMemos/\(documentId)"
+        let normalized = memo.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalized.isEmpty {
+            do { _ = try await requestJSON(path: path, method: "DELETE", idToken: idToken) }
+            catch CommunityRepositoryError.notFound { }
+        } else {
+            let fields: [String: Any] = [
+                "userId": stringValue(userId),
+                "communityId": stringValue(communityId),
+                "videoId": stringValue(videoId),
+                "memo": stringValue(normalized),
+                "updatedAt": ["timestampValue": ISO8601DateFormatter().string(from: Date())]
+            ]
+            _ = try await requestJSON(
+                path: path,
+                method: "PATCH",
+                idToken: idToken,
+                body: ["fields": fields]
+            )
+        }
+    }
+
+    public func videoQuestions(
+        communityId: String,
+        memberUid: String,
+        idToken: String
+    ) async throws -> [VideoQuestion] {
+        let body: [String: Any] = [
+            "structuredQuery": [
+                "from": [["collectionId": "videoQuestions"]],
+                "where": [
+                    "fieldFilter": [
+                        "field": ["fieldPath": "memberUid"],
+                        "op": "EQUAL",
+                        "value": stringValue(memberUid)
+                    ]
+                ]
+            ]
+        ]
+        let rows = try await requestJSON(
+            path: "documents/organizations/\(communityId):runQuery",
+            method: "POST",
+            idToken: idToken,
+            body: body
+        ) as? [[String: Any]] ?? []
+        return rows.compactMap { (row: [String: Any]) -> VideoQuestion? in
+            guard let document = row["document"] as? [String: Any],
+                  let fields = document["fields"] as? [String: Any],
+                  let questionText = string(fields, "questionText") else { return nil }
+            let id = (document["name"] as? String)?.split(separator: "/").last.map(String.init) ?? ""
+            return VideoQuestion(
+                id: id,
+                communityId: communityId,
+                memberUid: string(fields, "memberUid") ?? memberUid,
+                videoId: string(fields, "videoId") ?? "",
+                videoTitle: string(fields, "videoTitle") ?? "",
+                playbackSeconds: number(fields, "playbackSeconds") ?? 0,
+                memoText: string(fields, "memoText") ?? "",
+                questionText: questionText,
+                answerText: string(fields, "answerText") ?? "",
+                createdAt: timestamp(fields, "createdAt")
+            )
+        }.sorted { ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast) }
+    }
+
+    public func saveVideoQuestion(
+        communityId: String,
+        memberUid: String,
+        video: DistributedVideo,
+        memoText: String,
+        questionText: String,
+        playbackSeconds: Double,
+        idToken: String
+    ) async throws {
+        let normalized = questionText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { throw CommunityRepositoryError.invalidResponse }
+        let fields: [String: Any] = [
+            "memberUid": stringValue(memberUid),
+            "videoId": stringValue(video.id),
+            "videoType": stringValue("vimeo"),
+            "videoTitle": stringValue(video.title),
+            "playbackSeconds": ["doubleValue": playbackSeconds],
+            "memoText": stringValue(memoText.trimmingCharacters(in: .whitespacesAndNewlines)),
+            "questionText": stringValue(normalized),
+            "answerText": stringValue(""),
+            "createdAt": ["timestampValue": ISO8601DateFormatter().string(from: Date())]
+        ]
+        _ = try await requestJSON(
+            path: "documents/organizations/\(communityId)/videoQuestions/\(UUID().uuidString.lowercased())",
+            method: "PATCH",
+            idToken: idToken,
+            body: ["fields": fields]
+        )
+    }
+
+    public func adminCommunityVideos(
+        communityId: String,
+        idToken: String
+    ) async throws -> [DistributedVideo] {
+        let response = try await requestJSON(
+            path: "documents/organizations/\(communityId)/videos?pageSize=1000",
+            method: "GET",
+            idToken: idToken
+        ) as? [String: Any]
+        let documents = response?["documents"] as? [[String: Any]] ?? []
+        return documents.compactMap { document in
+            guard let fields = document["fields"] as? [String: Any],
+                  let vimeoVideoId = string(fields, "vimeoVideoId") else { return nil }
+            let id = (document["name"] as? String)?.split(separator: "/").last.map(String.init) ?? vimeoVideoId
+            return DistributedVideo(
+                id: id,
+                communityId: communityId,
+                title: string(fields, "title") ?? "Vimeo動画",
+                description: string(fields, "description") ?? "",
+                videoURL: (string(fields, "vimeoUrl") ?? string(fields, "videoUrl")).flatMap(URL.init(string:)),
+                vimeoVideoId: vimeoVideoId,
+                thumbnailURL: string(fields, "thumbnailUrl").flatMap(URL.init(string:)),
+                isPublished: bool(fields, "isPublished") ?? false,
+                isMembersOnly: bool(fields, "isMembersOnly") ?? true,
+                sortOrder: Int(string(fields, "sortOrder") ?? "0") ?? 0
+            )
+        }.sorted {
+            $0.sortOrder == $1.sortOrder ? $0.title < $1.title : $0.sortOrder < $1.sortOrder
+        }
+    }
+
+    public func vimeoLibraryVideos(
+        communityId: String,
+        idToken: String
+    ) async throws -> [DistributedVideo] {
+        guard let url = URL(
+            string: "https://asia-northeast1-\(projectId).cloudfunctions.net/fetchVimeoVideosHttp"
+        ) else {
+            throw URLError(.badURL)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "organizationId": communityId
+        ])
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode),
+              let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let videos = payload["videos"] as? [[String: Any]] else {
+            throw URLError(.badServerResponse)
+        }
+        return videos.compactMap { item in
+            guard let vimeoVideoId = item["id"] as? String,
+                  !vimeoVideoId.isEmpty else { return nil }
+            return DistributedVideo(
+                id: vimeoVideoId,
+                communityId: communityId,
+                title: item["title"] as? String ?? "Vimeo動画",
+                description: item["description"] as? String ?? "",
+                videoURL: (item["link"] as? String).flatMap(URL.init(string:)),
+                vimeoVideoId: vimeoVideoId,
+                thumbnailURL: (item["thumbnailUrl"] as? String).flatMap(URL.init(string:)),
+                isPublished: false,
+                isMembersOnly: true,
+                sortOrder: 0
+            )
+        }.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+
+    public func vimeoFolders(
+        communityId: String,
+        idToken: String
+    ) async throws -> [VimeoFolder] {
+        guard let url = URL(
+            string: "https://asia-northeast1-\(projectId).cloudfunctions.net/fetchVimeoFoldersHttp"
+        ) else {
+            throw URLError(.badURL)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["organizationId": communityId])
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode),
+              let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let folders = payload["folders"] as? [[String: Any]] else {
+            throw URLError(.badServerResponse)
+        }
+        return folders.compactMap { item in
+            guard let id = item["id"] as? String, !id.isEmpty else { return nil }
+            return VimeoFolder(id: id, name: item["name"] as? String ?? "名称未設定フォルダ")
+        }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    public func vimeoFolderVideos(
+        communityId: String,
+        folderId: String,
+        idToken: String
+    ) async throws -> [DistributedVideo] {
+        guard let url = URL(
+            string: "https://asia-northeast1-\(projectId).cloudfunctions.net/fetchVimeoVideosHttp"
+        ) else {
+            throw URLError(.badURL)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "organizationId": communityId,
+            "folderId": folderId
+        ])
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode),
+              let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let videos = payload["videos"] as? [[String: Any]] else {
+            throw URLError(.badServerResponse)
+        }
+        return videos.compactMap { item in
+            guard let vimeoVideoId = item["id"] as? String, !vimeoVideoId.isEmpty else { return nil }
+            return DistributedVideo(
+                id: vimeoVideoId,
+                communityId: communityId,
+                title: item["title"] as? String ?? "Vimeo動画",
+                description: item["description"] as? String ?? "",
+                videoURL: (item["link"] as? String).flatMap(URL.init(string:)),
+                vimeoVideoId: vimeoVideoId,
+                thumbnailURL: (item["thumbnailUrl"] as? String).flatMap(URL.init(string:)),
+                isPublished: false,
+                isMembersOnly: true,
+                sortOrder: 0
+            )
+        }.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+
+    public func vimeoConfiguration(
+        communityId: String,
+        idToken: String
+    ) async throws -> VimeoConfiguration {
+        guard let url = URL(
+            string: "https://asia-northeast1-\(projectId).cloudfunctions.net/getVimeoConfigHttp"
+        ) else {
+            throw URLError(.badURL)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["organizationId": communityId])
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode),
+              let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw URLError(.badServerResponse)
+        }
+        return VimeoConfiguration(
+            hasAccessToken: payload["hasAccessToken"] as? Bool ?? false,
+            userId: payload["userId"] as? String ?? "",
+            query: payload["query"] as? String ?? ""
+        )
+    }
+
+    public func saveVimeoConfiguration(
+        communityId: String,
+        accessToken: String,
+        userId: String,
+        query: String,
+        idToken: String
+    ) async throws {
+        guard let url = URL(
+            string: "https://asia-northeast1-\(projectId).cloudfunctions.net/saveVimeoConfigHttp"
+        ) else {
+            throw URLError(.badURL)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "organizationId": communityId,
+            "accessToken": accessToken.trimmingCharacters(in: .whitespacesAndNewlines),
+            "userId": userId.trimmingCharacters(in: .whitespacesAndNewlines),
+            "query": query.trimmingCharacters(in: .whitespacesAndNewlines)
+        ])
+        let (_, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+    }
+
+    public func saveCommunityVideo(
+        communityId: String,
+        videoId: String,
+        title: String,
+        description: String,
+        vimeoVideoId: String,
+        vimeoURL: String,
+        thumbnailURL: String,
+        isPublished: Bool,
+        idToken: String
+    ) async throws {
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedVimeoID = vimeoVideoId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedTitle.isEmpty, !normalizedVimeoID.isEmpty else {
+            throw CommunityRepositoryError.invalidResponse
+        }
+        let fields: [String: Any] = [
+            "title": stringValue(normalizedTitle),
+            "description": stringValue(description.trimmingCharacters(in: .whitespacesAndNewlines)),
+            "vimeoVideoId": stringValue(normalizedVimeoID),
+            "vimeoUrl": stringValue(vimeoURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "https://vimeo.com/\(normalizedVimeoID)" : vimeoURL),
+            "thumbnailUrl": stringValue(thumbnailURL.trimmingCharacters(in: .whitespacesAndNewlines)),
+            "isPublished": ["booleanValue": isPublished],
+            "isMembersOnly": ["booleanValue": true],
+            "sortOrder": stringValue("0"),
+            "updatedAt": ["timestampValue": ISO8601DateFormatter().string(from: Date())]
+        ]
+        _ = try await requestJSON(
+            path: "documents/organizations/\(communityId)/videos/\(videoId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? UUID().uuidString : videoId)",
+            method: "PATCH",
+            idToken: idToken,
+            body: ["fields": fields]
         )
     }
 
@@ -1082,6 +1725,30 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
                     + stringArray(fields, "categories")
                     + [string(fields, "categoryId")].compactMap { $0 }
             )
+            )
+    }
+
+    private func parseAuditLog(_ document: [String: Any]) -> CommunityAuditLog? {
+        guard let fields = document["fields"] as? [String: Any],
+              let name = document["name"] as? String else { return nil }
+        let id = name.split(separator: "/").last.map(String.init) ?? ""
+        guard !id.isEmpty, let action = string(fields, "action") else { return nil }
+        let components = name.split(separator: "/")
+        let communityId = string(fields, "communityId")
+            ?? components.lastIndex(of: "organizations")
+            .flatMap { index in
+                components.indices.contains(index + 1)
+                    ? String(components[index + 1])
+                    : nil
+            }
+            ?? ""
+        return CommunityAuditLog(
+            id: id,
+            action: action,
+            actorUserId: string(fields, "actorUserId"),
+            targetUserId: string(fields, "targetUserId"),
+            communityId: communityId,
+            createdAt: timestamp(fields, "createdAt")
         )
     }
 
@@ -1107,8 +1774,19 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
         (fields[key] as? [String: Any])?["stringValue"] as? String
     }
 
+    private func stringValue(_ value: String) -> [String: Any] {
+        ["stringValue": value]
+    }
+
     private func bool(_ fields: [String: Any], _ key: String) -> Bool? {
         (fields[key] as? [String: Any])?["booleanValue"] as? Bool
+    }
+
+    private func number(_ fields: [String: Any], _ key: String) -> Double? {
+        guard let value = fields[key] as? [String: Any] else { return nil }
+        if let doubleValue = value["doubleValue"] as? Double { return doubleValue }
+        if let integerValue = value["integerValue"] as? String { return Double(integerValue) }
+        return nil
     }
 
     private func timestamp(_ fields: [String: Any], _ key: String) -> Date? {

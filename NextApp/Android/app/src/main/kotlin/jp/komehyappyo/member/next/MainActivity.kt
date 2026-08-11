@@ -1,6 +1,7 @@
 package jp.komehyappyo.member.next
 
 import android.Manifest
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
@@ -17,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.fragment.app.FragmentActivity
 import jp.komehyappyo.member.next.core.data.FirebaseRestAnnouncementRepository
@@ -55,6 +57,7 @@ import jp.komehyappyo.member.next.feature.account.AccountRoot
 import jp.komehyappyo.member.next.feature.account.BiometricCredentialStore
 import jp.komehyappyo.member.next.feature.community.CommunityFeatureModel
 import jp.komehyappyo.member.next.feature.community.CommunityRoot
+import jp.komehyappyo.member.next.feature.community.VimeoMemoStore
 import jp.komehyappyo.member.next.feature.messages.AnnouncementFeatureModel
 import jp.komehyappyo.member.next.feature.messages.AnnouncementRoot
 import jp.komehyappyo.member.next.feature.messages.PostFeatureModel
@@ -99,6 +102,7 @@ class MainActivity : FragmentActivity() {
             CommunityFeatureModel.Factory(
                 FirebaseRestCommunityRepository(BuildConfig.FIREBASE_PROJECT_ID),
                 appSession,
+                VimeoMemoStore(applicationContext),
             )
         }
         val communityModel: CommunityFeatureModel = viewModel(factory = communityFactory)
@@ -250,14 +254,17 @@ class MainActivity : FragmentActivity() {
         announcementModel: AnnouncementFeatureModel,
     ) {
         var selectedSection by rememberSaveable { mutableIntStateOf(0) }
+        val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
         Column(modifier = Modifier.fillMaxSize()) {
-            TabRow(selectedTabIndex = selectedSection) {
-                listOf("コミュニティ", "投稿", "お知らせ").forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedSection == index,
-                        onClick = { selectedSection = index },
-                        text = { Text(title) },
-                    )
+            if (!isLandscape) {
+                TabRow(selectedTabIndex = selectedSection) {
+                    listOf("コミュニティ", "投稿", "お知らせ").forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedSection == index,
+                            onClick = { selectedSection = index },
+                            text = { Text(title) },
+                        )
+                    }
                 }
             }
             when (selectedSection) {

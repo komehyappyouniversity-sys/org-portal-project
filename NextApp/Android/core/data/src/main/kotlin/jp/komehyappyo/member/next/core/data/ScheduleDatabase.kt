@@ -275,7 +275,7 @@ interface FriendInteractionHistoryDao {
         FriendContactEntity::class,
         FriendInteractionHistoryEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 abstract class OrgPortalDatabase : RoomDatabase() {
@@ -445,6 +445,14 @@ abstract class OrgPortalDatabase : RoomDatabase() {
             }
         }
 
+        val migration8To9 = object : Migration(8, 9) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("DROP INDEX IF EXISTS index_video_memos_videoId")
+                database.execSQL("DROP TABLE IF EXISTS video_memos")
+                database.execSQL("DROP TABLE IF EXISTS personal_videos")
+            }
+        }
+
         fun create(context: Context): OrgPortalDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
@@ -458,6 +466,7 @@ abstract class OrgPortalDatabase : RoomDatabase() {
                 migration5To6,
                 migration6To7,
                 migration7To8,
+                migration8To9,
             ).build()
     }
 }

@@ -1,6 +1,7 @@
 import DataLayer
 import Foundation
 import Model
+import Session
 
 @MainActor
 public final class FavoriteBookmarkFeatureModel: ObservableObject {

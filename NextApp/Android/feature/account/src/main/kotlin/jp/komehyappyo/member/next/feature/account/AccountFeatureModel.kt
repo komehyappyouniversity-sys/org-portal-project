@@ -77,6 +77,22 @@ class AccountFeatureModel(
         }
     }
 
+    fun biometricError(message: String) {
+        mutableState.value = mutableState.value.copy(
+            isLoading = false,
+            message = message,
+        )
+    }
+
+    fun logout() {
+        session.logout()
+        mutableState.value = AccountUiState(
+            accessState = AccountAccessState.Guest,
+            canUseBiometricLogin = biometricStore.hasCredential,
+            message = "ログアウトしました。",
+        )
+    }
+
     fun resetPassword(email: String) {
         val credentials = AccountCredentials(email, "password")
         credentials.validationError()?.let {

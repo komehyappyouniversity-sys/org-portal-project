@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
@@ -19,8 +20,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -34,6 +35,7 @@ private enum class ToolsDestination {
     SnsPostingAssistant,
     Favorites,
     Friends,
+    Manual,
 }
 
 @Composable
@@ -83,6 +85,11 @@ fun ToolsHubRoot(
         ) {
             FriendExchangeRoot(friendExchangeModel)
         }
+        ToolsDestination.Manual -> ToolDestinationContainer(
+            onBack = { destination = null },
+        ) {
+            ManualListRoot()
+        }
         null -> Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -130,6 +137,13 @@ fun ToolsHubRoot(
                     title = "お気に入り",
                     description = "よく見るWebページを自分専用に保存します。",
                     icon = Icons.Outlined.Bookmark,
+                )
+            }
+            Button(onClick = { destination = ToolsDestination.Manual }) {
+                FeatureCard(
+                    title = "使い方マニュアル",
+                    description = "アプリの主要機能をすばやく確認できます。",
+                    icon = Icons.AutoMirrored.Outlined.MenuBook,
                 )
             }
             Button(onClick = { destination = ToolsDestination.Friends }) {

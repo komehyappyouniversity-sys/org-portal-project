@@ -77,6 +77,12 @@ enum class GuestHomeTool(
         icon = Icons.Outlined.Bookmark,
         isAvailable = true,
     ),
+    Manual(
+        title = "使い方マニュアル",
+        description = "アプリの使い方を一覧で確認できます。",
+        icon = Icons.AutoMirrored.Outlined.MenuBook,
+        isAvailable = true,
+    ),
     ;
 
     companion object {
@@ -90,6 +96,7 @@ private enum class GuestHomeDestination {
     Denomination,
     MeetingMinutes,
     Favorites,
+    Manual,
     AppBackup,
 }
 
@@ -119,6 +126,8 @@ fun GuestHomeView(
                         MeetingMinutesRoot(meetingMinutesModel)
                     GuestHomeDestination.Favorites ->
                         FavoriteBookmarksRoot(favoriteBookmarkModel)
+                    GuestHomeDestination.Manual ->
+                        ManualListRoot()
                     GuestHomeDestination.AppBackup ->
                         AppBackupRoot(appBackupModel)
                     null -> Unit
@@ -208,6 +217,14 @@ fun GuestHomeView(
                             Text("お気に入りを開く")
                         }
                     }
+                    GuestHomeTool.Manual -> {
+                        TextButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { destination = GuestHomeDestination.Manual },
+                        ) {
+                            Text("アプリ説明を見る")
+                        }
+                    }
                 }
             }
         }
@@ -281,7 +298,7 @@ private fun AppBackupRoot(model: AppBackupFeatureModel) {
         )
         FeatureCard(
             title = "バックアップされる内容",
-            description = "予定、日記・写真、金種計算、会議録音・議事録・PDF、SNSリンク、お気に入りURL・メモ・3段階カテゴリ",
+            description = "予定、日記・写真、金種計算、会議録音・議事録・PDF、SNSリンク、お気に入りURL・メモ・3段階カテゴリ、友達情報・交流履歴",
             icon = Icons.Outlined.SettingsBackupRestore,
         )
         Text(

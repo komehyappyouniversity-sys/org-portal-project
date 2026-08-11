@@ -430,6 +430,54 @@ export const getVimeoConfigHttp = functions
     }
   });
 
+// MARK: - Vimeoフォルダ取得（HTTP版）
+
+export const fetchVimeoFoldersHttp = functions
+  .region(REGION)
+  .https.onRequest(async (req, res): Promise<void> => {
+    try {
+      if (req.method !== "POST") {
+        res.status(405).json({ ok: false, error: "method-not-allowed" });
+        return;
+      }
+
+      const uid = await getUidFromRequest(req);
+      const { organizationId } = req.body || {};
+      if (!organizationId) {
+        res.status(400).json({ ok: false, error: "missing-organization-id" });
+        return;
+      }
+      await assertAdminOrSuperAdmin(organizationId, uid);
+
+      const configDoc = await db.collection("organizations").doc(organizationId)
+        .collection("private").doc("vimeo").get();
+      if (!configDoc.exists) {
+        res.status(404).json({ ok: false, error: "vimeo-config-not-found" });
+        return;
+      }
+
+      const config = configDoc.data() || {};
+      const accessToken = decryptText(config.encryptedAccessToken);
+      const userId = config.userId;
+      const response = await axios.get(
+        `https://api.vimeo.com/users/${encodeURIComponent(userId)}/projects?per_page=100`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      const folders = (response.data?.data || []).map((folder: any) => ({
+        id: folder.uri?.split("/").pop() || "",
+        name: folder.name || "名称未設定フォルダ",
+      })).filter((folder: { id: string }) => folder.id);
+
+      res.status(200).json({ ok: true, folders });
+    } catch (error: any) {
+      console.error("fetchVimeoFoldersHttp error:", error?.response?.data || error);
+      res.status(500).json({
+        ok: false,
+        error: error?.response?.data?.error || error.message || "internal-error",
+      });
+    }
+  });
+
 // MARK: - Vimeo動画取得（HTTP版）
 
 export const fetchVimeoVideosHttp = functions
@@ -448,6 +496,7 @@ export const fetchVimeoVideosHttp = functions
 
       const {
         organizationId,
+        folderId,
       } = req.body || {};
 
       if (!organizationId) {
@@ -480,7 +529,9 @@ export const fetchVimeoVideosHttp = functions
       const userId = config.userId;
       const query = config.query || "";
 
-      let url = `https://api.vimeo.com/users/${userId}/videos?per_page=50`;
+      let url = folderId
+        ? `https://api.vimeo.com/users/${encodeURIComponent(userId)}/projects/${encodeURIComponent(String(folderId))}/videos?per_page=100`
+        : `https://api.vimeo.com/users/${encodeURIComponent(userId)}/videos?per_page=100`;
 
       if (query) {
         url += `&query=${encodeURIComponent(query)}`;
@@ -1108,4 +1159,3 @@ export const onMemberPostCreated = functions
       targetCount: tokens.length,
     });
   });
-  

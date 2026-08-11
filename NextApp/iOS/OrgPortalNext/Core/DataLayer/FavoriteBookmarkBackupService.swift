@@ -24,6 +24,7 @@ public struct AppBackupImportSummary: Equatable, Sendable {
 }
 
 public struct AppBackupExportResult: Equatable, Sendable {
+
     public let data: Data
     public let skippedMeetingMinutes: Int
 }
@@ -245,12 +246,9 @@ public final class AppBackupService {
             format: Self.formatIdentifier,
             version: Self.currentVersion,
             exportedAtEpochMillis: Self.epochMillis(now),
-            diaryBackupBase64: try await diaryService.exportData(now: now)
-                .base64EncodedString(),
-            cashDistributionBackupBase64: try await cashService.exportData(now: now)
-                .base64EncodedString(),
-            favoriteBookmarkBackupBase64: try await favoriteService.exportData(now: now)
-                .base64EncodedString(),
+            diaryBackupBase64: try await diaryService.exportData(now: now).base64EncodedString(),
+            cashDistributionBackupBase64: try await cashService.exportData(now: now).base64EncodedString(),
+            favoriteBookmarkBackupBase64: try await favoriteService.exportData(now: now).base64EncodedString(),
             schedules: try await scheduleRepository.fetchAll().map { schedule in
                 AppBackupSchedule(
                     value: AppBackupScheduleValue(
@@ -319,7 +317,7 @@ public final class AppBackupService {
                     createdAtEpochMillis: Self.epochMillis($0.createdAt),
                     updatedAtEpochMillis: Self.epochMillis($0.updatedAt)
                 )
-            }
+            },
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .millisecondsSince1970
@@ -351,6 +349,7 @@ public final class AppBackupService {
         let diaryCount = try await diaryService.importData(diaryData)
         let cashCount = try await cashService.importData(cashData)
         let favoriteCount = try await favoriteService.importData(favoriteData)
+
         for schedule in envelope.schedules {
             let value = schedule.value
             guard
@@ -409,9 +408,11 @@ public final class AppBackupService {
             )
             try await scheduleRepository.save(try restored.validated())
         }
+
         for link in envelope.snsCustomLinks {
             try await snsRepository.save(try link.value.validated())
         }
+
         for entry in envelope.meetingMinutes {
             guard let id = UUID(uuidString: entry.id),
                   let audio = Data(base64Encoded: entry.audioDataBase64),
@@ -450,6 +451,7 @@ public final class AppBackupService {
                 )
             )
         }
+
         let friendContacts = envelope.friendContacts ?? []
         let friendHistories = envelope.friendInteractionHistories ?? []
         var importedFriendIDs = Set<UUID>()
@@ -505,8 +507,11 @@ public final class AppBackupService {
                 createdAt: Self.date(entry.createdAtEpochMillis),
                 updatedAt: updatedAt
             )
-            try await friendExchangeRepository.save(try history.validated(now: updatedAt))
+            try await friendExchangeRepository.save(
+                try history.validated(now: updatedAt)
+            )
         }
+
         return AppBackupImportSummary(
             schedules: envelope.schedules.count,
             diaries: diaryCount,
@@ -622,10 +627,7 @@ public final class FavoriteBookmarkBackupService {
     public func importData(_ data: Data) async throws -> Int {
         let envelope: FavoriteBookmarkBackupEnvelope
         do {
-            envelope = try JSONDecoder().decode(
-                FavoriteBookmarkBackupEnvelope.self,
-                from: data
-            )
+            envelope = try JSONDecoder().decode(FavoriteBookmarkBackupEnvelope.self, from: data)
         } catch {
             throw FavoriteBookmarkBackupError.invalidFormat
         }

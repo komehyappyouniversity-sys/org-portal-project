@@ -26,6 +26,14 @@ public final class AppSession: ObservableObject {
         authenticationToken = idToken
     }
 
+    public func logout() {
+        userStage = .guest
+        authenticatedUserId = nil
+        authenticationToken = nil
+        selectedCommunityId = nil
+        previousCommunityId = nil
+    }
+
     public func selectCommunity(_ id: String?) {
         guard id != selectedCommunityId else { return }
         previousCommunityId = selectedCommunityId

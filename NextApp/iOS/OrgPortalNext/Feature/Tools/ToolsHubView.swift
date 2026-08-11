@@ -11,6 +11,7 @@ public struct ToolsHubView: View {
         case snsPostingAssistant
         case favorites
         case friends
+        case manual
 
         var id: String {
             switch self {
@@ -21,8 +22,9 @@ public struct ToolsHubView: View {
             case .snsPostingAssistant: "snsPostingAssistant"
             case .favorites: "favorites"
             case .friends: "friends"
-            }
+            case .manual: "manual"
         }
+    }
     }
 
     @ObservedObject private var scheduleModel: ScheduleFeatureModel
@@ -125,6 +127,16 @@ public struct ToolsHubView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                Button {
+                    destination = .manual
+                } label: {
+                    FeatureCard(
+                        "使い方マニュアル",
+                        subtitle: "アプリの主要機能をすばやく確認できます。",
+                        systemImage: "book.closed"
+                    )
+                }
+                .buttonStyle(.plain)
             }
             .listStyle(.plain)
             .navigationTitle("tab.tools")
@@ -160,12 +172,13 @@ public struct ToolsHubView: View {
                     FavoriteBookmarksView(model: favoriteBookmarkModel)
                 case .friends:
                     FriendExchangeRootView(model: friendExchangeModel)
+                case .manual:
+                    ManualListView()
                 }
             }
         }
     }
 }
-
 private struct FriendExchangeRootView: View {
     @ObservedObject var model: FriendExchangeFeatureModel
     @State private var editingContact: FriendContact?
@@ -434,7 +447,9 @@ private struct FriendHistoryEditor: View {
                 if history != nil {
                     Button("この履歴を削除", role: .destructive) { confirmsDelete = true }
                 }
+
             }
+
             .navigationTitle(history == nil ? "交流履歴を追加" : "交流履歴を編集")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -471,4 +486,5 @@ private struct FriendHistoryEditor: View {
             }
         }
     }
+
 }
