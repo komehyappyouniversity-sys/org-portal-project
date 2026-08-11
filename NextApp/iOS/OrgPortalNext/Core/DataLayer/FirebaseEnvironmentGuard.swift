@@ -723,7 +723,7 @@ public protocol CommunityRepository: Sendable {
         applicantUserId: String,
         reviewerUserId: String,
         status: CommunityMembershipStatus,
-        auditAction: String? = nil,
+        auditAction: String?,
         idToken: String
     ) async throws
     func administrators(
