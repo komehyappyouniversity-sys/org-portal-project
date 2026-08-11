@@ -5,6 +5,7 @@ import jp.komehyappyo.member.next.core.model.CommunityAdminAccess
 import jp.komehyappyo.member.next.core.model.CommunityAdmin
 import jp.komehyappyo.member.next.core.model.CommunityAuditLog
 import jp.komehyappyo.member.next.core.model.BookingEvent
+import jp.komehyappyo.member.next.core.model.BookingReservation
 import jp.komehyappyo.member.next.core.model.BookingSlot
 import jp.komehyappyo.member.next.core.model.DistributedVideo
 import jp.komehyappyo.member.next.core.model.VideoQuestion
