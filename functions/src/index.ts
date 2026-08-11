@@ -87,6 +87,22 @@ async function assertAdminOrSuperAdmin(
   await assertAdmin(organizationId, uid);
 }
 
+async function assertApprovedMember(
+  organizationId: string,
+  uid: string
+): Promise<void> {
+  const memberDoc = await db
+    .collection("organizations")
+    .doc(organizationId)
+    .collection("members")
+    .doc(uid)
+    .get();
+
+  if (!memberDoc.exists || memberDoc.data()?.status !== "approved") {
+    throw new Error("membership-not-approved");
+  }
+}
+
 async function getUidFromRequest(req: functions.https.Request): Promise<string> {
   const authorization = req.headers.authorization || "";
 
@@ -932,6 +948,158 @@ export const sendUnreadReminderHttp = functions
         error: error.message || "internal-error",
       });
       return;
+    }
+  });
+
+// MARK: - イベント予約（HTTP版）
+
+export const reserveBookingSlotHttp = functions
+  .region(REGION)
+  .https.onRequest(async (req, res): Promise<void> => {
+    try {
+      if (req.method !== "POST") {
+        res.status(405).json({ ok: false, error: "method-not-allowed" });
+        return;
+      }
+
+      const uid = await getUidFromRequest(req);
+      const { organizationId, eventId, slotId } = req.body || {};
+      if (!organizationId || !eventId || !slotId) {
+        res.status(400).json({ ok: false, error: "missing-required-fields" });
+        return;
+      }
+
+      await assertApprovedMember(String(organizationId), uid);
+
+      const eventRef = db
+        .collection("organizations")
+        .doc(String(organizationId))
+        .collection("bookingEvents")
+        .doc(String(eventId));
+      const slotRef = eventRef.collection("slots").doc(String(slotId));
+      const reservationRef = slotRef.collection("bookings").doc(uid);
+
+      await db.runTransaction(async (transaction) => {
+        const [eventSnapshot, slotSnapshot, reservationSnapshot] = await Promise.all([
+          transaction.get(eventRef),
+          transaction.get(slotRef),
+          transaction.get(reservationRef),
+        ]);
+        if (!eventSnapshot.exists || eventSnapshot.data()?.isPublished !== true) {
+          throw new Error("event-not-available");
+        }
+        const event = eventSnapshot.data() || {};
+        if (event.paymentRequired === true || Number(event.feeAmount || 0) > 0) {
+          throw new Error("payment-required");
+        }
+        if (!slotSnapshot.exists) {
+          throw new Error("slot-not-found");
+        }
+        const slot = slotSnapshot.data() || {};
+        const capacity = Number(slot.capacity || 0);
+        const reservedCount = Number(slot.reservedCount || 0);
+        if (slot.isOpen !== true) {
+          throw new Error("booking-closed");
+        }
+        if (capacity <= 0 || reservedCount >= capacity) {
+          throw new Error("slot-full");
+        }
+        if (reservationSnapshot.data()?.status === "reserved") {
+          throw new Error("already-reserved");
+        }
+
+        transaction.set(reservationRef, {
+          organizationId: String(organizationId),
+          eventId: String(eventId),
+          slotId: String(slotId),
+          memberUid: uid,
+          status: "reserved",
+          purchaseStatus: "not-required",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        transaction.update(slotRef, {
+          reservedCount: reservedCount + 1,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+
+      res.status(200).json({ ok: true, status: "reserved" });
+    } catch (error: any) {
+      const code = String(error?.message || "internal-error");
+      const status = [
+        "event-not-available",
+        "slot-not-found",
+        "booking-closed",
+        "slot-full",
+        "already-reserved",
+        "payment-required",
+        "membership-not-approved",
+      ].includes(code) ? 409 : 500;
+      console.error("reserveBookingSlotHttp error", { code });
+      res.status(status).json({ ok: false, error: code });
+    }
+  });
+
+export const cancelBookingSlotHttp = functions
+  .region(REGION)
+  .https.onRequest(async (req, res): Promise<void> => {
+    try {
+      if (req.method !== "POST") {
+        res.status(405).json({ ok: false, error: "method-not-allowed" });
+        return;
+      }
+
+      const uid = await getUidFromRequest(req);
+      const { organizationId, eventId, slotId } = req.body || {};
+      if (!organizationId || !eventId || !slotId) {
+        res.status(400).json({ ok: false, error: "missing-required-fields" });
+        return;
+      }
+
+      await assertApprovedMember(String(organizationId), uid);
+
+      const eventRef = db
+        .collection("organizations")
+        .doc(String(organizationId))
+        .collection("bookingEvents")
+        .doc(String(eventId));
+      const slotRef = eventRef.collection("slots").doc(String(slotId));
+      const reservationRef = slotRef.collection("bookings").doc(uid);
+
+      await db.runTransaction(async (transaction) => {
+        const [slotSnapshot, reservationSnapshot] = await Promise.all([
+          transaction.get(slotRef),
+          transaction.get(reservationRef),
+        ]);
+        if (!slotSnapshot.exists) {
+          throw new Error("slot-not-found");
+        }
+        if (reservationSnapshot.data()?.status !== "reserved") {
+          throw new Error("reservation-not-found");
+        }
+        const reservedCount = Number(slotSnapshot.data()?.reservedCount || 0);
+        transaction.update(reservationRef, {
+          status: "cancelled",
+          cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        transaction.update(slotRef, {
+          reservedCount: Math.max(reservedCount - 1, 0),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+
+      res.status(200).json({ ok: true, status: "cancelled" });
+    } catch (error: any) {
+      const code = String(error?.message || "internal-error");
+      const status = [
+        "slot-not-found",
+        "reservation-not-found",
+        "membership-not-approved",
+      ].includes(code) ? 409 : 500;
+      console.error("cancelBookingSlotHttp error", { code });
+      res.status(status).json({ ok: false, error: code });
     }
   });
 
