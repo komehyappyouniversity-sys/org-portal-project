@@ -1257,7 +1257,7 @@ class FirebaseRestCommunityRepository(
         return document.optJSONObject("fields") ?: JSONObject()
     }
 
-    private fun bookingRequest(
+    private suspend fun bookingRequest(
         endpoint: String,
         communityId: String,
         eventId: String,
