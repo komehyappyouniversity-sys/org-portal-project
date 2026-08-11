@@ -12,6 +12,8 @@ import jp.komehyappyo.member.next.core.model.Community
 import jp.komehyappyo.member.next.core.model.CommunityAdminAccess
 import jp.komehyappyo.member.next.core.model.CommunityAdmin
 import jp.komehyappyo.member.next.core.model.CommunityAuditLog
+import jp.komehyappyo.member.next.core.model.BookingEvent
+import jp.komehyappyo.member.next.core.model.BookingSlot
 import jp.komehyappyo.member.next.core.model.DistributedVideo
 import jp.komehyappyo.member.next.core.model.VideoQuestion
 import jp.komehyappyo.member.next.core.model.CommunityCodeParser
@@ -46,6 +48,11 @@ data class CommunityUiState(
     val vimeoFolders: List<VimeoFolder> = emptyList(),
     val vimeoConfiguration: VimeoConfiguration = VimeoConfiguration(),
     val videoQuestions: List<VideoQuestion> = emptyList(),
+    val bookingEvents: List<BookingEvent> = emptyList(),
+    val selectedBookingEventId: String? = null,
+    val bookingSlots: List<BookingSlot> = emptyList(),
+    val bookedSlotIds: Set<String> = emptySet(),
+    val bookingProcessingSlotId: String? = null,
     val adminQuery: String = "",
     val reviewingUserId: String? = null,
     val isLoading: Boolean = false,
@@ -447,6 +454,11 @@ class CommunityFeatureModel(
                 administrators = emptyList(),
                 communityMembers = emptyList(),
                 distributedVideos = emptyList(),
+                bookingEvents = emptyList(),
+                selectedBookingEventId = null,
+                bookingSlots = emptyList(),
+                bookedSlotIds = emptySet(),
+                bookingProcessingSlotId = null,
                 reviewingUserId = null,
                 isLoading = false,
             )
@@ -472,6 +484,7 @@ class CommunityFeatureModel(
                     )
                     refreshManagement()
                     refreshVideos()
+                    refreshBookingEvents()
                     refreshRadioPrograms()
                 }
                 .onFailure { showError(it) }
@@ -482,7 +495,102 @@ class CommunityFeatureModel(
         session.selectCommunity(communityId)
         refreshManagement()
         refreshVideos()
+        refreshBookingEvents()
         refreshRadioPrograms()
+    }
+
+    private fun refreshBookingEvents() {
+        val current = session.state.value
+        val communityId = current.selectedCommunityId
+        val token = current.authenticationToken
+        if (communityId == null || token == null) {
+            mutableState.value = mutableState.value.copy(
+                bookingEvents = emptyList(),
+                selectedBookingEventId = null,
+                bookingSlots = emptyList(),
+                bookedSlotIds = emptySet(),
+                bookingProcessingSlotId = null,
+            )
+            return
+        }
+        viewModelScope.launch {
+            repository.bookingEvents(communityId, token)
+                .onSuccess { events ->
+                    val selectedEventId = mutableState.value.selectedBookingEventId
+                        ?.takeIf { id -> events.any { it.id == id } }
+                    mutableState.value = mutableState.value.copy(
+                        bookingEvents = events,
+                        selectedBookingEventId = selectedEventId,
+                        bookingSlots = if (selectedEventId == null) emptyList() else mutableState.value.bookingSlots,
+                        bookedSlotIds = if (selectedEventId == null) emptySet() else mutableState.value.bookedSlotIds,
+                    )
+                    selectedEventId?.let(::refreshBookingDetails)
+                }
+                .onFailure { showError(it, clearCandidate = false) }
+        }
+    }
+
+    fun selectBookingEvent(eventId: String) {
+        mutableState.value = mutableState.value.copy(
+            selectedBookingEventId = eventId,
+            bookingSlots = emptyList(),
+            bookedSlotIds = emptySet(),
+            message = null,
+        )
+        refreshBookingDetails(eventId)
+    }
+
+    fun reserveBooking(event: BookingEvent, slot: BookingSlot) {
+        updateBooking(event, slot, reserve = true)
+    }
+
+    fun cancelBooking(event: BookingEvent, slot: BookingSlot) {
+        updateBooking(event, slot, reserve = false)
+    }
+
+    private fun refreshBookingDetails(eventId: String) {
+        val current = session.state.value
+        val communityId = current.selectedCommunityId ?: return
+        val token = current.authenticationToken ?: return
+        viewModelScope.launch {
+            val slots = repository.bookingSlots(communityId, eventId, token).getOrDefault(emptyList())
+            val booked = repository.bookedSlotIds(
+                communityId,
+                eventId,
+                current.userId,
+                token,
+            ).getOrDefault(emptySet())
+            if (mutableState.value.selectedBookingEventId == eventId) {
+                mutableState.value = mutableState.value.copy(
+                    bookingSlots = slots,
+                    bookedSlotIds = booked,
+                )
+            }
+        }
+    }
+
+    private fun updateBooking(event: BookingEvent, slot: BookingSlot, reserve: Boolean) {
+        val current = session.state.value
+        val communityId = current.selectedCommunityId ?: return
+        val token = current.authenticationToken ?: return
+        mutableState.value = mutableState.value.copy(
+            bookingProcessingSlotId = slot.id,
+            message = null,
+        )
+        viewModelScope.launch {
+            val result = if (reserve) {
+                repository.reserveBookingSlot(communityId, event.id, slot.id, token)
+            } else {
+                repository.cancelBookingSlot(communityId, event.id, slot.id, token)
+            }
+            result.onSuccess {
+                mutableState.value = mutableState.value.copy(
+                    message = if (reserve) "イベントを予約しました。" else "イベント予約をキャンセルしました。",
+                )
+                refreshBookingDetails(event.id)
+            }.onFailure { showError(it, clearCandidate = false) }
+            mutableState.value = mutableState.value.copy(bookingProcessingSlotId = null)
+        }
     }
 
     private fun refreshVideos() {

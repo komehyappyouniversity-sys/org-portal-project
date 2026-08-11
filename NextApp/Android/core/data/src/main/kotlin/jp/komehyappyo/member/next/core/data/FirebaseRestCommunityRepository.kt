@@ -4,6 +4,8 @@ import jp.komehyappyo.member.next.core.model.Community
 import jp.komehyappyo.member.next.core.model.CommunityAdminAccess
 import jp.komehyappyo.member.next.core.model.CommunityAdmin
 import jp.komehyappyo.member.next.core.model.CommunityAuditLog
+import jp.komehyappyo.member.next.core.model.BookingEvent
+import jp.komehyappyo.member.next.core.model.BookingSlot
 import jp.komehyappyo.member.next.core.model.DistributedVideo
 import jp.komehyappyo.member.next.core.model.VideoQuestion
 import jp.komehyappyo.member.next.core.model.CommunityCodeParser
@@ -63,6 +65,33 @@ interface CommunityRepository {
         communityId: String,
         idToken: String,
     ): Result<List<CommunityAuditLog>>
+    suspend fun bookingEvents(
+        communityId: String,
+        idToken: String,
+    ): Result<List<BookingEvent>>
+    suspend fun bookingSlots(
+        communityId: String,
+        eventId: String,
+        idToken: String,
+    ): Result<List<BookingSlot>>
+    suspend fun bookedSlotIds(
+        communityId: String,
+        eventId: String,
+        userId: String,
+        idToken: String,
+    ): Result<Set<String>>
+    suspend fun reserveBookingSlot(
+        communityId: String,
+        eventId: String,
+        slotId: String,
+        idToken: String,
+    ): Result<Unit>
+    suspend fun cancelBookingSlot(
+        communityId: String,
+        eventId: String,
+        slotId: String,
+        idToken: String,
+    ): Result<Unit>
     suspend fun communityVideos(
         communityId: String,
         idToken: String,
@@ -572,6 +601,142 @@ class FirebaseRestCommunityRepository(
             }
         }.sortedByDescending { it.createdAt.orEmpty() }
     }
+
+    override suspend fun bookingEvents(
+        communityId: String,
+        idToken: String,
+    ): Result<List<BookingEvent>> = runCatching {
+        val response = request(
+            "documents/organizations/$communityId/bookingEvents?pageSize=1000",
+            "GET",
+            idToken,
+            null,
+        ) as JSONObject
+        val documents = response.optJSONArray("documents") ?: JSONArray()
+        buildList {
+            for (index in 0 until documents.length()) {
+                val document = documents.optJSONObject(index) ?: continue
+                val fields = document.optJSONObject("fields") ?: continue
+                if (boolean(fields, "isPublished") != true) continue
+                add(
+                    BookingEvent(
+                        id = document.optString("name").substringAfterLast("/"),
+                        communityId = communityId,
+                        title = string(fields, "title") ?: "イベント",
+                        description = string(fields, "description").orEmpty(),
+                        eventDate = timestamp(fields, "eventDate"),
+                        feeAmount = number(fields, "feeAmount")?.toInt() ?: 0,
+                        paymentRequired = boolean(fields, "paymentRequired") ?: false,
+                        zoomUrl = string(fields, "zoomURL") ?: string(fields, "zoomUrl"),
+                        isPublished = true,
+                    ),
+                )
+            }
+        }.sortedBy { it.eventDate.orEmpty() }
+    }
+
+    override suspend fun bookingSlots(
+        communityId: String,
+        eventId: String,
+        idToken: String,
+    ): Result<List<BookingSlot>> = runCatching {
+        val response = request(
+            "documents/organizations/$communityId/bookingEvents/$eventId/slots?pageSize=1000",
+            "GET",
+            idToken,
+            null,
+        ) as JSONObject
+        val documents = response.optJSONArray("documents") ?: JSONArray()
+        buildList {
+            for (index in 0 until documents.length()) {
+                val document = documents.optJSONObject(index) ?: continue
+                val fields = document.optJSONObject("fields") ?: continue
+                add(
+                    BookingSlot(
+                        id = document.optString("name").substringAfterLast("/"),
+                        eventId = eventId,
+                        startAt = timestamp(fields, "startAt"),
+                        endAt = timestamp(fields, "endAt"),
+                        capacity = number(fields, "capacity")?.toInt() ?: 0,
+                        reservedCount = number(fields, "reservedCount")?.toInt() ?: 0,
+                        paidCount = number(fields, "paidCount")?.toInt() ?: 0,
+                        isOpen = boolean(fields, "isOpen") ?: true,
+                    ),
+                )
+            }
+        }.sortedBy { it.startAt.orEmpty() }
+    }
+
+    override suspend fun bookedSlotIds(
+        communityId: String,
+        eventId: String,
+        userId: String,
+        idToken: String,
+    ): Result<Set<String>> = runCatching {
+        val body = JSONObject().put(
+            "structuredQuery",
+            JSONObject()
+                .put(
+                    "from",
+                    JSONArray().put(
+                        JSONObject()
+                            .put("collectionId", "bookings")
+                            .put("allDescendants", true),
+                    ),
+                )
+                .put(
+                    "where",
+                    JSONObject().put(
+                        "fieldFilter",
+                        JSONObject()
+                            .put("field", JSONObject().put("fieldPath", "memberUid"))
+                            .put("op", "EQUAL")
+                            .put("value", stringValue(userId)),
+                    ),
+                ),
+        )
+        val rows = request("documents:runQuery", "POST", idToken, body) as JSONArray
+        buildSet {
+            for (index in 0 until rows.length()) {
+                val fields = rows.optJSONObject(index)
+                    ?.optJSONObject("document")
+                    ?.optJSONObject("fields") ?: continue
+                if (
+                    string(fields, "organizationId") == communityId &&
+                    string(fields, "eventId") == eventId &&
+                    string(fields, "status") == "reserved"
+                ) {
+                    string(fields, "slotId")?.let(::add)
+                }
+            }
+        }
+    }
+
+    override suspend fun reserveBookingSlot(
+        communityId: String,
+        eventId: String,
+        slotId: String,
+        idToken: String,
+    ): Result<Unit> = bookingRequest(
+        endpoint = "reserveBookingSlotHttp",
+        communityId = communityId,
+        eventId = eventId,
+        slotId = slotId,
+        idToken = idToken,
+    )
+
+    override suspend fun cancelBookingSlot(
+        communityId: String,
+        eventId: String,
+        slotId: String,
+        idToken: String,
+    ): Result<Unit> = bookingRequest(
+        endpoint = "cancelBookingSlotHttp",
+        communityId = communityId,
+        eventId = eventId,
+        slotId = slotId,
+        idToken = idToken,
+    )
 
     override suspend fun communityVideos(
         communityId: String,
@@ -1090,6 +1255,46 @@ class FirebaseRestCommunityRepository(
             null,
         ) as JSONObject
         return document.optJSONObject("fields") ?: JSONObject()
+    }
+
+    private suspend fun bookingRequest(
+        endpoint: String,
+        communityId: String,
+        eventId: String,
+        slotId: String,
+        idToken: String,
+    ): Result<Unit> = runCatching {
+        withContext(Dispatchers.IO) {
+            val connection = (
+                URL("https://asia-northeast1-$projectId.cloudfunctions.net/$endpoint")
+                    .openConnection() as HttpURLConnection
+                ).apply {
+                requestMethod = "POST"
+                connectTimeout = 15_000
+                readTimeout = 15_000
+                doOutput = true
+                setRequestProperty("Authorization", "Bearer $idToken")
+                setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+            }
+            try {
+                connection.outputStream.use {
+                    it.write(
+                        JSONObject()
+                            .put("organizationId", communityId)
+                            .put("eventId", eventId)
+                            .put("slotId", slotId)
+                            .toString()
+                            .toByteArray(Charsets.UTF_8),
+                    )
+                }
+                if (connection.responseCode !in 200..299) {
+                    throw CommunityRepositoryException("イベント予約の処理に失敗しました。")
+                }
+            } finally {
+                connection.disconnect()
+            }
+        }
+        Unit
     }
 
     private suspend fun request(

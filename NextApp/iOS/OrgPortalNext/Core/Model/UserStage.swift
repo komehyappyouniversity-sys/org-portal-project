@@ -306,6 +306,98 @@ public struct DistributedVideo: Identifiable, Equatable, Codable, Sendable {
     }
 }
 
+public struct BookingEvent: Identifiable, Equatable, Codable, Sendable {
+    public let id: String
+    public let communityId: String
+    public let title: String
+    public let description: String
+    public let eventDate: Date?
+    public let feeAmount: Int
+    public let paymentRequired: Bool
+    public let zoomURL: URL?
+    public let isPublished: Bool
+
+    public init(
+        id: String,
+        communityId: String,
+        title: String,
+        description: String = "",
+        eventDate: Date? = nil,
+        feeAmount: Int = 0,
+        paymentRequired: Bool = false,
+        zoomURL: URL? = nil,
+        isPublished: Bool = false
+    ) {
+        self.id = id
+        self.communityId = communityId
+        self.title = title
+        self.description = description
+        self.eventDate = eventDate
+        self.feeAmount = feeAmount
+        self.paymentRequired = paymentRequired
+        self.zoomURL = zoomURL
+        self.isPublished = isPublished
+    }
+}
+
+public struct BookingSlot: Identifiable, Equatable, Codable, Sendable {
+    public let id: String
+    public let eventId: String
+    public let startAt: Date?
+    public let endAt: Date?
+    public let capacity: Int
+    public let reservedCount: Int
+    public let paidCount: Int
+    public let isOpen: Bool
+
+    public init(
+        id: String,
+        eventId: String,
+        startAt: Date? = nil,
+        endAt: Date? = nil,
+        capacity: Int = 0,
+        reservedCount: Int = 0,
+        paidCount: Int = 0,
+        isOpen: Bool = true
+    ) {
+        self.id = id
+        self.eventId = eventId
+        self.startAt = startAt
+        self.endAt = endAt
+        self.capacity = capacity
+        self.reservedCount = reservedCount
+        self.paidCount = paidCount
+        self.isOpen = isOpen
+    }
+
+    public var remainingCount: Int {
+        max(capacity - reservedCount, 0)
+    }
+
+    public var isFull: Bool {
+        capacity <= 0 || reservedCount >= capacity
+    }
+}
+
+public struct BookingReservation: Equatable, Codable, Sendable {
+    public let slotId: String
+    public let userId: String
+    public let status: String
+    public let purchaseStatus: String
+
+    public init(
+        slotId: String,
+        userId: String,
+        status: String,
+        purchaseStatus: String = "not-required"
+    ) {
+        self.slotId = slotId
+        self.userId = userId
+        self.status = status
+        self.purchaseStatus = purchaseStatus
+    }
+}
+
 public struct VideoQuestion: Identifiable, Equatable, Codable, Sendable {
     public let id: String
     public let communityId: String

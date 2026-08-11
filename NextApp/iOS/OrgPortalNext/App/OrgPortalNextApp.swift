@@ -566,6 +566,11 @@ private final class CommunityFeatureModel: ObservableObject {
     @Published private(set) var administrators: [CommunityAdmin] = []
     @Published private(set) var communityMembers: [CommunityMembership] = []
     @Published private(set) var distributedVideos: [DistributedVideo] = []
+    @Published private(set) var bookingEvents: [BookingEvent] = []
+    @Published private(set) var selectedBookingEventID: String?
+    @Published private(set) var bookingSlots: [BookingSlot] = []
+    @Published private(set) var bookedSlotIDs: Set<String> = []
+    @Published private(set) var bookingProcessingSlotID: String?
     @Published private(set) var managedVideos: [DistributedVideo] = []
     @Published private(set) var vimeoLibraryVideos: [DistributedVideo] = []
     @Published private(set) var vimeoFolders: [VimeoFolder] = []
@@ -842,6 +847,7 @@ private final class CommunityFeatureModel: ObservableObject {
             }
             session.updateUserStage(approved.isEmpty ? .guest : .member)
             await refreshManagement()
+            await refreshBookingEvents()
             isLoading = false
         } catch {
             isLoading = false
@@ -969,6 +975,102 @@ private final class CommunityFeatureModel: ObservableObject {
             auditLogs = []
             message = error.localizedDescription
         }
+    }
+
+    private func refreshBookingEvents() async {
+        guard let communityID = session.selectedCommunityId,
+              let token = session.authenticationToken else {
+            bookingEvents = []
+            selectedBookingEventID = nil
+            bookingSlots = []
+            bookedSlotIDs = []
+            bookingProcessingSlotID = nil
+            return
+        }
+        do {
+            bookingEvents = try await repository.bookingEvents(communityId: communityID, idToken: token)
+            if let selectedBookingEventID,
+               bookingEvents.contains(where: { $0.id == selectedBookingEventID }) {
+                await refreshBookingDetails(eventID: selectedBookingEventID)
+            } else {
+                selectedBookingEventID = nil
+                bookingSlots = []
+                bookedSlotIDs = []
+            }
+        } catch {
+            bookingEvents = []
+        }
+    }
+
+    func selectBookingEvent(_ eventID: String) async {
+        selectedBookingEventID = eventID
+        bookingSlots = []
+        bookedSlotIDs = []
+        await refreshBookingDetails(eventID: eventID)
+    }
+
+    func reserveBooking(event: BookingEvent, slot: BookingSlot) async {
+        await updateBooking(event: event, slot: slot, reserve: true)
+    }
+
+    func cancelBooking(event: BookingEvent, slot: BookingSlot) async {
+        await updateBooking(event: event, slot: slot, reserve: false)
+    }
+
+    private func refreshBookingDetails(eventID: String) async {
+        guard let communityID = session.selectedCommunityId,
+              let userID = session.authenticatedUserId,
+              let token = session.authenticationToken else { return }
+        do {
+            async let slots = repository.bookingSlots(
+                communityId: communityID,
+                eventId: eventID,
+                idToken: token
+            )
+            async let booked = repository.bookedSlotIDs(
+                communityId: communityID,
+                eventId: eventID,
+                userId: userID,
+                idToken: token
+            )
+            let (loadedSlots, loadedBooked) = try await (slots, booked)
+            guard selectedBookingEventID == eventID else { return }
+            bookingSlots = loadedSlots
+            bookedSlotIDs = loadedBooked
+        } catch {
+            bookingSlots = []
+            bookedSlotIDs = []
+        }
+    }
+
+    private func updateBooking(event: BookingEvent, slot: BookingSlot, reserve: Bool) async {
+        guard let communityID = session.selectedCommunityId,
+              let token = session.authenticationToken else { return }
+        bookingProcessingSlotID = slot.id
+        message = nil
+        do {
+            if reserve {
+                try await repository.reserveBookingSlot(
+                    communityId: communityID,
+                    eventId: event.id,
+                    slotId: slot.id,
+                    idToken: token
+                )
+                message = "イベントを予約しました。"
+            } else {
+                try await repository.cancelBookingSlot(
+                    communityId: communityID,
+                    eventId: event.id,
+                    slotId: slot.id,
+                    idToken: token
+                )
+                message = "イベント予約をキャンセルしました。"
+            }
+            await refreshBookingDetails(eventID: event.id)
+        } catch {
+            message = "イベント予約を更新できませんでした: \(error.localizedDescription)"
+        }
+        bookingProcessingSlotID = nil
     }
 
     func saveVimeoConfiguration(accessToken: String, userId: String, query: String) {
@@ -1692,6 +1794,9 @@ private struct CommunityRootView: View {
                             }
                         }
                     }
+                    if model.isLoggedIn {
+                        bookingSection
+                    }
                     if model.isLoggedIn, !model.distributedVideos.isEmpty {
                         videoSelectionSection
                     }
@@ -2180,6 +2285,80 @@ private struct CommunityRootView: View {
             duration: durationSeconds,
             layout: layout
         )
+    }
+
+    private var bookingSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if !model.bookingEvents.isEmpty {
+                Text("イベント予約")
+                    .font(.title2.bold())
+                ForEach(model.bookingEvents) { event in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(event.title)
+                            .font(.headline)
+                        if let eventDate = event.eventDate {
+                            Text("開催日: \(eventDate.formatted(date: .abbreviated, time: .shortened))")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        if !event.description.isEmpty {
+                            Text(event.description)
+                        }
+                        Text(
+                            event.paymentRequired || event.feeAmount > 0
+                                ? "料金: \(event.feeAmount)円（決済準備中のため予約できません）"
+                                : "無料イベント"
+                        )
+                        Button(
+                            model.selectedBookingEventID == event.id ? "予約枠を表示中" : "予約枠を見る"
+                        ) {
+                            Task { await model.selectBookingEvent(event.id) }
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(model.selectedBookingEventID == event.id)
+
+                        if model.selectedBookingEventID == event.id {
+                            if model.bookingSlots.isEmpty {
+                                Text("予約枠はまだありません。")
+                                    .foregroundStyle(.secondary)
+                            }
+                            ForEach(model.bookingSlots) { slot in
+                                HStack(alignment: .center, spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("\(slot.startAt?.formatted(date: .abbreviated, time: .shortened) ?? "開始時刻未定") - \(slot.endAt?.formatted(date: .omitted, time: .shortened) ?? "終了時刻未定")")
+                                        Text("残席: \(slot.remainingCount) / \(slot.capacity)")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    let isBooked = model.bookedSlotIDs.contains(slot.id)
+                                    if isBooked {
+                                        Button("予約をキャンセル") {
+                                            Task { await model.cancelBooking(event: event, slot: slot) }
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .disabled(model.bookingProcessingSlotID != nil)
+                                    } else {
+                                        Button(slot.isFull ? "満席" : "予約") {
+                                            Task { await model.reserveBooking(event: event, slot: slot) }
+                                        }
+                                        .buttonStyle(.borderedProminent)
+                                        .disabled(
+                                            event.paymentRequired || event.feeAmount > 0 ||
+                                                !slot.isOpen || slot.isFull ||
+                                                model.bookingProcessingSlotID != nil
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                }
+            }
+        }
     }
 
     private var videoSelectionSection: some View {

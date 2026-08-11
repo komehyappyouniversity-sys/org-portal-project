@@ -597,6 +597,65 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                 }
             }
 
+            if (state.bookingEvents.isNotEmpty()) {
+                Text("イベント予約")
+                state.bookingEvents.forEach { event ->
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(event.title)
+                        event.eventDate?.let { Text("開催日: $it") }
+                        if (event.description.isNotBlank()) Text(event.description)
+                        Text(
+                            if (event.paymentRequired || event.feeAmount > 0) {
+                                "料金: ${event.feeAmount}円（決済準備中のため予約できません）"
+                            } else {
+                                "無料イベント"
+                            },
+                        )
+                        OutlinedButton(
+                            onClick = { model.selectBookingEvent(event.id) },
+                            enabled = state.selectedBookingEventId != event.id,
+                        ) {
+                            Text(if (state.selectedBookingEventId == event.id) "予約枠を表示中" else "予約枠を見る")
+                        }
+                        if (state.selectedBookingEventId == event.id) {
+                            if (state.bookingSlots.isEmpty()) {
+                                Text("予約枠はまだありません。")
+                            }
+                            state.bookingSlots.forEach { slot ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("${slot.startAt ?: "開始時刻未定"} - ${slot.endAt ?: "終了時刻未定"}")
+                                        Text("残席: ${slot.remainingCount} / ${slot.capacity}")
+                                    }
+                                    val isBooked = slot.id in state.bookedSlotIds
+                                    val canReserve = !event.paymentRequired && event.feeAmount <= 0 &&
+                                        slot.isOpen && !slot.isFull &&
+                                        state.bookingProcessingSlotId == null
+                                    if (isBooked) {
+                                        OutlinedButton(
+                                            onClick = { model.cancelBooking(event, slot) },
+                                            enabled = state.bookingProcessingSlotId == null,
+                                        ) { Text("予約をキャンセル") }
+                                    } else {
+                                        Button(
+                                            onClick = { model.reserveBooking(event, slot) },
+                                            enabled = canReserve,
+                                        ) { Text(if (slot.isFull) "満席" else "予約") }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    HorizontalDivider()
+                }
+            }
+
             if (state.distributedVideos.isNotEmpty()) {
                 Text("Vimeo配信動画")
                 state.distributedVideos.forEach { video ->

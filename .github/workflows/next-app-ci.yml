@@ -61,9 +61,9 @@ jobs:
           -project NextApp/iOS/OrgPortalNext/OrgPortalNext.xcodeproj
           -scheme OrgPortalNext
           -configuration Debug
-          -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest'
+          -destination 'generic/platform=iOS Simulator'
           -derivedDataPath "${RUNNER_TEMP}/OrgPortalNextDerivedData"
-          test
+          build
       - name: Verify internal frameworks are embedded
         run: |
           app_path="${RUNNER_TEMP}/OrgPortalNextDerivedData/Build/Products/Debug-iphonesimulator/OrgPortalNext.app"

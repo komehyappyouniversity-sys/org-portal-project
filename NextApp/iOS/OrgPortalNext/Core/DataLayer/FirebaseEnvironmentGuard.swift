@@ -747,6 +747,33 @@ public protocol CommunityRepository: Sendable {
         communityId: String,
         idToken: String
     ) async throws -> [CommunityAuditLog]
+    func bookingEvents(
+        communityId: String,
+        idToken: String
+    ) async throws -> [BookingEvent]
+    func bookingSlots(
+        communityId: String,
+        eventId: String,
+        idToken: String
+    ) async throws -> [BookingSlot]
+    func bookedSlotIDs(
+        communityId: String,
+        eventId: String,
+        userId: String,
+        idToken: String
+    ) async throws -> Set<String>
+    func reserveBookingSlot(
+        communityId: String,
+        eventId: String,
+        slotId: String,
+        idToken: String
+    ) async throws
+    func cancelBookingSlot(
+        communityId: String,
+        eventId: String,
+        slotId: String,
+        idToken: String
+    ) async throws
     func communityVideos(
         communityId: String,
         idToken: String
@@ -1252,6 +1279,127 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
         let documents = response?["documents"] as? [[String: Any]] ?? []
         return documents.compactMap(parseAuditLog)
             .sorted { ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast) }
+    }
+
+    public func bookingEvents(
+        communityId: String,
+        idToken: String
+    ) async throws -> [BookingEvent] {
+        let response = try await requestJSON(
+            path: "documents/organizations/\(communityId)/bookingEvents?pageSize=1000",
+            method: "GET",
+            idToken: idToken
+        ) as? [String: Any]
+        let documents = response?["documents"] as? [[String: Any]] ?? []
+        return documents.compactMap { document in
+            guard let fields = document["fields"] as? [String: Any],
+                  bool(fields, "isPublished") == true else { return nil }
+            let id = (document["name"] as? String)?.split(separator: "/").last.map(String.init) ?? ""
+            guard !id.isEmpty else { return nil }
+            return BookingEvent(
+                id: id,
+                communityId: communityId,
+                title: string(fields, "title") ?? "イベント",
+                description: string(fields, "description") ?? "",
+                eventDate: timestamp(fields, "eventDate"),
+                feeAmount: Int(number(fields, "feeAmount") ?? 0),
+                paymentRequired: bool(fields, "paymentRequired") ?? false,
+                zoomURL: (string(fields, "zoomURL") ?? string(fields, "zoomUrl"))
+                    .flatMap(URL.init(string:)),
+                isPublished: true
+            )
+        }.sorted { ($0.eventDate ?? .distantFuture) < ($1.eventDate ?? .distantFuture) }
+    }
+
+    public func bookingSlots(
+        communityId: String,
+        eventId: String,
+        idToken: String
+    ) async throws -> [BookingSlot] {
+        let response = try await requestJSON(
+            path: "documents/organizations/\(communityId)/bookingEvents/\(eventId)/slots?pageSize=1000",
+            method: "GET",
+            idToken: idToken
+        ) as? [String: Any]
+        let documents = response?["documents"] as? [[String: Any]] ?? []
+        return documents.compactMap { document in
+            guard let fields = document["fields"] as? [String: Any] else { return nil }
+            let id = (document["name"] as? String)?.split(separator: "/").last.map(String.init) ?? ""
+            guard !id.isEmpty else { return nil }
+            return BookingSlot(
+                id: id,
+                eventId: eventId,
+                startAt: timestamp(fields, "startAt"),
+                endAt: timestamp(fields, "endAt"),
+                capacity: Int(number(fields, "capacity") ?? 0),
+                reservedCount: Int(number(fields, "reservedCount") ?? 0),
+                paidCount: Int(number(fields, "paidCount") ?? 0),
+                isOpen: bool(fields, "isOpen") ?? true
+            )
+        }.sorted { ($0.startAt ?? .distantFuture) < ($1.startAt ?? .distantFuture) }
+    }
+
+    public func bookedSlotIDs(
+        communityId: String,
+        eventId: String,
+        userId: String,
+        idToken: String
+    ) async throws -> Set<String> {
+        let body: [String: Any] = [
+            "structuredQuery": [
+                "from": [["collectionId": "bookings", "allDescendants": true]],
+                "where": [
+                    "fieldFilter": [
+                        "field": ["fieldPath": "memberUid"],
+                        "op": "EQUAL",
+                        "value": stringValue(userId)
+                    ]
+                ]
+            ]
+        ]
+        let rows = try await requestJSON(
+            path: "documents:runQuery",
+            method: "POST",
+            idToken: idToken,
+            body: body
+        ) as? [[String: Any]] ?? []
+        return Set(rows.compactMap { row -> String? in
+            guard let fields = (row["document"] as? [String: Any])?["fields"] as? [String: Any],
+                  string(fields, "organizationId") == communityId,
+                  string(fields, "eventId") == eventId,
+                  string(fields, "status") == "reserved" else { return nil }
+            return string(fields, "slotId")
+        })
+    }
+
+    public func reserveBookingSlot(
+        communityId: String,
+        eventId: String,
+        slotId: String,
+        idToken: String
+    ) async throws {
+        try await bookingRequest(
+            endpoint: "reserveBookingSlotHttp",
+            communityId: communityId,
+            eventId: eventId,
+            slotId: slotId,
+            idToken: idToken
+        )
+    }
+
+    public func cancelBookingSlot(
+        communityId: String,
+        eventId: String,
+        slotId: String,
+        idToken: String
+    ) async throws {
+        try await bookingRequest(
+            endpoint: "cancelBookingSlotHttp",
+            communityId: communityId,
+            eventId: eventId,
+            slotId: slotId,
+            idToken: idToken
+        )
     }
 
     public func communityVideos(
@@ -1803,6 +1951,33 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
             return []
         }
         return values.compactMap { $0["stringValue"] as? String }
+    }
+
+    private func bookingRequest(
+        endpoint: String,
+        communityId: String,
+        eventId: String,
+        slotId: String,
+        idToken: String
+    ) async throws {
+        guard let url = URL(
+            string: "https://asia-northeast1-\(projectId).cloudfunctions.net/\(endpoint)"
+        ) else {
+            throw CommunityRepositoryError.invalidResponse
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "organizationId": communityId,
+            "eventId": eventId,
+            "slotId": slotId,
+        ])
+        let (_, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw CommunityRepositoryError.requestFailed
+        }
     }
 
     private func requestJSON(

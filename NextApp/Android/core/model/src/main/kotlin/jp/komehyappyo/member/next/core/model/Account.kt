@@ -47,6 +47,41 @@ data class DistributedVideo(
     val sortOrder: Int = 0,
 )
 
+data class BookingEvent(
+    val id: String,
+    val communityId: String,
+    val title: String,
+    val description: String = "",
+    val eventDate: String? = null,
+    val feeAmount: Int = 0,
+    val paymentRequired: Boolean = false,
+    val zoomUrl: String? = null,
+    val isPublished: Boolean = false,
+)
+
+data class BookingSlot(
+    val id: String,
+    val eventId: String,
+    val startAt: String? = null,
+    val endAt: String? = null,
+    val capacity: Int = 0,
+    val reservedCount: Int = 0,
+    val paidCount: Int = 0,
+    val isOpen: Boolean = true,
+) {
+    val remainingCount: Int
+        get() = (capacity - reservedCount).coerceAtLeast(0)
+    val isFull: Boolean
+        get() = capacity <= 0 || reservedCount >= capacity
+}
+
+data class BookingReservation(
+    val slotId: String,
+    val userId: String,
+    val status: String,
+    val purchaseStatus: String = "not-required",
+)
+
 data class CommunityAuditLog(
     val id: String,
     val action: String,
