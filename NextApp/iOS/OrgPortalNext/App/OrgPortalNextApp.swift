@@ -573,6 +573,9 @@ private final class CommunityFeatureModel: ObservableObject {
     @Published private(set) var bookingProcessingSlotID: String?
     @Published private(set) var managedVideos: [DistributedVideo] = []
     @Published private(set) var managedBookingEvents: [BookingEvent] = []
+    @Published private(set) var selectedManagedBookingEventID: String?
+    @Published private(set) var managedBookingSlots: [BookingSlot] = []
+    @Published private(set) var managedBookingReservations: [BookingReservation] = []
     @Published private(set) var vimeoLibraryVideos: [DistributedVideo] = []
     @Published private(set) var vimeoFolders: [VimeoFolder] = []
     @Published private(set) var vimeoConfiguration = VimeoConfiguration()
@@ -904,6 +907,9 @@ private final class CommunityFeatureModel: ObservableObject {
             distributedVideos = []
             managedVideos = []
             managedBookingEvents = []
+            selectedManagedBookingEventID = nil
+            managedBookingSlots = []
+            managedBookingReservations = []
             vimeoLibraryVideos = []
             vimeoConfiguration = VimeoConfiguration()
             auditLogs = []
@@ -979,6 +985,9 @@ private final class CommunityFeatureModel: ObservableObject {
             distributedVideos = []
             managedVideos = []
             managedBookingEvents = []
+            selectedManagedBookingEventID = nil
+            managedBookingSlots = []
+            managedBookingReservations = []
             vimeoLibraryVideos = []
             vimeoConfiguration = VimeoConfiguration()
             auditLogs = []
@@ -1193,6 +1202,33 @@ private final class CommunityFeatureModel: ObservableObject {
             } catch {
                 message = "予約枠を保存できませんでした: \(error.localizedDescription)"
             }
+        }
+    }
+
+    func selectManagedBookingEvent(_ eventID: String) async {
+        guard let communityID = session.selectedCommunityId,
+              let token = session.authenticationToken,
+              adminAccess?.canReviewMembers == true else { return }
+        selectedManagedBookingEventID = eventID
+        managedBookingSlots = []
+        managedBookingReservations = []
+        do {
+            async let slots = repository.bookingSlots(
+                communityId: communityID,
+                eventId: eventID,
+                idToken: token
+            )
+            async let reservations = repository.bookingReservations(
+                communityId: communityID,
+                eventId: eventID,
+                idToken: token
+            )
+            let (loadedSlots, loadedReservations) = try await (slots, reservations)
+            guard selectedManagedBookingEventID == eventID else { return }
+            managedBookingSlots = loadedSlots
+            managedBookingReservations = loadedReservations
+        } catch {
+            message = "予約状況を取得できませんでした: \(error.localizedDescription)"
         }
     }
 
@@ -2126,6 +2162,7 @@ private struct CommunityRootView: View {
             }
             ForEach(model.managedBookingEvents) { event in
                 Button("\(event.title)（\(event.isPublished ? "公開" : "下書き")）") {
+                    Task { await model.selectManagedBookingEvent(event.id) }
                     bookingEventID = event.id
                     bookingEventTitle = event.title
                     bookingEventDescription = event.description
@@ -2134,6 +2171,31 @@ private struct CommunityRootView: View {
                     bookingEventZoomURL = event.zoomURL?.absoluteString ?? ""
                 }
                 .buttonStyle(.plain)
+            }
+            if model.selectedManagedBookingEventID != nil {
+                Text("予約状況").font(.headline)
+                if model.managedBookingSlots.isEmpty {
+                    Text("予約枠はまだありません。")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(model.managedBookingSlots) { slot in
+                    let reservations = model.managedBookingReservations.filter { $0.slotId == slot.id }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(slot.startAt?.formatted(date: .abbreviated, time: .shortened) ?? "開始時刻未定") - \(slot.endAt?.formatted(date: .omitted, time: .shortened) ?? "終了時刻未定")")
+                        Text("定員 \(slot.capacity)名 / 予約 \(slot.reservedCount)名 / 残席 \(slot.remainingCount)名")
+                            .font(.subheadline)
+                        Text(slot.isOpen ? "受付中" : "受付停止中")
+                            .font(.subheadline)
+                        ForEach(reservations, id: \.userId) { reservation in
+                            Text("\(reservation.userId) / \(reservation.status) / \(reservation.purchaseStatus)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                }
             }
             Text("予約枠を保存").font(.headline)
             TextField("イベントID（上のイベントを選択）", text: $bookingEventID)

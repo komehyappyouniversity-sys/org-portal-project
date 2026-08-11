@@ -349,6 +349,7 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                 }
                 state.managedBookingEvents.forEach { event ->
                     TextButton(onClick = {
+                        model.selectManagedBookingEvent(event.id)
                         bookingEventId = event.id
                         bookingEventTitle = event.title
                         bookingEventDescription = event.description
@@ -357,6 +358,28 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                         bookingEventZoomUrl = event.zoomUrl.orEmpty()
                     }) {
                         Text("${event.title}（${if (event.isPublished) "公開" else "下書き"}）")
+                    }
+                }
+                state.selectedManagedBookingEventId?.let {
+                    Text("予約状況")
+                    if (state.managedBookingSlots.isEmpty()) {
+                        Text("予約枠はまだありません。")
+                    }
+                    state.managedBookingSlots.forEach { slot ->
+                        val reservations = state.managedBookingReservations.filter { reservation ->
+                            reservation.slotId == slot.id
+                        }
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text("${slot.startAt ?: "開始時刻未定"} - ${slot.endAt ?: "終了時刻未定"}")
+                            Text("定員 ${slot.capacity}名 / 予約 ${slot.reservedCount}名 / 残席 ${slot.remainingCount}名")
+                            Text(if (slot.isOpen) "受付中" else "受付停止中")
+                            reservations.forEach { reservation ->
+                                Text("${reservation.userId} / ${reservation.status} / ${reservation.purchaseStatus}")
+                            }
+                        }
                     }
                 }
                 Text("予約枠を保存")

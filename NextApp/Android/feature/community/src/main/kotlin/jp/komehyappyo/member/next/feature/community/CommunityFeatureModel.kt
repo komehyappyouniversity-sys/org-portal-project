@@ -14,6 +14,7 @@ import jp.komehyappyo.member.next.core.model.CommunityAdmin
 import jp.komehyappyo.member.next.core.model.CommunityAuditLog
 import jp.komehyappyo.member.next.core.model.BookingEvent
 import jp.komehyappyo.member.next.core.model.BookingSlot
+import jp.komehyappyo.member.next.core.model.BookingReservation
 import jp.komehyappyo.member.next.core.model.DistributedVideo
 import jp.komehyappyo.member.next.core.model.VideoQuestion
 import jp.komehyappyo.member.next.core.model.CommunityCodeParser
@@ -45,6 +46,9 @@ data class CommunityUiState(
     val distributedVideos: List<DistributedVideo> = emptyList(),
     val managedVideos: List<DistributedVideo> = emptyList(),
     val managedBookingEvents: List<BookingEvent> = emptyList(),
+    val selectedManagedBookingEventId: String? = null,
+    val managedBookingSlots: List<BookingSlot> = emptyList(),
+    val managedBookingReservations: List<BookingReservation> = emptyList(),
     val vimeoLibraryVideos: List<DistributedVideo> = emptyList(),
     val vimeoFolders: List<VimeoFolder> = emptyList(),
     val vimeoConfiguration: VimeoConfiguration = VimeoConfiguration(),
@@ -669,6 +673,9 @@ class CommunityFeatureModel(
                 auditLogs = emptyList(),
                 managedVideos = emptyList(),
                 managedBookingEvents = emptyList(),
+                selectedManagedBookingEventId = null,
+                managedBookingSlots = emptyList(),
+                managedBookingReservations = emptyList(),
                 vimeoLibraryVideos = emptyList(),
                 vimeoConfiguration = VimeoConfiguration(),
             )
@@ -709,6 +716,9 @@ class CommunityFeatureModel(
                             auditLogs = emptyList(),
                             managedVideos = emptyList(),
                             managedBookingEvents = emptyList(),
+                            selectedManagedBookingEventId = null,
+                            managedBookingSlots = emptyList(),
+                            managedBookingReservations = emptyList(),
                             vimeoLibraryVideos = emptyList(),
                             vimeoConfiguration = VimeoConfiguration(),
                         )
@@ -811,6 +821,29 @@ class CommunityFeatureModel(
                 mutableState.value = mutableState.value.copy(message = "予約枠を保存しました。")
                 refreshBookingDetails(eventId)
             }.onFailure(::showError)
+        }
+    }
+
+    fun selectManagedBookingEvent(eventId: String) {
+        val current = session.state.value
+        val communityId = current.selectedCommunityId ?: return
+        val token = current.authenticationToken ?: return
+        if (state.value.adminAccess?.canReviewMembers != true) return
+        mutableState.value = mutableState.value.copy(
+            selectedManagedBookingEventId = eventId,
+            managedBookingSlots = emptyList(),
+            managedBookingReservations = emptyList(),
+        )
+        viewModelScope.launch {
+            val slots = repository.bookingSlots(communityId, eventId, token).getOrDefault(emptyList())
+            val reservations = repository.bookingReservations(communityId, eventId, token)
+                .getOrDefault(emptyList())
+            if (mutableState.value.selectedManagedBookingEventId == eventId) {
+                mutableState.value = mutableState.value.copy(
+                    managedBookingSlots = slots,
+                    managedBookingReservations = reservations,
+                )
+            }
         }
     }
 
