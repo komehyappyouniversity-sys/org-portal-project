@@ -55,6 +55,17 @@ fun CommunityRoot(model: CommunityFeatureModel) {
     val uriHandler = LocalUriHandler.current
     var selectedVideoId by rememberSaveable { mutableStateOf<String?>(null) }
     val selectedVideo = state.distributedVideos.firstOrNull { it.id == selectedVideoId }
+    var bookingEventId by rememberSaveable { mutableStateOf("") }
+    var bookingEventTitle by rememberSaveable { mutableStateOf("") }
+    var bookingEventDescription by rememberSaveable { mutableStateOf("") }
+    var bookingEventDate by rememberSaveable { mutableStateOf("") }
+    var bookingEventFee by rememberSaveable { mutableStateOf("0") }
+    var bookingEventZoomUrl by rememberSaveable { mutableStateOf("") }
+    var bookingSlotId by rememberSaveable { mutableStateOf("") }
+    var bookingSlotStartAt by rememberSaveable { mutableStateOf("") }
+    var bookingSlotEndAt by rememberSaveable { mutableStateOf("") }
+    var bookingSlotCapacity by rememberSaveable { mutableStateOf("1") }
+    var bookingSlotOpen by rememberSaveable { mutableStateOf(true) }
 
     LaunchedEffect(sessionState.authenticationToken) {
         model.refreshPublicCommunities()
@@ -276,6 +287,117 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                 }
 
                 Text("管理者コンソール")
+                Text("イベント予約の管理")
+                Text("イベントを保存")
+                OutlinedTextField(
+                    value = bookingEventTitle,
+                    onValueChange = { bookingEventTitle = it },
+                    label = { Text("イベント名") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = bookingEventDescription,
+                    onValueChange = { bookingEventDescription = it },
+                    label = { Text("説明") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                )
+                OutlinedTextField(
+                    value = bookingEventDate,
+                    onValueChange = { bookingEventDate = it },
+                    label = { Text("開催日時（例: 2026-08-12T13:00:00Z）") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = bookingEventFee,
+                    onValueChange = { bookingEventFee = it },
+                    label = { Text("料金（円）") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    value = bookingEventZoomUrl,
+                    onValueChange = { bookingEventZoomUrl = it },
+                    label = { Text("Zoom URL（任意）") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = {
+                        model.saveBookingEvent(
+                            bookingEventId,
+                            bookingEventTitle,
+                            bookingEventDescription,
+                            bookingEventDate.ifBlank { null },
+                            bookingEventFee.toIntOrNull() ?: 0,
+                            paymentRequired = (bookingEventFee.toIntOrNull() ?: 0) > 0,
+                            zoomUrl = bookingEventZoomUrl,
+                            isPublished = false,
+                        )
+                    }) { Text("下書き保存") }
+                    Button(onClick = {
+                        model.saveBookingEvent(
+                            bookingEventId,
+                            bookingEventTitle,
+                            bookingEventDescription,
+                            bookingEventDate.ifBlank { null },
+                            bookingEventFee.toIntOrNull() ?: 0,
+                            paymentRequired = (bookingEventFee.toIntOrNull() ?: 0) > 0,
+                            zoomUrl = bookingEventZoomUrl,
+                            isPublished = true,
+                        )
+                    }) { Text("公開して保存") }
+                }
+                state.managedBookingEvents.forEach { event ->
+                    TextButton(onClick = {
+                        bookingEventId = event.id
+                        bookingEventTitle = event.title
+                        bookingEventDescription = event.description
+                        bookingEventDate = event.eventDate.orEmpty()
+                        bookingEventFee = event.feeAmount.toString()
+                        bookingEventZoomUrl = event.zoomUrl.orEmpty()
+                    }) {
+                        Text("${event.title}（${if (event.isPublished) "公開" else "下書き"}）")
+                    }
+                }
+                Text("予約枠を保存")
+                OutlinedTextField(
+                    value = bookingEventId,
+                    onValueChange = { bookingEventId = it },
+                    label = { Text("イベントID（上のイベントを選択）") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = bookingSlotStartAt,
+                    onValueChange = { bookingSlotStartAt = it },
+                    label = { Text("開始日時（例: 2026-08-12T13:00:00Z）") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = bookingSlotEndAt,
+                    onValueChange = { bookingSlotEndAt = it },
+                    label = { Text("終了日時（例: 2026-08-12T14:00:00Z）") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = bookingSlotCapacity,
+                    onValueChange = { bookingSlotCapacity = it },
+                    label = { Text("定員") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+                TextButton(onClick = { bookingSlotOpen = !bookingSlotOpen }) {
+                    Text(if (bookingSlotOpen) "受付中（タップで停止）" else "受付停止中（タップで再開）")
+                }
+                Button(onClick = {
+                    model.saveBookingSlot(
+                        bookingEventId,
+                        bookingSlotId,
+                        bookingSlotStartAt.ifBlank { null },
+                        bookingSlotEndAt.ifBlank { null },
+                        bookingSlotCapacity.toIntOrNull() ?: 0,
+                        bookingSlotOpen,
+                    )
+                }) { Text("予約枠を保存") }
                 if (state.adminAccess?.role == "owner") {
                     Text("複数管理者の設定")
                     OutlinedTextField(

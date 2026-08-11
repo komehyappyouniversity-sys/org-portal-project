@@ -572,6 +572,7 @@ private final class CommunityFeatureModel: ObservableObject {
     @Published private(set) var bookedSlotIDs: Set<String> = []
     @Published private(set) var bookingProcessingSlotID: String?
     @Published private(set) var managedVideos: [DistributedVideo] = []
+    @Published private(set) var managedBookingEvents: [BookingEvent] = []
     @Published private(set) var vimeoLibraryVideos: [DistributedVideo] = []
     @Published private(set) var vimeoFolders: [VimeoFolder] = []
     @Published private(set) var vimeoConfiguration = VimeoConfiguration()
@@ -902,6 +903,7 @@ private final class CommunityFeatureModel: ObservableObject {
             communityMembers = []
             distributedVideos = []
             managedVideos = []
+            managedBookingEvents = []
             vimeoLibraryVideos = []
             vimeoConfiguration = VimeoConfiguration()
             auditLogs = []
@@ -938,6 +940,12 @@ private final class CommunityFeatureModel: ObservableObject {
                     idToken: token
                 )
                 : []
+            managedBookingEvents = access?.canReviewMembers == true
+                ? (try? await repository.adminBookingEvents(
+                    communityId: communityId,
+                    idToken: token
+                )) ?? []
+                : []
             vimeoLibraryVideos = []
             vimeoConfiguration = access?.canReviewMembers == true
                 ? (try? await repository.vimeoConfiguration(
@@ -970,6 +978,7 @@ private final class CommunityFeatureModel: ObservableObject {
             communityMembers = []
             distributedVideos = []
             managedVideos = []
+            managedBookingEvents = []
             vimeoLibraryVideos = []
             vimeoConfiguration = VimeoConfiguration()
             auditLogs = []
@@ -1118,6 +1127,73 @@ private final class CommunityFeatureModel: ObservableObject {
 
     func clearVimeoLibrary() {
         vimeoLibraryVideos = []
+    }
+
+    func saveBookingEvent(
+        eventID: String,
+        title: String,
+        description: String,
+        eventDate: Date?,
+        feeAmount: Int,
+        paymentRequired: Bool,
+        zoomURL: String,
+        isPublished: Bool
+    ) {
+        guard let communityID = session.selectedCommunityId,
+              let token = session.authenticationToken,
+              adminAccess?.canReviewMembers == true else { return }
+        Task {
+            do {
+                try await repository.saveBookingEvent(
+                    communityId: communityID,
+                    eventId: eventID,
+                    title: title,
+                    description: description,
+                    eventDate: eventDate,
+                    feeAmount: feeAmount,
+                    paymentRequired: paymentRequired,
+                    zoomURL: zoomURL,
+                    isPublished: isPublished,
+                    idToken: token
+                )
+                message = "イベントを保存しました。"
+                await refreshManagement()
+                await refreshBookingEvents()
+            } catch {
+                message = "イベントを保存できませんでした: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func saveBookingSlot(
+        eventID: String,
+        slotID: String,
+        startAt: Date?,
+        endAt: Date?,
+        capacity: Int,
+        isOpen: Bool
+    ) {
+        guard let communityID = session.selectedCommunityId,
+              let token = session.authenticationToken,
+              adminAccess?.canReviewMembers == true else { return }
+        Task {
+            do {
+                try await repository.saveBookingSlot(
+                    communityId: communityID,
+                    eventId: eventID,
+                    slotId: slotID,
+                    startAt: startAt,
+                    endAt: endAt,
+                    capacity: capacity,
+                    isOpen: isOpen,
+                    idToken: token
+                )
+                message = "予約枠を保存しました。"
+                await refreshBookingDetails(eventID: eventID)
+            } catch {
+                message = "予約枠を保存できませんでした: \(error.localizedDescription)"
+            }
+        }
     }
 
     func saveCommunityVideos(_ videos: [DistributedVideo], isPublished: Bool) {
@@ -1750,6 +1826,17 @@ private struct CommunityRootView: View {
     @ObservedObject var model: CommunityFeatureModel
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var newAdminUserId = ""
+    @State private var bookingEventID = ""
+    @State private var bookingEventTitle = ""
+    @State private var bookingEventDescription = ""
+    @State private var bookingEventDate = Date()
+    @State private var bookingEventFee = "0"
+    @State private var bookingEventZoomURL = ""
+    @State private var bookingSlotID = ""
+    @State private var bookingSlotStartAt = Date()
+    @State private var bookingSlotEndAt = Date().addingTimeInterval(3_600)
+    @State private var bookingSlotCapacity = "1"
+    @State private var bookingSlotOpen = true
     @State private var videoMemoDrafts: [String: String] = [:]
     @State private var videoMemoEditDrafts: [String: String] = [:]
     @State private var editingVideoMemoIDs: Set<String> = []
@@ -1995,6 +2082,79 @@ private struct CommunityRootView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             }
             Text("管理者コンソール").font(.title3.bold())
+            Text("イベント予約の管理").font(.headline)
+            TextField("イベント名", text: $bookingEventTitle)
+                .textFieldStyle(.roundedBorder)
+            TextField("説明", text: $bookingEventDescription, axis: .vertical)
+                .textFieldStyle(.roundedBorder)
+                .lineLimit(2...4)
+            DatePicker("開催日時", selection: $bookingEventDate)
+            TextField("料金（円）", text: $bookingEventFee)
+                .textFieldStyle(.roundedBorder)
+                .keyboardType(.numberPad)
+            TextField("Zoom URL（任意）", text: $bookingEventZoomURL)
+                .textFieldStyle(.roundedBorder)
+                .textInputAutocapitalization(.never)
+                .keyboardType(.URL)
+            HStack {
+                Button("下書き保存") {
+                    model.saveBookingEvent(
+                        eventID: bookingEventID,
+                        title: bookingEventTitle,
+                        description: bookingEventDescription,
+                        eventDate: bookingEventDate,
+                        feeAmount: Int(bookingEventFee) ?? 0,
+                        paymentRequired: (Int(bookingEventFee) ?? 0) > 0,
+                        zoomURL: bookingEventZoomURL,
+                        isPublished: false
+                    )
+                }
+                .buttonStyle(.bordered)
+                Button("公開して保存") {
+                    model.saveBookingEvent(
+                        eventID: bookingEventID,
+                        title: bookingEventTitle,
+                        description: bookingEventDescription,
+                        eventDate: bookingEventDate,
+                        feeAmount: Int(bookingEventFee) ?? 0,
+                        paymentRequired: (Int(bookingEventFee) ?? 0) > 0,
+                        zoomURL: bookingEventZoomURL,
+                        isPublished: true
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            ForEach(model.managedBookingEvents) { event in
+                Button("\(event.title)（\(event.isPublished ? "公開" : "下書き")）") {
+                    bookingEventID = event.id
+                    bookingEventTitle = event.title
+                    bookingEventDescription = event.description
+                    bookingEventDate = event.eventDate ?? Date()
+                    bookingEventFee = String(event.feeAmount)
+                    bookingEventZoomURL = event.zoomURL?.absoluteString ?? ""
+                }
+                .buttonStyle(.plain)
+            }
+            Text("予約枠を保存").font(.headline)
+            TextField("イベントID（上のイベントを選択）", text: $bookingEventID)
+                .textFieldStyle(.roundedBorder)
+            DatePicker("開始日時", selection: $bookingSlotStartAt)
+            DatePicker("終了日時", selection: $bookingSlotEndAt)
+            TextField("定員", text: $bookingSlotCapacity)
+                .textFieldStyle(.roundedBorder)
+                .keyboardType(.numberPad)
+            Toggle("予約受付を開始する", isOn: $bookingSlotOpen)
+            Button("予約枠を保存") {
+                model.saveBookingSlot(
+                    eventID: bookingEventID,
+                    slotID: bookingSlotID,
+                    startAt: bookingSlotStartAt,
+                    endAt: bookingSlotEndAt,
+                    capacity: Int(bookingSlotCapacity) ?? 0,
+                    isOpen: bookingSlotOpen
+                )
+            }
+            .buttonStyle(.borderedProminent)
             if model.isOwner {
                 Text("複数管理者の設定")
                 TextField("氏名・メールアドレス・UIDで検索", text: $model.adminQuery)

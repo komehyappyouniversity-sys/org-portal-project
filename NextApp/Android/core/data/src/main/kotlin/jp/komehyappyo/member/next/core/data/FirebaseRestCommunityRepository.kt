@@ -69,11 +69,37 @@ interface CommunityRepository {
         communityId: String,
         idToken: String,
     ): Result<List<BookingEvent>>
+    suspend fun adminBookingEvents(
+        communityId: String,
+        idToken: String,
+    ): Result<List<BookingEvent>>
+    suspend fun saveBookingEvent(
+        communityId: String,
+        eventId: String,
+        title: String,
+        description: String,
+        eventDate: String?,
+        feeAmount: Int,
+        paymentRequired: Boolean,
+        zoomUrl: String,
+        isPublished: Boolean,
+        idToken: String,
+    ): Result<Unit>
     suspend fun bookingSlots(
         communityId: String,
         eventId: String,
         idToken: String,
     ): Result<List<BookingSlot>>
+    suspend fun saveBookingSlot(
+        communityId: String,
+        eventId: String,
+        slotId: String,
+        startAt: String?,
+        endAt: String?,
+        capacity: Int,
+        isOpen: Boolean,
+        idToken: String,
+    ): Result<Unit>
     suspend fun bookedSlotIds(
         communityId: String,
         eventId: String,
@@ -635,6 +661,72 @@ class FirebaseRestCommunityRepository(
         }.sortedBy { it.eventDate.orEmpty() }
     }
 
+    override suspend fun adminBookingEvents(
+        communityId: String,
+        idToken: String,
+    ): Result<List<BookingEvent>> = runCatching {
+        val response = request(
+            "documents/organizations/$communityId/bookingEvents?pageSize=1000",
+            "GET",
+            idToken,
+            null,
+        ) as JSONObject
+        val documents = response.optJSONArray("documents") ?: JSONArray()
+        buildList {
+            for (index in 0 until documents.length()) {
+                val document = documents.optJSONObject(index) ?: continue
+                val fields = document.optJSONObject("fields") ?: continue
+                add(
+                    BookingEvent(
+                        id = document.optString("name").substringAfterLast("/"),
+                        communityId = communityId,
+                        title = string(fields, "title") ?: "イベント",
+                        description = string(fields, "description").orEmpty(),
+                        eventDate = timestamp(fields, "eventDate"),
+                        feeAmount = number(fields, "feeAmount")?.toInt() ?: 0,
+                        paymentRequired = boolean(fields, "paymentRequired") ?: false,
+                        zoomUrl = string(fields, "zoomURL") ?: string(fields, "zoomUrl"),
+                        isPublished = boolean(fields, "isPublished") ?: false,
+                    ),
+                )
+            }
+        }.sortedBy { it.eventDate.orEmpty() }
+    }
+
+    override suspend fun saveBookingEvent(
+        communityId: String,
+        eventId: String,
+        title: String,
+        description: String,
+        eventDate: String?,
+        feeAmount: Int,
+        paymentRequired: Boolean,
+        zoomUrl: String,
+        isPublished: Boolean,
+        idToken: String,
+    ): Result<Unit> = runCatching {
+        require(title.trim().isNotEmpty()) { "イベント名を入力してください。" }
+        require(feeAmount >= 0) { "料金は0円以上で入力してください。" }
+        val fields = JSONObject()
+            .put("title", stringValue(title.trim()))
+            .put("description", stringValue(description.trim()))
+            .put("feeAmount", JSONObject().put("integerValue", feeAmount.toString()))
+            .put("paymentRequired", booleanValue(paymentRequired))
+            .put("zoomURL", stringValue(zoomUrl.trim()))
+            .put("isPublished", booleanValue(isPublished))
+            .put("updatedAt", timestampValue(Instant.now().toString()))
+        eventDate?.trim()?.takeIf(String::isNotEmpty)?.let {
+            fields.put("eventDate", timestampValue(it))
+        }
+        request(
+            "documents/organizations/$communityId/bookingEvents/${eventId.trim().ifEmpty { java.util.UUID.randomUUID().toString() }}",
+            "PATCH",
+            idToken,
+            JSONObject().put("fields", fields),
+        )
+        Unit
+    }
+
     override suspend fun bookingSlots(
         communityId: String,
         eventId: String,
@@ -665,6 +757,37 @@ class FirebaseRestCommunityRepository(
                 )
             }
         }.sortedBy { it.startAt.orEmpty() }
+    }
+
+    override suspend fun saveBookingSlot(
+        communityId: String,
+        eventId: String,
+        slotId: String,
+        startAt: String?,
+        endAt: String?,
+        capacity: Int,
+        isOpen: Boolean,
+        idToken: String,
+    ): Result<Unit> = runCatching {
+        require(eventId.isNotBlank()) { "イベントを選択してください。" }
+        require(capacity > 0) { "定員は1名以上で入力してください。" }
+        val fields = JSONObject()
+            .put("capacity", JSONObject().put("integerValue", capacity.toString()))
+            .put("isOpen", booleanValue(isOpen))
+            .put("updatedAt", timestampValue(Instant.now().toString()))
+        startAt?.trim()?.takeIf(String::isNotEmpty)?.let {
+            fields.put("startAt", timestampValue(it))
+        }
+        endAt?.trim()?.takeIf(String::isNotEmpty)?.let {
+            fields.put("endAt", timestampValue(it))
+        }
+        request(
+            "documents/organizations/$communityId/bookingEvents/$eventId/slots/${slotId.trim().ifEmpty { java.util.UUID.randomUUID().toString() }}",
+            "PATCH",
+            idToken,
+            JSONObject().put("fields", fields),
+        )
+        Unit
     }
 
     override suspend fun bookedSlotIds(
