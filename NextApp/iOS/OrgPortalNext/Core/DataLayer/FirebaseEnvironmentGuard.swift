@@ -751,11 +751,37 @@ public protocol CommunityRepository: Sendable {
         communityId: String,
         idToken: String
     ) async throws -> [BookingEvent]
+    func adminBookingEvents(
+        communityId: String,
+        idToken: String
+    ) async throws -> [BookingEvent]
+    func saveBookingEvent(
+        communityId: String,
+        eventId: String,
+        title: String,
+        description: String,
+        eventDate: Date?,
+        feeAmount: Int,
+        paymentRequired: Bool,
+        zoomURL: String,
+        isPublished: Bool,
+        idToken: String
+    ) async throws
     func bookingSlots(
         communityId: String,
         eventId: String,
         idToken: String
     ) async throws -> [BookingSlot]
+    func saveBookingSlot(
+        communityId: String,
+        eventId: String,
+        slotId: String,
+        startAt: Date?,
+        endAt: Date?,
+        capacity: Int,
+        isOpen: Bool,
+        idToken: String
+    ) async throws
     func bookedSlotIDs(
         communityId: String,
         eventId: String,
@@ -1311,6 +1337,71 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
         }.sorted { ($0.eventDate ?? .distantFuture) < ($1.eventDate ?? .distantFuture) }
     }
 
+    public func adminBookingEvents(
+        communityId: String,
+        idToken: String
+    ) async throws -> [BookingEvent] {
+        let response = try await requestJSON(
+            path: "documents/organizations/\(communityId)/bookingEvents?pageSize=1000",
+            method: "GET",
+            idToken: idToken
+        ) as? [String: Any]
+        let documents = response?["documents"] as? [[String: Any]] ?? []
+        return documents.compactMap { document in
+            guard let fields = document["fields"] as? [String: Any] else { return nil }
+            let id = (document["name"] as? String)?.split(separator: "/").last.map(String.init) ?? ""
+            guard !id.isEmpty else { return nil }
+            return BookingEvent(
+                id: id,
+                communityId: communityId,
+                title: string(fields, "title") ?? "イベント",
+                description: string(fields, "description") ?? "",
+                eventDate: timestamp(fields, "eventDate"),
+                feeAmount: Int(number(fields, "feeAmount") ?? 0),
+                paymentRequired: bool(fields, "paymentRequired") ?? false,
+                zoomURL: (string(fields, "zoomURL") ?? string(fields, "zoomUrl"))
+                    .flatMap(URL.init(string:)),
+                isPublished: bool(fields, "isPublished") ?? false
+            )
+        }.sorted { ($0.eventDate ?? .distantFuture) < ($1.eventDate ?? .distantFuture) }
+    }
+
+    public func saveBookingEvent(
+        communityId: String,
+        eventId: String,
+        title: String,
+        description: String,
+        eventDate: Date?,
+        feeAmount: Int,
+        paymentRequired: Bool,
+        zoomURL: String,
+        isPublished: Bool,
+        idToken: String
+    ) async throws {
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedTitle.isEmpty, feeAmount >= 0 else {
+            throw CommunityRepositoryError.invalidResponse
+        }
+        var fields: [String: Any] = [
+            "title": stringValue(normalizedTitle),
+            "description": stringValue(description.trimmingCharacters(in: .whitespacesAndNewlines)),
+            "feeAmount": ["integerValue": String(feeAmount)],
+            "paymentRequired": ["booleanValue": paymentRequired],
+            "zoomURL": stringValue(zoomURL.trimmingCharacters(in: .whitespacesAndNewlines)),
+            "isPublished": ["booleanValue": isPublished],
+            "updatedAt": ["timestampValue": ISO8601DateFormatter().string(from: Date())]
+        ]
+        if let eventDate {
+            fields["eventDate"] = ["timestampValue": ISO8601DateFormatter().string(from: eventDate)]
+        }
+        _ = try await requestJSON(
+            path: "documents/organizations/\(communityId)/bookingEvents/\(eventId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? UUID().uuidString : eventId)",
+            method: "PATCH",
+            idToken: idToken,
+            body: ["fields": fields]
+        )
+    }
+
     public func bookingSlots(
         communityId: String,
         eventId: String,
@@ -1337,6 +1428,38 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
                 isOpen: bool(fields, "isOpen") ?? true
             )
         }.sorted { ($0.startAt ?? .distantFuture) < ($1.startAt ?? .distantFuture) }
+    }
+
+    public func saveBookingSlot(
+        communityId: String,
+        eventId: String,
+        slotId: String,
+        startAt: Date?,
+        endAt: Date?,
+        capacity: Int,
+        isOpen: Bool,
+        idToken: String
+    ) async throws {
+        guard !eventId.isEmpty, capacity > 0 else {
+            throw CommunityRepositoryError.invalidResponse
+        }
+        var fields: [String: Any] = [
+            "capacity": ["integerValue": String(capacity)],
+            "isOpen": ["booleanValue": isOpen],
+            "updatedAt": ["timestampValue": ISO8601DateFormatter().string(from: Date())]
+        ]
+        if let startAt {
+            fields["startAt"] = ["timestampValue": ISO8601DateFormatter().string(from: startAt)]
+        }
+        if let endAt {
+            fields["endAt"] = ["timestampValue": ISO8601DateFormatter().string(from: endAt)]
+        }
+        _ = try await requestJSON(
+            path: "documents/organizations/\(communityId)/bookingEvents/\(eventId)/slots/\(slotId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? UUID().uuidString : slotId)",
+            method: "PATCH",
+            idToken: idToken,
+            body: ["fields": fields]
+        )
     }
 
     public func bookedSlotIDs(
