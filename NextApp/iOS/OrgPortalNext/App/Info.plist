@@ -36,9 +36,11 @@
     <string>録音した会議音声を端末内で文字起こしするために使用します。</string>
     <key>UILaunchScreen</key>
     <dict/>
-    <key>UISupportedInterfaceOrientations</key>
-    <array>
-        <string>UIInterfaceOrientationPortrait</string>
-    </array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+	        <string>UIInterfaceOrientationPortrait</string>
+	        <string>UIInterfaceOrientationLandscapeLeft</string>
+	        <string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
 </dict>
 </plist>

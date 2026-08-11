@@ -1,9 +1,120 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // タスク1〜3ではFirebaseへ書き込まない。後続タスクでEmulator専用ルールを追加する。
-    match /{document=**} {
-      allow read, write: if false;
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function hasActiveAdminRecord(communityId, userId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/organizations/$(communityId)/admins/$(userId))
+        && get(/databases/$(database)/documents/organizations/$(communityId)/admins/$(userId)).data.isActive == true;
+    }
+
+    function canReviewMembers(communityId, userId) {
+      return hasActiveAdminRecord(communityId, userId)
+        && (
+          get(/databases/$(database)/documents/organizations/$(communityId)/admins/$(userId)).data.role == 'owner'
+          || !get(/databases/$(database)/documents/organizations/$(communityId)/admins/$(userId)).data.keys().hasAny(['permissions'])
+          || get(/databases/$(database)/documents/organizations/$(communityId)/admins/$(userId)).data.permissions.hasAny(['memberReview', 'membersReview'])
+        );
+    }
+
+    function canManageAdministrators(communityId, userId) {
+      return hasActiveAdminRecord(communityId, userId)
+        && get(/databases/$(database)/documents/organizations/$(communityId)/admins/$(userId)).data.role == 'owner';
+    }
+
+    function isApprovedMember(communityId, userId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/organizations/$(communityId)/members/$(userId))
+        && get(/databases/$(database)/documents/organizations/$(communityId)/members/$(userId)).data.status == 'approved';
+    }
+
+    function canReadCommunity(communityId) {
+      return signedIn()
+        && (
+          isApprovedMember(communityId, request.auth.uid)
+          || hasActiveAdminRecord(communityId, request.auth.uid)
+        );
+    }
+
+    match /organizations/{communityId} {
+      // Organization metadata is visible to authenticated users so that the
+      // community directory and community-code lookup can work.
+      allow read: if signedIn();
+      allow write: if hasActiveAdminRecord(communityId, request.auth.uid);
+
+      match /members/{userId} {
+        // The collection-group query used by both clients is restricted to the
+        // caller's own uid. Administrators may list pending applications.
+        allow read: if (
+          signedIn() && resource.data.uid == request.auth.uid
+        ) || canReviewMembers(communityId, request.auth.uid);
+
+        // A member can submit or refresh only their own pending application.
+        allow create: if isSelf(userId)
+          && request.resource.data.uid == userId
+          && request.resource.data.userId == userId
+          && request.resource.data.status == 'pending';
+
+        // A member cannot downgrade an approved application. Review decisions
+        // are reserved for an active administrator with member-review access.
+        allow update: if canReviewMembers(communityId, request.auth.uid)
+          || (
+            isSelf(userId)
+            && resource.data.status != 'approved'
+            && request.resource.data.uid == userId
+            && request.resource.data.userId == userId
+            && request.resource.data.status == 'pending'
+          );
+
+        allow delete: if canReviewMembers(communityId, request.auth.uid);
+      }
+
+      match /admins/{userId} {
+        allow read: if isSelf(userId)
+          || hasActiveAdminRecord(communityId, request.auth.uid);
+        allow write: if canManageAdministrators(communityId, request.auth.uid);
+      }
+
+      match /videoQuestions/{questionId} {
+        allow read: if (
+          canReadCommunity(communityId)
+          && resource.data.memberUid == request.auth.uid
+        ) || hasActiveAdminRecord(communityId, request.auth.uid);
+        allow create: if isApprovedMember(communityId, request.auth.uid)
+          && request.resource.data.memberUid == request.auth.uid
+          && request.resource.data.videoId is string
+          && request.resource.data.questionText is string;
+        allow update, delete: if hasActiveAdminRecord(communityId, request.auth.uid);
+      }
+
+      match /auditLogs/{auditId} {
+        allow read, write: if hasActiveAdminRecord(communityId, request.auth.uid);
+      }
+
+      // Community content is available only to approved members and active
+      // administrators. This covers the existing organization subcollections
+      // without granting unauthenticated or pending-member access.
+      match /{document=**} {
+        allow read: if canReadCommunity(communityId);
+        allow write: if hasActiveAdminRecord(communityId, request.auth.uid);
+      }
+    }
+
+    match /memberPrivate/{userId}/{document=**} {
+      allow read, write: if isSelf(userId);
+    }
+
+    match /sharedManuals/{documentId} {
+      allow read: if signedIn();
+      allow write: if false;
     }
   }
 }

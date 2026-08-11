@@ -1,6 +1,7 @@
 package jp.komehyappyo.member.next
 
 import android.Manifest
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
@@ -17,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.fragment.app.FragmentActivity
 import jp.komehyappyo.member.next.core.data.FirebaseRestAnnouncementRepository
@@ -24,7 +26,6 @@ import jp.komehyappyo.member.next.core.data.FirebaseRestPostRepository
 import jp.komehyappyo.member.next.core.data.FirebaseEnvironmentGuard
 import jp.komehyappyo.member.next.core.data.FirebaseRestAccountAuthRepository
 import jp.komehyappyo.member.next.core.data.FirebaseRestCommunityRepository
-import jp.komehyappyo.member.next.core.data.FirebaseRestVideoQuestionRepository
 import jp.komehyappyo.member.next.core.data.AppBackupService
 import jp.komehyappyo.member.next.core.data.LocalDiaryPhotoStore
 import jp.komehyappyo.member.next.core.data.OrgPortalDatabase
@@ -36,7 +37,6 @@ import jp.komehyappyo.member.next.core.data.RoomMeetingMinutesRepository
 import jp.komehyappyo.member.next.core.data.RoomSnsCustomLinkRepository
 import jp.komehyappyo.member.next.core.data.RoomFavoriteBookmarkRepository
 import jp.komehyappyo.member.next.core.data.RoomFriendExchangeRepository
-import jp.komehyappyo.member.next.core.data.RoomPersonalVideoRepository
 import jp.komehyappyo.member.next.core.designsystem.OrgPortalTheme
 import jp.komehyappyo.member.next.core.navigation.AppShell
 import jp.komehyappyo.member.next.core.notifications.NotificationService
@@ -51,14 +51,13 @@ import jp.komehyappyo.member.next.feature.tools.MeetingRecordingService
 import jp.komehyappyo.member.next.feature.tools.SnsPostingAssistantFeatureModel
 import jp.komehyappyo.member.next.feature.tools.FavoriteBookmarkFeatureModel
 import jp.komehyappyo.member.next.feature.tools.FriendExchangeFeatureModel
-import jp.komehyappyo.member.next.feature.tools.PersonalVideoFeatureModel
-import jp.komehyappyo.member.next.feature.tools.VideoQuestionFeatureModel
 import jp.komehyappyo.member.next.core.session.AppSession
 import jp.komehyappyo.member.next.feature.account.AccountFeatureModel
 import jp.komehyappyo.member.next.feature.account.AccountRoot
 import jp.komehyappyo.member.next.feature.account.BiometricCredentialStore
 import jp.komehyappyo.member.next.feature.community.CommunityFeatureModel
 import jp.komehyappyo.member.next.feature.community.CommunityRoot
+import jp.komehyappyo.member.next.feature.community.VimeoMemoStore
 import jp.komehyappyo.member.next.feature.messages.AnnouncementFeatureModel
 import jp.komehyappyo.member.next.feature.messages.AnnouncementRoot
 import jp.komehyappyo.member.next.feature.messages.PostFeatureModel
@@ -103,6 +102,7 @@ class MainActivity : FragmentActivity() {
             CommunityFeatureModel.Factory(
                 FirebaseRestCommunityRepository(BuildConfig.FIREBASE_PROJECT_ID),
                 appSession,
+                VimeoMemoStore(applicationContext),
             )
         }
         val communityModel: CommunityFeatureModel = viewModel(factory = communityFactory)
@@ -199,27 +199,6 @@ class MainActivity : FragmentActivity() {
         val friendExchangeModel: FriendExchangeFeatureModel = viewModel(
             factory = friendExchangeFactory,
         )
-        val personalVideoRepository = remember {
-            RoomPersonalVideoRepository(
-                videoDao = database.personalVideoDao(),
-                memoDao = database.videoMemoDao(),
-            )
-        }
-        val personalVideoFactory = remember {
-            PersonalVideoFeatureModel.Factory(personalVideoRepository)
-        }
-        val personalVideoModel: PersonalVideoFeatureModel = viewModel(
-            factory = personalVideoFactory,
-        )
-        val videoQuestionRepository = remember {
-            FirebaseRestVideoQuestionRepository(BuildConfig.FIREBASE_PROJECT_ID)
-        }
-        val videoQuestionFactory = remember {
-            VideoQuestionFeatureModel.Factory(videoQuestionRepository, appSession)
-        }
-        val videoQuestionModel: VideoQuestionFeatureModel = viewModel(
-            factory = videoQuestionFactory,
-        )
         val appBackupFactory = remember {
             AppBackupFeatureModel.Factory(
                 AppBackupService(
@@ -232,7 +211,6 @@ class MainActivity : FragmentActivity() {
                     snsCustomLinkRepository = snsCustomLinkRepository,
                     favoriteBookmarkRepository = favoriteBookmarkRepository,
                     friendExchangeRepository = friendExchangeRepository,
-                    personalVideoRepository = personalVideoRepository,
                 ),
             )
         }
@@ -246,7 +224,6 @@ class MainActivity : FragmentActivity() {
                     cashDistributionModel,
                     meetingMinutesModel,
                     favoriteBookmarkModel,
-                    personalVideoModel,
                     appBackupModel,
                 )
             },
@@ -259,8 +236,6 @@ class MainActivity : FragmentActivity() {
                     snsPostingAssistantModel,
                     favoriteBookmarkModel,
                     friendExchangeModel,
-                    personalVideoModel,
-                    videoQuestionModel,
                 )
             },
             connect = {
@@ -279,14 +254,17 @@ class MainActivity : FragmentActivity() {
         announcementModel: AnnouncementFeatureModel,
     ) {
         var selectedSection by rememberSaveable { mutableIntStateOf(0) }
+        val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
         Column(modifier = Modifier.fillMaxSize()) {
-            TabRow(selectedTabIndex = selectedSection) {
-                listOf("コミュニティ", "投稿", "お知らせ").forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedSection == index,
-                        onClick = { selectedSection = index },
-                        text = { Text(title) },
-                    )
+            if (!isLandscape) {
+                TabRow(selectedTabIndex = selectedSection) {
+                    listOf("コミュニティ", "投稿", "お知らせ").forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedSection == index,
+                            onClick = { selectedSection = index },
+                            text = { Text(title) },
+                        )
+                    }
                 }
             }
             when (selectedSection) {

@@ -34,6 +34,41 @@ data class Community(
     }
 }
 
+data class DistributedVideo(
+    val id: String,
+    val communityId: String,
+    val title: String,
+    val description: String = "",
+    val videoUrl: String? = null,
+    val vimeoVideoId: String,
+    val thumbnailUrl: String? = null,
+    val isPublished: Boolean = false,
+    val isMembersOnly: Boolean = false,
+    val sortOrder: Int = 0,
+)
+
+data class CommunityAuditLog(
+    val id: String,
+    val action: String,
+    val actorUserId: String? = null,
+    val targetUserId: String? = null,
+    val communityId: String,
+    val createdAt: String? = null,
+)
+
+data class VideoQuestion(
+    val id: String,
+    val communityId: String,
+    val memberUid: String,
+    val videoId: String,
+    val videoTitle: String,
+    val playbackSeconds: Double = 0.0,
+    val memoText: String = "",
+    val questionText: String,
+    val answerText: String = "",
+    val createdAt: String? = null,
+)
+
 data class CommunityMembership(
     val id: String,
     val communityId: String,
@@ -112,6 +147,13 @@ data class CommunityAdminAccess(
         const val LEGACY_MEMBER_REVIEW_PERMISSION = "メンバー閲覧・承認"
     }
 }
+
+data class CommunityAdmin(
+    val userId: String,
+    val role: String = "admin",
+    val permissions: Set<String> = emptySet(),
+    val isActive: Boolean = true,
+)
 
 object CommunityCodeParser {
     fun parse(value: String): String? {

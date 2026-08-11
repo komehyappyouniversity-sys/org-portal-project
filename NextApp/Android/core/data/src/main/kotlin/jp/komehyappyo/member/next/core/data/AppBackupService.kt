@@ -27,14 +27,11 @@ data class AppBackupImportSummary(
     val meetingMinutes: Int,
     val snsLinks: Int,
     val favorites: Int,
-    val personalVideos: Int,
-    val personalVideoMemos: Int,
     val friendContacts: Int,
     val friendHistories: Int,
 ) {
     val total: Int
         get() = schedules + diaries + cashDistributions + meetingMinutes + snsLinks + favorites +
-            personalVideos + personalVideoMemos +
             friendContacts + friendHistories
 }
 
@@ -57,12 +54,10 @@ class AppBackupService(
     private val snsCustomLinkRepository: SnsCustomLinkRepository,
     favoriteBookmarkRepository: FavoriteBookmarkRepository,
     private val friendExchangeRepository: FriendExchangeRepository,
-    personalVideoRepository: PersonalVideoRepository,
 ) {
     private val diaryService = DiaryBackupService(diaryRepository, photoStore)
     private val cashService = CashDistributionBackupService(cashDistributionRepository)
     private val favoriteService = FavoriteBookmarkBackupService(favoriteBookmarkRepository)
-    private val personalVideoService = PersonalVideoBackupService(personalVideoRepository)
 
     suspend fun exportData(now: Instant = Instant.now()): AppBackupExportResult {
         var skippedMeetingMinutes = 0
@@ -137,7 +132,6 @@ class AppBackupService(
             .put("diaryBackupBase64", encode(diaryService.exportData(now)))
             .put("cashDistributionBackupBase64", encode(cashService.exportData(now)))
             .put("favoriteBookmarkBackupBase64", encode(favoriteService.exportData(now)))
-            .put("personalVideoBackupBase64", encode(personalVideoService.exportData(now)))
             .put("schedules", schedules)
             .put("meetingMinutes", minutes)
             .put("snsCustomLinks", snsLinks)
@@ -171,27 +165,10 @@ class AppBackupService(
         val diaryData = decode(root.optString("diaryBackupBase64"))
         val cashData = decode(root.optString("cashDistributionBackupBase64"))
         val favoriteData = decode(root.optString("favoriteBookmarkBackupBase64"))
-        val personalData = if (root.has("personalVideoBackupBase64")) {
-            decode(root.optString("personalVideoBackupBase64"))
-        } else {
-            null
-        }
 
         val diaryCount = diaryService.importData(diaryData)
         val cashCount = cashService.importData(cashData)
         val favoriteCount = favoriteService.importData(favoriteData)
-        val personalSummary = if (personalData == null) {
-            PersonalVideoBackupImportSummary(videos = 0, memos = 0)
-        } else {
-            runCatching { personalVideoService.importData(personalData) }
-                .getOrElse { error ->
-                    throw when (error) {
-                        is PersonalVideoBackupException.InvalidFormat -> AppBackupException.InvalidFormat
-                        is PersonalVideoBackupException.UnsupportedVersion -> AppBackupException.UnsupportedVersion
-                        else -> error
-                    }
-                }
-        }
 
         repeat(schedules.length()) { index ->
             val value = schedules.optJSONObject(index)?.optJSONObject("value")
@@ -239,8 +216,6 @@ class AppBackupService(
             meetingMinutes = minutes.length(),
             snsLinks = links.length(),
             favorites = favoriteCount,
-            personalVideos = personalSummary.videos,
-            personalVideoMemos = personalSummary.memos,
             friendContacts = friendContacts.length(),
             friendHistories = friendHistories.length(),
         )

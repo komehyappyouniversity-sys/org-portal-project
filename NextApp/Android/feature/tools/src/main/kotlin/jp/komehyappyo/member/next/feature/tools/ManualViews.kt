@@ -30,7 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import jp.komehyappyo.member.next.core.designsystem.FeatureCard
 
-private data class ManualItem(
+data class ManualItem(
     val id: String,
     val title: String,
     val description: String,
@@ -162,7 +162,7 @@ private fun openUrl(context: Context, url: String) {
     )
 }
 
-private val availableManuals: List<ManualItem> = listOf(
+val availableManuals: List<ManualItem> = listOf(
     ManualItem(
         id = "quick-start",
         title = "1. アカウントと開始の流れ",

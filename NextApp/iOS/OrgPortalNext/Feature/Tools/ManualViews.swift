@@ -48,8 +48,8 @@ public struct ManualListView: View {
                                 selectedManual = manual
                             } label: {
                                 FeatureCard(
-                                    manual.title,
-                                    subtitle: manual.description,
+                                    LocalizedStringKey(manual.title),
+                                    subtitle: LocalizedStringKey(manual.description),
                                     systemImage: "book"
                                 )
                             }
@@ -90,7 +90,7 @@ public struct ManualDetailView: View {
                         } label: {
                             FeatureCard(
                                 "外部参照を開く",
-                                subtitle: externalURL,
+                                subtitle: LocalizedStringKey(externalURL),
                                 systemImage: "arrow.up.right.square"
                             )
                         }
@@ -109,7 +109,7 @@ public struct ManualDetailView: View {
     }
 }
 
-private let availableManuals: [AppManual] = [
+public let availableManuals: [AppManual] = [
     AppManual(
         id: "quick-start",
         title: "1. アカウントと開始の流れ",

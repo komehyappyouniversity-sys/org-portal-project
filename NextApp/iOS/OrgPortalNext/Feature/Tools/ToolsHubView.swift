@@ -12,9 +12,6 @@ public struct ToolsHubView: View {
         case favorites
         case friends
         case manual
-        case youtubeSearch
-        case personalVideos
-        case videoQuestions
 
         var id: String {
             switch self {
@@ -26,10 +23,8 @@ public struct ToolsHubView: View {
             case .favorites: "favorites"
             case .friends: "friends"
             case .manual: "manual"
-            case .youtubeSearch: "youtubeSearch"
-            case .personalVideos: "personalVideos"
-            case .videoQuestions: "videoQuestions"
         }
+    }
     }
 
     @ObservedObject private var scheduleModel: ScheduleFeatureModel
@@ -39,8 +34,6 @@ public struct ToolsHubView: View {
     @ObservedObject private var snsPostingAssistantModel: SnsPostingAssistantFeatureModel
     @ObservedObject private var favoriteBookmarkModel: FavoriteBookmarkFeatureModel
     @ObservedObject private var friendExchangeModel: FriendExchangeFeatureModel
-    @ObservedObject private var personalVideoModel: PersonalVideoFeatureModel
-    @ObservedObject private var videoQuestionModel: VideoQuestionFeatureModel
     @State private var destination: Destination?
 
     public init(
@@ -50,9 +43,7 @@ public struct ToolsHubView: View {
         meetingMinutesModel: MeetingMinutesFeatureModel,
         snsPostingAssistantModel: SnsPostingAssistantFeatureModel,
         favoriteBookmarkModel: FavoriteBookmarkFeatureModel,
-        friendExchangeModel: FriendExchangeFeatureModel,
-        personalVideoModel: PersonalVideoFeatureModel,
-        videoQuestionModel: VideoQuestionFeatureModel
+        friendExchangeModel: FriendExchangeFeatureModel
     ) {
         self.scheduleModel = scheduleModel
         self.diaryModel = diaryModel
@@ -61,8 +52,6 @@ public struct ToolsHubView: View {
         self.snsPostingAssistantModel = snsPostingAssistantModel
         self.favoriteBookmarkModel = favoriteBookmarkModel
         self.friendExchangeModel = friendExchangeModel
-        self.personalVideoModel = personalVideoModel
-        self.videoQuestionModel = videoQuestionModel
     }
 
     public var body: some View {
@@ -129,16 +118,6 @@ public struct ToolsHubView: View {
                 }
                 .buttonStyle(.plain)
                 Button {
-                    destination = .personalVideos
-                } label: {
-                    FeatureCard(
-                        "YouTube動画メモ",
-                        subtitle: "タイトル・URL・再生位置メモを端末内で管理します。",
-                        systemImage: "play.rectangle"
-                    )
-                }
-                .buttonStyle(.plain)
-                Button {
                     destination = .friends
                 } label: {
                     FeatureCard(
@@ -155,26 +134,6 @@ public struct ToolsHubView: View {
                         "使い方マニュアル",
                         subtitle: "アプリの主要機能をすばやく確認できます。",
                         systemImage: "book.closed"
-                    )
-                }
-                .buttonStyle(.plain)
-                Button {
-                    destination = .youtubeSearch
-                } label: {
-                    FeatureCard(
-                        "YouTube検索・登録",
-                        subtitle: "キーワード検索からYouTubeを開き、動画URLを保存できます。",
-                        systemImage: "magnifyingglass"
-                    )
-                }
-                .buttonStyle(.plain)
-                Button {
-                    destination = .videoQuestions
-                } label: {
-                    FeatureCard(
-                        "動画質問",
-                        subtitle: "動画の質問を投稿し、回答を確認できます。",
-                        systemImage: "bubble.left.and.bubble.right"
                     )
                 }
                 .buttonStyle(.plain)
@@ -215,206 +174,11 @@ public struct ToolsHubView: View {
                     FriendExchangeRootView(model: friendExchangeModel)
                 case .manual:
                     ManualListView()
-                case .youtubeSearch:
-                    YoutubeSearchView()
-                case .personalVideos:
-                    PersonalVideosView(model: personalVideoModel)
-                case .videoQuestions:
-                    VideoQuestionsView(model: videoQuestionModel)
                 }
             }
         }
     }
 }
-
-}
-
-private struct YoutubeSearchView: View {
-    @State private var keyword = ""
-    @Environment(\.openURL) private var openURL
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("YouTube検索") {
-                    TextField("検索ワード", text: $keyword)
-                    Button {
-                        openYouTubeSearch()
-                    } label: {
-                        Label("YouTubeで検索", systemImage: "magnifyingglass")
-                    }
-                    .disabled(keyword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-
-                Section("使い方") {
-                    Text("検索結果から開いた動画URLを『お気に入り』画面で登録できます。")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .navigationTitle("YouTube検索・登録")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-
-    private func openYouTubeSearch() {
-        let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://www.youtube.com/results?search_query=\(encoded)") else {
-            return
-        }
-        openURL(url)
-    }
-}
-
-private struct VideoQuestionsView: View {
-    @ObservedObject private var model: VideoQuestionFeatureModel
-    @State private var videoId = ""
-    @State private var videoTitle = ""
-    @State private var note = ""
-    @State private var questionText = ""
-    @State private var playbackSeconds = "0"
-
-    init(model: VideoQuestionFeatureModel) {
-        self.model = model
-    }
-
-    var body: some View {
-        NavigationStack {
-            Group {
-                if model.isLoading && model.questions.isEmpty {
-                    LoadingState()
-                } else if model.questions.isEmpty {
-                    VStack(spacing: 12) {
-                        EmptyState("まだ質問はありません", systemImage: "bubble.left.and.exclamationmark.bubble.right")
-                        Text("動画IDと質問内容を入力して送信してください。")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding()
-                } else {
-                    List {
-                        ForEach(model.questions) { question in
-                            Section {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    HStack {
-                                        Text(question.videoTitle)
-                                            .font(.headline)
-                                        Spacer()
-                                        Text(question.status == .unanswered ? "未回答" : "回答済")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Text(question.questionText)
-                                        .font(.body)
-                                    if !question.noteText.isEmpty {
-                                        Text(question.noteText)
-                                            .font(.callout)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Text("回答: \(question.answerText.isEmpty ? "（まだありません）" : question.answerText)")
-                                        .font(.body)
-                                        .foregroundStyle(.secondary)
-                                }
-                            } header: {
-                                Text(formatted(question.createdAt))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .listStyle(.insetGrouped)
-                }
-            }
-            .navigationTitle("動画質問")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("更新") {
-                        Task { await model.load() }
-                    }
-                }
-            }
-            .task { await model.load() }
-        }
-        .safeAreaInset(edge: .bottom) {
-            VStack(spacing: 10) {
-                TextField("動画ID（YouTube ID など）", text: $videoId)
-                    .textFieldStyle(.roundedBorder)
-                TextField("タイトル", text: $videoTitle)
-                    .textFieldStyle(.roundedBorder)
-                TextField("メモ（任意）", text: $note)
-                    .textFieldStyle(.roundedBorder)
-                TextField("再生位置（秒）", text: $playbackSeconds)
-                    .keyboardType(.numberPad)
-                    .textFieldStyle(.roundedBorder)
-                TextEditor(text: $questionText)
-                    .frame(minHeight: 90)
-                    .scrollContentBackground(.hidden)
-                    .padding(6)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(.secondary.opacity(0.4))
-                    )
-                if let message = model.message {
-                    Text(message)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if model.isSaving {
-                    ProgressView()
-                }
-                Button("送信") {
-                    Task {
-                        await model.sendQuestion(
-                            videoId: videoId,
-                            videoTitle: videoTitle,
-                            noteText: note,
-                            questionText: questionText,
-                            playbackSecondsText: playbackSeconds
-                        )
-                        videoId = ""
-                        videoTitle = ""
-                        note = ""
-                        questionText = ""
-                        playbackSeconds = "0"
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(model.cannotSend)
-            }
-            .padding()
-            .background(.ultraThinMaterial)
-        }
-        .alert(
-            "お知らせ",
-            isPresented: Binding(
-                get: { model.notice != nil },
-                set: { if !$0 { model.clearNotice() } }
-            )
-        ) {
-            Button("閉じる") { model.clearNotice() }
-        } message: {
-            Text(model.notice ?? "")
-        }
-        .alert(
-            "エラー",
-            isPresented: Binding(
-                get: { model.errorMessage != nil },
-                set: { if !$0 { model.clearError() } }
-            )
-        ) {
-            Button("閉じる") { model.clearError() }
-        } message: {
-            Text(model.errorMessage ?? "")
-        }
-    }
-
-    private func formatted(_ date: Date) -> String {
-        date.formatted(date: .abbreviated, time: .shortened)
-    }
-}
-
 private struct FriendExchangeRootView: View {
     @ObservedObject var model: FriendExchangeFeatureModel
     @State private var editingContact: FriendContact?
@@ -683,7 +447,9 @@ private struct FriendHistoryEditor: View {
                 if history != nil {
                     Button("この履歴を削除", role: .destructive) { confirmsDelete = true }
                 }
+
             }
+
             .navigationTitle(history == nil ? "交流履歴を追加" : "交流履歴を編集")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -720,4 +486,5 @@ private struct FriendHistoryEditor: View {
             }
         }
     }
+
 }

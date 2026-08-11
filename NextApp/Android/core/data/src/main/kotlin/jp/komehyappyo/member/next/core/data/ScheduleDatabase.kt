@@ -27,8 +27,6 @@ import jp.komehyappyo.member.next.core.model.Schedule
 import jp.komehyappyo.member.next.core.model.ScheduleCategory
 import jp.komehyappyo.member.next.core.model.ScheduleTimeOfDay
 import jp.komehyappyo.member.next.core.model.SnsCustomLink
-import jp.komehyappyo.member.next.core.model.VideoMemo
-import jp.komehyappyo.member.next.core.model.PersonalVideo
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.Instant
@@ -116,36 +114,6 @@ data class FavoriteBookmarkEntity(
     val category: String,
     val secondaryCategory: String,
     val tertiaryCategory: String,
-    val createdAtEpochMillis: Long,
-    val updatedAtEpochMillis: Long,
-)
-
-@Entity(tableName = "personal_videos")
-data class PersonalVideoEntity(
-    @PrimaryKey val id: String,
-    val userId: String,
-    val providerVideoId: String,
-    val title: String,
-    val originalUrl: String,
-    val note: String,
-    val savedPositionSeconds: Int,
-    val category: String,
-    val secondaryCategory: String,
-    val tertiaryCategory: String,
-    val createdAtEpochMillis: Long,
-    val updatedAtEpochMillis: Long,
-)
-
-@Entity(
-    tableName = "video_memos",
-    indices = [Index(value = ["videoId"])],
-)
-data class VideoMemoEntity(
-    @PrimaryKey val id: String,
-    val userId: String,
-    val videoId: String,
-    val positionSeconds: Int,
-    val memoText: String,
     val createdAtEpochMillis: Long,
     val updatedAtEpochMillis: Long,
 )
@@ -267,32 +235,6 @@ interface FavoriteBookmarkDao {
 }
 
 @Dao
-interface PersonalVideoDao {
-    @Query("SELECT * FROM personal_videos ORDER BY updatedAtEpochMillis DESC, title")
-    fun observeAll(): Flow<List<PersonalVideoEntity>>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(video: PersonalVideoEntity)
-
-    @Query("DELETE FROM personal_videos WHERE id = :id")
-    suspend fun delete(id: String)
-}
-
-@Dao
-interface VideoMemoDao {
-    @Query(
-        "SELECT * FROM video_memos WHERE videoId = :videoId ORDER BY positionSeconds, updatedAtEpochMillis",
-    )
-    fun observeByVideo(videoId: String): Flow<List<VideoMemoEntity>>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(memo: VideoMemoEntity)
-
-    @Query("DELETE FROM video_memos WHERE id = :id")
-    suspend fun delete(id: String)
-}
-
-@Dao
 interface FriendContactDao {
     @Query("SELECT * FROM friend_exchange_friends ORDER BY name, updatedAtEpochMillis DESC")
     fun observeAll(): Flow<List<FriendContactEntity>>
@@ -332,8 +274,6 @@ interface FriendInteractionHistoryDao {
         FavoriteBookmarkEntity::class,
         FriendContactEntity::class,
         FriendInteractionHistoryEntity::class,
-        PersonalVideoEntity::class,
-        VideoMemoEntity::class,
     ],
     version = 9,
     exportSchema = true,
@@ -347,8 +287,6 @@ abstract class OrgPortalDatabase : RoomDatabase() {
     abstract fun favoriteBookmarkDao(): FavoriteBookmarkDao
     abstract fun friendContactDao(): FriendContactDao
     abstract fun friendInteractionHistoryDao(): FriendInteractionHistoryDao
-    abstract fun personalVideoDao(): PersonalVideoDao
-    abstract fun videoMemoDao(): VideoMemoDao
 
     companion object {
         val migration1To2 = object : Migration(1, 2) {
@@ -509,43 +447,9 @@ abstract class OrgPortalDatabase : RoomDatabase() {
 
         val migration8To9 = object : Migration(8, 9) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL(
-                    """
-                    CREATE TABLE IF NOT EXISTS `personal_videos` (
-                        `id` TEXT NOT NULL,
-                        `userId` TEXT NOT NULL,
-                        `providerVideoId` TEXT NOT NULL,
-                        `title` TEXT NOT NULL,
-                        `originalUrl` TEXT NOT NULL,
-                        `note` TEXT NOT NULL,
-                        `savedPositionSeconds` INTEGER NOT NULL,
-                        `category` TEXT NOT NULL,
-                        `secondaryCategory` TEXT NOT NULL,
-                        `tertiaryCategory` TEXT NOT NULL,
-                        `createdAtEpochMillis` INTEGER NOT NULL,
-                        `updatedAtEpochMillis` INTEGER NOT NULL,
-                        PRIMARY KEY(`id`)
-                    )
-                    """.trimIndent(),
-                )
-                database.execSQL(
-                    """
-                    CREATE TABLE IF NOT EXISTS `video_memos` (
-                        `id` TEXT NOT NULL,
-                        `userId` TEXT NOT NULL,
-                        `videoId` TEXT NOT NULL,
-                        `positionSeconds` INTEGER NOT NULL,
-                        `memoText` TEXT NOT NULL,
-                        `createdAtEpochMillis` INTEGER NOT NULL,
-                        `updatedAtEpochMillis` INTEGER NOT NULL,
-                        PRIMARY KEY(`id`),
-                        FOREIGN KEY(`videoId`) REFERENCES `personal_videos`(`id`) ON DELETE CASCADE
-                    )
-                    """.trimIndent(),
-                )
-                database.execSQL(
-                    "CREATE INDEX IF NOT EXISTS `index_video_memos_videoId` ON `video_memos` (`videoId`)",
-                )
+                database.execSQL("DROP INDEX IF EXISTS index_video_memos_videoId")
+                database.execSQL("DROP TABLE IF EXISTS video_memos")
+                database.execSQL("DROP TABLE IF EXISTS personal_videos")
             }
         }
 
@@ -894,83 +798,6 @@ class RoomFriendExchangeRepository(
         historyDao.delete(id.toString())
     }
 }
-
-class RoomPersonalVideoRepository(
-    private val videoDao: PersonalVideoDao,
-    private val memoDao: VideoMemoDao,
-) : PersonalVideoRepository {
-    override fun observeVideos(): Flow<List<PersonalVideo>> =
-        videoDao.observeAll().map { videos -> videos.map(PersonalVideoEntity::toDomain) }
-
-    override fun observeMemos(videoId: UUID): Flow<List<VideoMemo>> =
-        memoDao.observeByVideo(videoId.toString()).map { memos -> memos.map(VideoMemoEntity::toDomain) }
-
-    override suspend fun saveVideo(video: PersonalVideo) {
-        videoDao.upsert(video.validated().toEntity())
-    }
-
-    override suspend fun saveMemo(memo: VideoMemo) {
-        memoDao.upsert(memo.validated().toEntity())
-    }
-
-    override suspend fun deleteVideo(id: UUID) {
-        videoDao.delete(id.toString())
-    }
-
-    override suspend fun deleteMemo(id: UUID) {
-        memoDao.delete(id.toString())
-    }
-}
-
-private fun PersonalVideo.toEntity() = PersonalVideoEntity(
-    id = id.toString(),
-    userId = userId,
-    providerVideoId = providerVideoId,
-    title = title,
-    originalUrl = originalUrl,
-    note = note,
-    savedPositionSeconds = savedPositionSeconds,
-    category = category,
-    secondaryCategory = secondaryCategory,
-    tertiaryCategory = tertiaryCategory,
-    createdAtEpochMillis = createdAt.toEpochMilli(),
-    updatedAtEpochMillis = updatedAt.toEpochMilli(),
-)
-
-private fun PersonalVideoEntity.toDomain() = PersonalVideo(
-    id = UUID.fromString(id),
-    userId = userId,
-    providerVideoId = providerVideoId,
-    title = title,
-    originalUrl = originalUrl,
-    note = note,
-    savedPositionSeconds = savedPositionSeconds,
-    category = category,
-    secondaryCategory = secondaryCategory,
-    tertiaryCategory = tertiaryCategory,
-    createdAt = Instant.ofEpochMilli(createdAtEpochMillis),
-    updatedAt = Instant.ofEpochMilli(updatedAtEpochMillis),
-)
-
-private fun VideoMemo.toEntity() = VideoMemoEntity(
-    id = id.toString(),
-    userId = userId,
-    videoId = videoId.toString(),
-    positionSeconds = positionSeconds,
-    memoText = memoText,
-    createdAtEpochMillis = createdAt.toEpochMilli(),
-    updatedAtEpochMillis = updatedAt.toEpochMilli(),
-)
-
-private fun VideoMemoEntity.toDomain() = VideoMemo(
-    id = UUID.fromString(id),
-    userId = userId,
-    videoId = UUID.fromString(videoId),
-    positionSeconds = positionSeconds,
-    memoText = memoText,
-    createdAt = Instant.ofEpochMilli(createdAtEpochMillis),
-    updatedAt = Instant.ofEpochMilli(updatedAtEpochMillis),
-)
 
 private fun FriendContact.toEntity() = FriendContactEntity(
     id = id.toString(),

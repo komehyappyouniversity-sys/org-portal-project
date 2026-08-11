@@ -28,6 +28,10 @@ class AppSession {
         )
     }
 
+    fun logout() {
+        mutableState.value = SessionState()
+    }
+
     fun selectCommunity(communityId: String?) {
         if (communityId == mutableState.value.selectedCommunityId) return
         mutableState.value = mutableState.value.copy(

@@ -45,3 +45,22 @@ data class PublicPost(
     val attachments: List<PostAttachment> = emptyList(),
     val createdAt: String? = null,
 )
+
+data class RadioProgram(
+    val id: String,
+    val communityId: String,
+    val title: String,
+    val description: String,
+    val imageUrl: String,
+    val audioUrl: String,
+    val broadcastStartAt: java.time.Instant,
+    val broadcastEndAt: java.time.Instant,
+)
+
+data class RadioPlaybackRecord(
+    val userId: String,
+    val programId: String,
+    val lastPositionSeconds: Long = 0,
+    val playCount: Int = 0,
+    val lastPlayedAt: java.time.Instant? = null,
+)

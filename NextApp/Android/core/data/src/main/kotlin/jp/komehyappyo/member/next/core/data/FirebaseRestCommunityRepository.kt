@@ -2,6 +2,10 @@ package jp.komehyappyo.member.next.core.data
 
 import jp.komehyappyo.member.next.core.model.Community
 import jp.komehyappyo.member.next.core.model.CommunityAdminAccess
+import jp.komehyappyo.member.next.core.model.CommunityAdmin
+import jp.komehyappyo.member.next.core.model.CommunityAuditLog
+import jp.komehyappyo.member.next.core.model.DistributedVideo
+import jp.komehyappyo.member.next.core.model.VideoQuestion
 import jp.komehyappyo.member.next.core.model.CommunityCodeParser
 import jp.komehyappyo.member.next.core.model.CommunityMembership
 import jp.komehyappyo.member.next.core.model.CommunityMembershipStatus
@@ -35,9 +39,103 @@ interface CommunityRepository {
         applicantUserId: String,
         reviewerUserId: String,
         status: CommunityMembershipStatus,
+        auditAction: String? = null,
+        idToken: String,
+    ): Result<Unit>
+    suspend fun administrators(
+        communityId: String,
+        idToken: String,
+    ): Result<List<CommunityAdmin>>
+    suspend fun saveAdministrator(
+        communityId: String,
+        adminUserId: String,
+        role: String,
+        permissions: Set<String>,
+        isActive: Boolean,
+        actorUserId: String,
+        idToken: String,
+    ): Result<Unit>
+    suspend fun communityMembers(
+        communityId: String,
+        idToken: String,
+    ): Result<List<CommunityMembership>>
+    suspend fun auditLogs(
+        communityId: String,
+        idToken: String,
+    ): Result<List<CommunityAuditLog>>
+    suspend fun communityVideos(
+        communityId: String,
+        idToken: String,
+    ): Result<List<DistributedVideo>>
+    suspend fun videoMemos(userId: String, idToken: String): Result<Map<String, String>>
+    suspend fun saveVideoMemo(
+        userId: String,
+        communityId: String,
+        videoId: String,
+        memo: String,
+        idToken: String,
+    ): Result<Unit>
+    suspend fun videoQuestions(
+        communityId: String,
+        memberUid: String,
+        idToken: String,
+    ): Result<List<VideoQuestion>>
+    suspend fun saveVideoQuestion(
+        communityId: String,
+        memberUid: String,
+        video: DistributedVideo,
+        memoText: String,
+        questionText: String,
+        playbackSeconds: Double,
+        idToken: String,
+    ): Result<Unit>
+    suspend fun adminCommunityVideos(
+        communityId: String,
+        idToken: String,
+    ): Result<List<DistributedVideo>>
+    suspend fun vimeoLibraryVideos(
+        communityId: String,
+        idToken: String,
+        folderId: String? = null,
+    ): Result<List<DistributedVideo>>
+    suspend fun vimeoFolders(
+        communityId: String,
+        idToken: String,
+    ): Result<List<VimeoFolder>>
+    suspend fun vimeoConfiguration(
+        communityId: String,
+        idToken: String,
+    ): Result<VimeoConfiguration>
+    suspend fun saveVimeoConfiguration(
+        communityId: String,
+        accessToken: String,
+        userId: String,
+        query: String,
+        idToken: String,
+    ): Result<Unit>
+    suspend fun saveCommunityVideo(
+        communityId: String,
+        videoId: String,
+        title: String,
+        description: String,
+        vimeoVideoId: String,
+        vimeoUrl: String,
+        thumbnailUrl: String,
+        isPublished: Boolean,
         idToken: String,
     ): Result<Unit>
 }
+
+data class VimeoConfiguration(
+    val hasAccessToken: Boolean = false,
+    val userId: String = "",
+    val query: String = "",
+)
+
+data class VimeoFolder(
+    val id: String,
+    val name: String,
+)
 
 class CommunityRepositoryException(message: String) : IllegalStateException(message)
 private class CommunityHttpException(
@@ -240,6 +338,7 @@ class FirebaseRestCommunityRepository(
         applicantUserId: String,
         reviewerUserId: String,
         status: CommunityMembershipStatus,
+        auditAction: String?,
         idToken: String,
     ): Result<Unit> = runCatching {
         require(
@@ -265,7 +364,7 @@ class FirebaseRestCommunityRepository(
             .put(
                 "action",
                 stringValue(
-                    if (status == CommunityMembershipStatus.Approved) {
+                    auditAction ?: if (status == CommunityMembershipStatus.Approved) {
                         "membership.approved"
                     } else {
                         "membership.rejected"
@@ -326,6 +425,556 @@ class FirebaseRestCommunityRepository(
             "POST",
             idToken,
             JSONObject().put("writes", writes),
+        )
+        Unit
+    }
+
+    override suspend fun administrators(
+        communityId: String,
+        idToken: String,
+    ): Result<List<CommunityAdmin>> = runCatching {
+        val response = request(
+            "documents/organizations/$communityId/admins?pageSize=1000",
+            "GET",
+            idToken,
+            null,
+        ) as JSONObject
+        val documents = response.optJSONArray("documents") ?: JSONArray()
+        buildList {
+            for (index in 0 until documents.length()) {
+                val document = documents.optJSONObject(index) ?: continue
+                val fields = document.optJSONObject("fields") ?: continue
+                val userId = document.optString("name").substringAfterLast("/")
+                if (userId.isNotEmpty()) {
+                    add(
+                        CommunityAdmin(
+                            userId = userId,
+                            role = string(fields, "role") ?: "admin",
+                            permissions = permissionValues(fields.optJSONObject("permissions")),
+                            isActive = boolean(fields, "isActive") ?: true,
+                        ),
+                    )
+                }
+            }
+        }.sortedBy { it.userId }
+    }
+
+    override suspend fun saveAdministrator(
+        communityId: String,
+        adminUserId: String,
+        role: String,
+        permissions: Set<String>,
+        isActive: Boolean,
+        actorUserId: String,
+        idToken: String,
+    ): Result<Unit> = runCatching {
+        val normalizedUserId = adminUserId.trim()
+        require(normalizedUserId.isNotBlank()) { "管理者のユーザーIDを入力してください。" }
+        require(actorUserId.isNotBlank()) { "操作したユーザーIDを入力してください。" }
+        val permissionValues = JSONArray().apply {
+            permissions.sorted().forEach { put(stringValue(it)) }
+        }
+        val fields = JSONObject()
+            .put("uid", stringValue(normalizedUserId))
+            .put("role", stringValue(role.ifBlank { "admin" }))
+            .put("isActive", booleanValue(isActive))
+            .put("permissions", JSONObject().put("arrayValue", JSONObject().put("values", permissionValues)))
+        val databaseRoot = "projects/$projectId/databases/(default)/documents"
+        val auditFields = JSONObject()
+            .put(
+                "action",
+                stringValue(
+                    if (isActive) "administrator.added" else "administrator.deactivated",
+                ),
+            )
+            .put("actorUserId", stringValue(actorUserId))
+            .put("targetUserId", stringValue(normalizedUserId))
+            .put("communityId", stringValue(communityId))
+        request(
+            "documents:commit",
+            "POST",
+            idToken,
+            JSONObject().put(
+                "writes",
+                JSONArray()
+                    .put(
+                        JSONObject()
+                            .put(
+                                "update",
+                                JSONObject()
+                                    .put(
+                                        "name",
+                                        "$databaseRoot/organizations/$communityId/admins/$normalizedUserId",
+                                    )
+                                    .put("fields", fields),
+                            )
+                            .put(
+                                "updateTransforms",
+                                JSONArray().put(serverTimestamp("updatedAt")),
+                            ),
+                    )
+                    .put(
+                        JSONObject()
+                            .put(
+                                "update",
+                                JSONObject()
+                                    .put(
+                                        "name",
+                                        "$databaseRoot/organizations/$communityId/auditLogs/" +
+                                            java.util.UUID.randomUUID().toString(),
+                                    )
+                                    .put("fields", auditFields),
+                            )
+                            .put(
+                                "updateTransforms",
+                                JSONArray().put(serverTimestamp("createdAt")),
+                            )
+                            .put("currentDocument", JSONObject().put("exists", false)),
+                    ),
+            ),
+        )
+        Unit
+    }
+
+    override suspend fun communityMembers(
+        communityId: String,
+        idToken: String,
+    ): Result<List<CommunityMembership>> = runCatching {
+        val response = request(
+            "documents/organizations/$communityId/members?pageSize=1000",
+            "GET",
+            idToken,
+            null,
+        ) as JSONObject
+        val documents = response.optJSONArray("documents") ?: JSONArray()
+        buildList {
+            for (index in 0 until documents.length()) {
+                documents.optJSONObject(index)?.let { parseMembership(it, null)?.let(::add) }
+            }
+        }.sortedBy { it.createdAt.orEmpty() }
+    }
+
+    override suspend fun auditLogs(
+        communityId: String,
+        idToken: String,
+    ): Result<List<CommunityAuditLog>> = runCatching {
+        val response = request(
+            "documents/organizations/$communityId/auditLogs?pageSize=100",
+            "GET",
+            idToken,
+            null,
+        ) as JSONObject
+        val documents = response.optJSONArray("documents") ?: JSONArray()
+        buildList {
+            for (index in 0 until documents.length()) {
+                val document = documents.optJSONObject(index) ?: continue
+                parseAuditLog(document)?.let(::add)
+            }
+        }.sortedByDescending { it.createdAt.orEmpty() }
+    }
+
+    override suspend fun communityVideos(
+        communityId: String,
+        idToken: String,
+    ): Result<List<DistributedVideo>> = runCatching {
+        val response = request(
+            "documents/organizations/$communityId/videos?pageSize=1000",
+            "GET",
+            idToken,
+            null,
+        ) as JSONObject
+        val documents = response.optJSONArray("documents") ?: JSONArray()
+        buildList {
+            for (index in 0 until documents.length()) {
+                val document = documents.optJSONObject(index) ?: continue
+                val fields = document.optJSONObject("fields") ?: continue
+                val vimeoId = string(fields, "vimeoVideoId") ?: continue
+                if (boolean(fields, "isPublished") != true) continue
+                add(
+                    DistributedVideo(
+                        id = document.optString("name").substringAfterLast("/"),
+                        communityId = communityId,
+                        title = string(fields, "title") ?: "Vimeo動画",
+                        description = string(fields, "description").orEmpty(),
+                        videoUrl = string(fields, "vimeoUrl") ?: string(fields, "videoUrl"),
+                        vimeoVideoId = vimeoId,
+                        thumbnailUrl = string(fields, "thumbnailUrl"),
+                        isPublished = true,
+                        isMembersOnly = boolean(fields, "isMembersOnly") ?: false,
+                        sortOrder = string(fields, "sortOrder")?.toIntOrNull() ?: 0,
+                    ),
+                )
+            }
+        }.sortedWith(compareBy<DistributedVideo> { it.sortOrder }.thenBy { it.title })
+    }
+
+    override suspend fun videoMemos(
+        userId: String,
+        idToken: String,
+    ): Result<Map<String, String>> = runCatching {
+        val response = request(
+            "documents/memberPrivate/$userId/videoMemos?pageSize=1000",
+            "GET",
+            idToken,
+            null,
+        ) as JSONObject
+        val documents = response.optJSONArray("documents") ?: JSONArray()
+        buildMap {
+            for (index in 0 until documents.length()) {
+                val fields = documents.optJSONObject(index)?.optJSONObject("fields") ?: continue
+                val communityId = string(fields, "communityId") ?: continue
+                val videoId = string(fields, "videoId") ?: continue
+                string(fields, "memo")?.let { put("$communityId:$videoId", it) }
+            }
+        }
+    }
+
+    override suspend fun saveVideoMemo(
+        userId: String,
+        communityId: String,
+        videoId: String,
+        memo: String,
+        idToken: String,
+    ): Result<Unit> = runCatching {
+        val documentId = "$communityId-$videoId".replace(Regex("[^A-Za-z0-9_-]"), "_")
+        val path = "documents/memberPrivate/$userId/videoMemos/$documentId"
+        val normalized = memo.trim()
+        if (normalized.isEmpty()) {
+            request(path, "DELETE", idToken, null)
+        } else {
+            val fields = JSONObject()
+                .put("userId", stringValue(userId))
+                .put("communityId", stringValue(communityId))
+                .put("videoId", stringValue(videoId))
+                .put("memo", stringValue(normalized))
+                .put("updatedAt", timestampValue(Instant.now().toString()))
+            request(path, "PATCH", idToken, JSONObject().put("fields", fields))
+        }
+        Unit
+    }
+
+    override suspend fun videoQuestions(
+        communityId: String,
+        memberUid: String,
+        idToken: String,
+    ): Result<List<VideoQuestion>> = runCatching {
+        val body = JSONObject().put(
+            "structuredQuery",
+            JSONObject()
+                .put("from", JSONArray().put(JSONObject().put("collectionId", "videoQuestions")))
+                .put(
+                    "where",
+                    JSONObject().put(
+                        "fieldFilter",
+                        JSONObject()
+                            .put("field", JSONObject().put("fieldPath", "memberUid"))
+                            .put("op", "EQUAL")
+                            .put("value", stringValue(memberUid)),
+                    ),
+                ),
+        )
+        val rows = request("documents/organizations/$communityId:runQuery", "POST", idToken, body) as JSONArray
+        buildList {
+            for (index in 0 until rows.length()) {
+                val document = rows.optJSONObject(index)?.optJSONObject("document") ?: continue
+                val fields = document.optJSONObject("fields") ?: continue
+                val question = string(fields, "questionText") ?: continue
+                add(
+                    VideoQuestion(
+                        id = document.optString("name").substringAfterLast("/"),
+                        communityId = communityId,
+                        memberUid = string(fields, "memberUid") ?: memberUid,
+                        videoId = string(fields, "videoId").orEmpty(),
+                        videoTitle = string(fields, "videoTitle").orEmpty(),
+                        playbackSeconds = number(fields, "playbackSeconds") ?: 0.0,
+                        memoText = string(fields, "memoText").orEmpty(),
+                        questionText = question,
+                        answerText = string(fields, "answerText").orEmpty(),
+                        createdAt = timestamp(fields, "createdAt"),
+                    ),
+                )
+            }
+        }.sortedByDescending { it.createdAt.orEmpty() }
+    }
+
+    override suspend fun saveVideoQuestion(
+        communityId: String,
+        memberUid: String,
+        video: DistributedVideo,
+        memoText: String,
+        questionText: String,
+        playbackSeconds: Double,
+        idToken: String,
+    ): Result<Unit> = runCatching {
+        val normalized = questionText.trim()
+        require(normalized.isNotEmpty()) { "質問内容を入力してください。" }
+        val fields = JSONObject()
+            .put("memberUid", stringValue(memberUid))
+            .put("videoId", stringValue(video.id))
+            .put("videoType", stringValue("vimeo"))
+            .put("videoTitle", stringValue(video.title))
+            .put("playbackSeconds", JSONObject().put("doubleValue", playbackSeconds))
+            .put("memoText", stringValue(memoText.trim()))
+            .put("questionText", stringValue(normalized))
+            .put("answerText", stringValue(""))
+            .put("createdAt", timestampValue(Instant.now().toString()))
+        request(
+            "documents/organizations/$communityId/videoQuestions/${java.util.UUID.randomUUID()}",
+            "PATCH",
+            idToken,
+            JSONObject().put("fields", fields),
+        )
+        Unit
+    }
+
+    override suspend fun adminCommunityVideos(
+        communityId: String,
+        idToken: String,
+    ): Result<List<DistributedVideo>> = runCatching {
+        val response = request(
+            "documents/organizations/$communityId/videos?pageSize=1000",
+            "GET",
+            idToken,
+            null,
+        ) as JSONObject
+        val documents = response.optJSONArray("documents") ?: JSONArray()
+        buildList {
+            for (index in 0 until documents.length()) {
+                val document = documents.optJSONObject(index) ?: continue
+                val fields = document.optJSONObject("fields") ?: continue
+                val vimeoId = string(fields, "vimeoVideoId") ?: continue
+                add(
+                    DistributedVideo(
+                        id = document.optString("name").substringAfterLast("/"),
+                        communityId = communityId,
+                        title = string(fields, "title") ?: "Vimeo動画",
+                        description = string(fields, "description").orEmpty(),
+                        videoUrl = string(fields, "vimeoUrl") ?: string(fields, "videoUrl"),
+                        vimeoVideoId = vimeoId,
+                        thumbnailUrl = string(fields, "thumbnailUrl"),
+                        isPublished = boolean(fields, "isPublished") ?: false,
+                        isMembersOnly = boolean(fields, "isMembersOnly") ?: true,
+                        sortOrder = string(fields, "sortOrder")?.toIntOrNull() ?: 0,
+                    ),
+                )
+            }
+        }.sortedWith(compareBy<DistributedVideo> { it.sortOrder }.thenBy { it.title })
+    }
+
+    override suspend fun vimeoLibraryVideos(
+        communityId: String,
+        idToken: String,
+        folderId: String?,
+    ): Result<List<DistributedVideo>> = runCatching {
+        withContext(Dispatchers.IO) {
+            val connection = (
+                URL(
+                    "https://asia-northeast1-$projectId.cloudfunctions.net/" +
+                        "fetchVimeoVideosHttp",
+                ).openConnection() as HttpURLConnection
+                ).apply {
+                requestMethod = "POST"
+                connectTimeout = 15_000
+                readTimeout = 15_000
+                doOutput = true
+                setRequestProperty("Authorization", "Bearer $idToken")
+                setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+            }
+            try {
+                connection.outputStream.use {
+                    it.write(JSONObject().put("organizationId", communityId)
+                        .apply { if (!folderId.isNullOrBlank()) put("folderId", folderId) }
+                        .toString()
+                        .toByteArray(Charsets.UTF_8))
+                }
+                val status = connection.responseCode
+                val responseText = (if (status in 200..299) connection.inputStream else connection.errorStream)
+                    ?.bufferedReader()?.use { it.readText() }.orEmpty()
+                if (status !in 200..299) {
+                    throw CommunityRepositoryException(
+                        "Vimeo動画の取得に失敗しました（HTTP $status）。",
+                    )
+                }
+                val videos = JSONObject(responseText).optJSONArray("videos") ?: JSONArray()
+                buildList {
+                    for (index in 0 until videos.length()) {
+                        val video = videos.optJSONObject(index) ?: continue
+                        val vimeoVideoId = video.optString("id").trim()
+                        if (vimeoVideoId.isEmpty()) continue
+                        add(
+                            DistributedVideo(
+                                id = vimeoVideoId,
+                                communityId = communityId,
+                                title = video.optString("title", "Vimeo動画"),
+                                description = video.optString("description"),
+                                videoUrl = video.optString("link").ifBlank { null },
+                                vimeoVideoId = vimeoVideoId,
+                                thumbnailUrl = video.optString("thumbnailUrl").ifBlank { null },
+                                isPublished = false,
+                                isMembersOnly = true,
+                                sortOrder = 0,
+                            ),
+                        )
+                    }
+                }.sortedBy { it.title }
+            } finally {
+                connection.disconnect()
+            }
+        }
+    }
+
+    override suspend fun vimeoFolders(
+        communityId: String,
+        idToken: String,
+    ): Result<List<VimeoFolder>> = runCatching {
+        withContext(Dispatchers.IO) {
+            val connection = (
+                URL(
+                    "https://asia-northeast1-$projectId.cloudfunctions.net/" +
+                        "fetchVimeoFoldersHttp",
+                ).openConnection() as HttpURLConnection
+                ).apply {
+                requestMethod = "POST"
+                connectTimeout = 15_000
+                readTimeout = 15_000
+                doOutput = true
+                setRequestProperty("Authorization", "Bearer $idToken")
+                setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+            }
+            try {
+                connection.outputStream.use {
+                    it.write(JSONObject().put("organizationId", communityId).toString()
+                        .toByteArray(Charsets.UTF_8))
+                }
+                val status = connection.responseCode
+                val responseText = (if (status in 200..299) connection.inputStream else connection.errorStream)
+                    ?.bufferedReader()?.use { it.readText() }.orEmpty()
+                if (status !in 200..299) {
+                    throw CommunityRepositoryException(
+                        "Vimeoフォルダの取得に失敗しました（HTTP $status）。",
+                    )
+                }
+                val folders = JSONObject(responseText).optJSONArray("folders") ?: JSONArray()
+                buildList {
+                    for (index in 0 until folders.length()) {
+                        val folder = folders.optJSONObject(index) ?: continue
+                        val id = folder.optString("id").trim()
+                        if (id.isNotEmpty()) {
+                            add(VimeoFolder(id, folder.optString("name", "名称未設定フォルダ")))
+                        }
+                    }
+                }.sortedBy { it.name }
+            } finally {
+                connection.disconnect()
+            }
+        }
+    }
+
+    override suspend fun vimeoConfiguration(
+        communityId: String,
+        idToken: String,
+    ): Result<VimeoConfiguration> = runCatching {
+        withContext(Dispatchers.IO) {
+            val connection = (
+                URL("https://asia-northeast1-$projectId.cloudfunctions.net/getVimeoConfigHttp")
+                    .openConnection() as HttpURLConnection
+                ).apply {
+                requestMethod = "POST"
+                connectTimeout = 15_000
+                readTimeout = 15_000
+                doOutput = true
+                setRequestProperty("Authorization", "Bearer $idToken")
+                setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+            }
+            try {
+                connection.outputStream.use {
+                    it.write(JSONObject().put("organizationId", communityId).toString()
+                        .toByteArray(Charsets.UTF_8))
+                }
+                val status = connection.responseCode
+                val text = (if (status in 200..299) connection.inputStream else connection.errorStream)
+                    ?.bufferedReader()?.use { it.readText() }.orEmpty()
+                if (status !in 200..299) {
+                    throw CommunityRepositoryException("Vimeo接続設定を取得できませんでした（HTTP $status）。")
+                }
+                val payload = JSONObject(text)
+                VimeoConfiguration(
+                    hasAccessToken = payload.optBoolean("hasAccessToken"),
+                    userId = payload.optString("userId"),
+                    query = payload.optString("query"),
+                )
+            } finally {
+                connection.disconnect()
+            }
+        }
+    }
+
+    override suspend fun saveVimeoConfiguration(
+        communityId: String,
+        accessToken: String,
+        userId: String,
+        query: String,
+        idToken: String,
+    ): Result<Unit> = runCatching {
+        require(accessToken.trim().isNotEmpty()) { "Vimeoアクセストークンを入力してください。" }
+        require(userId.trim().isNotEmpty()) { "VimeoユーザーIDを入力してください。" }
+        withContext(Dispatchers.IO) {
+            val connection = (
+                URL("https://asia-northeast1-$projectId.cloudfunctions.net/saveVimeoConfigHttp")
+                    .openConnection() as HttpURLConnection
+                ).apply {
+                requestMethod = "POST"
+                connectTimeout = 15_000
+                readTimeout = 15_000
+                doOutput = true
+                setRequestProperty("Authorization", "Bearer $idToken")
+                setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+            }
+            try {
+                val body = JSONObject()
+                    .put("organizationId", communityId)
+                    .put("accessToken", accessToken.trim())
+                    .put("userId", userId.trim())
+                    .put("query", query.trim())
+                connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+                if (connection.responseCode !in 200..299) {
+                    throw CommunityRepositoryException("Vimeo接続設定を保存できませんでした。")
+                }
+                Unit
+            } finally {
+                connection.disconnect()
+            }
+        }
+    }
+
+    override suspend fun saveCommunityVideo(
+        communityId: String,
+        videoId: String,
+        title: String,
+        description: String,
+        vimeoVideoId: String,
+        vimeoUrl: String,
+        thumbnailUrl: String,
+        isPublished: Boolean,
+        idToken: String,
+    ): Result<Unit> = runCatching {
+        require(title.trim().isNotEmpty()) { "動画タイトルを入力してください。" }
+        require(vimeoVideoId.trim().isNotEmpty()) { "Vimeo動画IDを入力してください。" }
+        val fields = JSONObject()
+            .put("title", stringValue(title.trim()))
+            .put("description", stringValue(description.trim()))
+            .put("vimeoVideoId", stringValue(vimeoVideoId.trim()))
+            .put("vimeoUrl", stringValue(vimeoUrl.trim().ifEmpty { "https://vimeo.com/${vimeoVideoId.trim()}" }))
+            .put("thumbnailUrl", stringValue(thumbnailUrl.trim()))
+            .put("isPublished", booleanValue(isPublished))
+            .put("isMembersOnly", booleanValue(true))
+            .put("sortOrder", stringValue("0"))
+            .put("updatedAt", timestampValue(Instant.now().toString()))
+        request(
+            "documents/organizations/$communityId/videos/${videoId.trim().ifEmpty { java.util.UUID.randomUUID().toString() }}",
+            "PATCH",
+            idToken,
+            JSONObject().put("fields", fields),
         )
         Unit
     }
@@ -413,6 +1062,26 @@ class FirebaseRestCommunityRepository(
         )
     }
 
+    private fun parseAuditLog(document: JSONObject): CommunityAuditLog? {
+        val fields = document.optJSONObject("fields") ?: return null
+        val action = string(fields, "action") ?: return null
+        val pathParts = document.optString("name").split("/")
+        val organizationIndex = pathParts.indexOfLast { it == "organizations" }
+        val communityId = when {
+            organizationIndex >= 0 && organizationIndex + 1 < pathParts.size ->
+                pathParts[organizationIndex + 1]
+            else -> string(fields, "communityId")
+        } ?: return null
+        return CommunityAuditLog(
+            id = document.optString("name").substringAfterLast("/"),
+            action = action,
+            actorUserId = string(fields, "actorUserId"),
+            targetUserId = string(fields, "targetUserId"),
+            communityId = communityId,
+            createdAt = timestamp(fields, "createdAt"),
+        )
+    }
+
     private suspend fun memberProfile(userId: String, idToken: String): JSONObject {
         val document = request(
             "documents/memberPrivate/$userId",
@@ -462,7 +1131,8 @@ class FirebaseRestCommunityRepository(
                 throw CommunityHttpException(status, message)
             }
             val text = connection.inputStream.bufferedReader().use { it.readText() }
-            if (text.trimStart().startsWith("[")) JSONArray(text) else JSONObject(text)
+            if (text.isBlank()) JSONObject()
+            else if (text.trimStart().startsWith("[")) JSONArray(text) else JSONObject(text)
         } finally {
             connection.disconnect()
         }
@@ -480,6 +1150,14 @@ class FirebaseRestCommunityRepository(
         fields.optJSONObject(key)?.takeIf { it.has("booleanValue") }?.optBoolean("booleanValue")
     private fun timestamp(fields: JSONObject, key: String): String? =
         fields.optJSONObject(key)?.optString("timestampValue")?.takeIf { it.isNotEmpty() }
+    private fun number(fields: JSONObject, key: String): Double? =
+        fields.optJSONObject(key)?.let { value ->
+            when {
+                value.has("doubleValue") -> value.optDouble("doubleValue")
+                value.has("integerValue") -> value.optString("integerValue").toDoubleOrNull()
+                else -> null
+            }
+        }
     private fun permissionValues(value: JSONObject?): Set<String> {
         if (value == null) return emptySet()
         value.optJSONObject("arrayValue")

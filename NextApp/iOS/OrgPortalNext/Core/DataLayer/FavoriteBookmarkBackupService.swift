@@ -14,19 +14,17 @@ public struct AppBackupImportSummary: Equatable, Sendable {
     public let meetingMinutes: Int
     public let snsLinks: Int
     public let favorites: Int
-    public let personalVideos: Int
-    public let personalVideoMemos: Int
     public let friendContacts: Int
     public let friendHistories: Int
 
     public var total: Int {
         schedules + diaries + cashDistributions + meetingMinutes + snsLinks + favorites
-            + personalVideos + personalVideoMemos
             + friendContacts + friendHistories
     }
 }
 
 public struct AppBackupExportResult: Equatable, Sendable {
+
     public let data: Data
     public let skippedMeetingMinutes: Int
 }
@@ -63,7 +61,6 @@ private struct AppBackupEnvelope: Codable {
     let snsCustomLinks: [AppBackupSnsLink]
     let friendContacts: [AppBackupFriendContact]?
     let friendInteractionHistories: [AppBackupFriendInteractionHistory]?
-    let personalVideoBackupBase64: String?
 }
 
 private struct AppBackupSchedule: Codable {
@@ -152,31 +149,6 @@ private struct AppBackupFriendInteractionHistory: Codable {
     let updatedAtEpochMillis: Int64
 }
 
-private struct AppBackupPersonalVideo: Codable {
-    let id: String
-    let userId: String
-    let providerVideoId: String
-    let title: String
-    let originalUrl: String
-    let note: String
-    let savedPositionSeconds: Int
-    let category: String
-    let secondaryCategory: String
-    let tertiaryCategory: String
-    let createdAtEpochMillis: Int64
-    let updatedAtEpochMillis: Int64
-}
-
-private struct AppBackupVideoMemo: Codable {
-    let id: String
-    let userId: String
-    let videoId: String
-    let positionSeconds: Int
-    let memoText: String
-    let createdAtEpochMillis: Int64
-    let updatedAtEpochMillis: Int64
-}
-
 /// 端末内データを、アプリ削除前に1つのファイルへまとめるバックアップです。
 /// Firebase上の会員・コミュニティ情報は対象外です。
 @MainActor
@@ -191,7 +163,6 @@ public final class AppBackupService {
     private let recordingStore: LocalMeetingRecordingStore
     private let snsRepository: SnsCustomLinkRepository
     private let favoriteService: FavoriteBookmarkBackupService
-    private let personalVideoService: PersonalVideoBackupService
     private let friendExchangeRepository: FriendExchangeRepository
     private let fileManager: FileManager
 
@@ -204,7 +175,6 @@ public final class AppBackupService {
         recordingStore: LocalMeetingRecordingStore,
         snsCustomLinkRepository: SnsCustomLinkRepository,
         favoriteBookmarkRepository: FavoriteBookmarkRepository,
-        personalVideoRepository: PersonalVideoRepository,
         friendExchangeRepository: FriendExchangeRepository,
         fileManager: FileManager = .default
     ) {
@@ -222,7 +192,6 @@ public final class AppBackupService {
         favoriteService = FavoriteBookmarkBackupService(
             repository: favoriteBookmarkRepository
         )
-        personalVideoService = PersonalVideoBackupService(repository: personalVideoRepository)
         self.friendExchangeRepository = friendExchangeRepository
         self.fileManager = fileManager
     }
@@ -277,14 +246,9 @@ public final class AppBackupService {
             format: Self.formatIdentifier,
             version: Self.currentVersion,
             exportedAtEpochMillis: Self.epochMillis(now),
-            diaryBackupBase64: try await diaryService.exportData(now: now)
-                .base64EncodedString(),
-            cashDistributionBackupBase64: try await cashService.exportData(now: now)
-                .base64EncodedString(),
-            favoriteBookmarkBackupBase64: try await favoriteService.exportData(now: now)
-                .base64EncodedString(),
-            personalVideoBackupBase64: try await personalVideoService.exportData(now: now)
-                .base64EncodedString(),
+            diaryBackupBase64: try await diaryService.exportData(now: now).base64EncodedString(),
+            cashDistributionBackupBase64: try await cashService.exportData(now: now).base64EncodedString(),
+            favoriteBookmarkBackupBase64: try await favoriteService.exportData(now: now).base64EncodedString(),
             schedules: try await scheduleRepository.fetchAll().map { schedule in
                 AppBackupSchedule(
                     value: AppBackupScheduleValue(
@@ -353,7 +317,7 @@ public final class AppBackupService {
                     createdAtEpochMillis: Self.epochMillis($0.createdAt),
                     updatedAtEpochMillis: Self.epochMillis($0.updatedAt)
                 )
-            }
+            },
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .millisecondsSince1970
@@ -382,19 +346,10 @@ public final class AppBackupService {
             throw AppBackupError.invalidFormat
         }
 
-        let personalData = envelope.personalVideoBackupBase64.flatMap { Data(base64Encoded: $0) }
-        if envelope.personalVideoBackupBase64 != nil && personalData == nil {
-            throw AppBackupError.invalidFormat
-        }
-
         let diaryCount = try await diaryService.importData(diaryData)
         let cashCount = try await cashService.importData(cashData)
         let favoriteCount = try await favoriteService.importData(favoriteData)
-        let personalSummary = if let personalData {
-            try await personalVideoService.importData(personalData)
-        } else {
-            PersonalVideoBackupImportSummary(videos: 0, memos: 0)
-        }
+
         for schedule in envelope.schedules {
             let value = schedule.value
             guard
@@ -453,9 +408,11 @@ public final class AppBackupService {
             )
             try await scheduleRepository.save(try restored.validated())
         }
+
         for link in envelope.snsCustomLinks {
             try await snsRepository.save(try link.value.validated())
         }
+
         for entry in envelope.meetingMinutes {
             guard let id = UUID(uuidString: entry.id),
                   let audio = Data(base64Encoded: entry.audioDataBase64),
@@ -494,6 +451,7 @@ public final class AppBackupService {
                 )
             )
         }
+
         let friendContacts = envelope.friendContacts ?? []
         let friendHistories = envelope.friendInteractionHistories ?? []
         var importedFriendIDs = Set<UUID>()
@@ -549,8 +507,11 @@ public final class AppBackupService {
                 createdAt: Self.date(entry.createdAtEpochMillis),
                 updatedAt: updatedAt
             )
-            try await friendExchangeRepository.save(try history.validated(now: updatedAt))
+            try await friendExchangeRepository.save(
+                try history.validated(now: updatedAt)
+            )
         }
+
         return AppBackupImportSummary(
             schedules: envelope.schedules.count,
             diaries: diaryCount,
@@ -558,8 +519,6 @@ public final class AppBackupService {
             meetingMinutes: envelope.meetingMinutes.count,
             snsLinks: envelope.snsCustomLinks.count,
             favorites: favoriteCount,
-            personalVideos: personalSummary.videos,
-            personalVideoMemos: personalSummary.memos,
             friendContacts: friendContacts.count,
             friendHistories: friendHistories.count
         )
@@ -605,135 +564,11 @@ public final class AppBackupService {
     }
 }
 
-    private struct FavoriteBookmarkBackupEnvelope: Codable {
+private struct FavoriteBookmarkBackupEnvelope: Codable {
     let format: String
     let version: Int
     let exportedAtEpochMillis: Int64
     let favorites: [FavoriteBookmarkBackupEntry]
-}
-
-@MainActor
-public final class PersonalVideoBackupService {
-    public static let formatIdentifier = "org-portal-personal-videos-backup"
-    public static let currentVersion = 1
-
-    private let repository: PersonalVideoRepository
-
-    public init(repository: PersonalVideoRepository) {
-        self.repository = repository
-    }
-
-    public func exportData(now: Date = .now) async throws -> Data {
-        let videos = try await repository.fetchVideos()
-        let backupVideos = videos.map { video in
-            AppBackupPersonalVideo(
-                id: video.id.uuidString,
-                userId: video.userId,
-                providerVideoId: video.providerVideoId,
-                title: video.title,
-                originalUrl: video.originalURL,
-                note: video.note,
-                savedPositionSeconds: video.savedPositionSeconds,
-                category: video.category,
-                secondaryCategory: video.secondaryCategory,
-                tertiaryCategory: video.tertiaryCategory,
-                createdAtEpochMillis: Self.epochMillis(video.createdAt),
-                updatedAtEpochMillis: Self.epochMillis(video.updatedAt)
-            )
-        }
-        var memos: [AppBackupVideoMemo] = []
-        for video in videos {
-            memos += try await repository.fetchMemos(videoId: video.id).map {
-                AppBackupVideoMemo(
-                    id: $0.id.uuidString,
-                    userId: $0.userId,
-                    videoId: $0.videoId.uuidString,
-                    positionSeconds: $0.positionSeconds,
-                    memoText: $0.text,
-                    createdAtEpochMillis: Self.epochMillis($0.createdAt),
-                    updatedAtEpochMillis: Self.epochMillis($0.updatedAt)
-                )
-            }
-        }
-        let envelope = PersonalVideoBackupEnvelope(
-            format: Self.formatIdentifier,
-            version: Self.currentVersion,
-            exportedAtEpochMillis: Self.epochMillis(now),
-            videos: backupVideos,
-            memos: memos
-        )
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return try encoder.encode(envelope)
-    }
-
-    public func importData(_ data: Data) async throws -> PersonalVideoBackupImportSummary {
-        let envelope: PersonalVideoBackupEnvelope
-        do {
-            envelope = try JSONDecoder().decode(PersonalVideoBackupEnvelope.self, from: data)
-        } catch {
-            throw AppBackupError.invalidFormat
-        }
-        guard envelope.format == Self.formatIdentifier else {
-            throw AppBackupError.invalidFormat
-        }
-        guard (1...Self.currentVersion).contains(envelope.version) else {
-            throw AppBackupError.unsupportedVersion
-        }
-
-        for entry in envelope.videos {
-            guard let id = UUID(uuidString: entry.id) else {
-                throw AppBackupError.invalidFormat
-            }
-            let video = PersonalVideo(
-                id: id,
-                userId: entry.userId,
-                providerVideoId: entry.providerVideoId,
-                title: entry.title,
-                originalURL: entry.originalUrl,
-                note: entry.note,
-                savedPositionSeconds: entry.savedPositionSeconds,
-                category: entry.category,
-                secondaryCategory: entry.secondaryCategory,
-                tertiaryCategory: entry.tertiaryCategory,
-                createdAt: Self.date(entry.createdAtEpochMillis),
-                updatedAt: Self.date(entry.updatedAtEpochMillis)
-            )
-            try await repository.saveVideo(video.validated())
-        }
-        var memoCount = 0
-        for entry in envelope.memos {
-            guard let id = UUID(uuidString: entry.id),
-                  let videoId = UUID(uuidString: entry.videoId) else {
-                throw AppBackupError.invalidFormat
-            }
-            let memo = VideoMemo(
-                id: id,
-                userId: entry.userId,
-                videoId: videoId,
-                positionSeconds: entry.positionSeconds,
-                text: entry.memoText,
-                createdAt: Self.date(entry.createdAtEpochMillis),
-                updatedAt: Self.date(entry.updatedAtEpochMillis)
-            )
-            try await repository.saveMemo(memo.validated())
-            memoCount += 1
-        }
-        return PersonalVideoBackupImportSummary(videos: envelope.videos.count, memos: memoCount)
-    }
-}
-
-private struct PersonalVideoBackupEnvelope: Codable {
-    let format: String
-    let version: Int
-    let exportedAtEpochMillis: Int64
-    let videos: [AppBackupPersonalVideo]
-    let memos: [AppBackupVideoMemo]
-}
-
-public struct PersonalVideoBackupImportSummary: Equatable, Sendable {
-    public let videos: Int
-    public let memos: Int
 }
 
 private struct FavoriteBookmarkBackupEntry: Codable {
@@ -792,10 +627,7 @@ public final class FavoriteBookmarkBackupService {
     public func importData(_ data: Data) async throws -> Int {
         let envelope: FavoriteBookmarkBackupEnvelope
         do {
-            envelope = try JSONDecoder().decode(
-                FavoriteBookmarkBackupEnvelope.self,
-                from: data
-            )
+            envelope = try JSONDecoder().decode(FavoriteBookmarkBackupEnvelope.self, from: data)
         } catch {
             throw FavoriteBookmarkBackupError.invalidFormat
         }

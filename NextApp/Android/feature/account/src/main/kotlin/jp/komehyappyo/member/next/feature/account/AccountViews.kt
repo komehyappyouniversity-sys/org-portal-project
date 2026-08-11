@@ -77,6 +77,7 @@ private fun AccountOverview(
                             requestBiometricAuthentication(
                                 activity = activity,
                                 onSuccess = model::biometricLogin,
+                                onError = model::biometricError,
                             )
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -89,9 +90,15 @@ private fun AccountOverview(
                 }
             }
             AccountAccessState.PendingApproval ->
-                Text("コミュニティへの参加申請を確認中です。承認後に会員向け機能が追加されます。")
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("コミュニティへの参加申請を確認中です。承認後に会員向け機能が追加されます。")
+                    OutlinedButton(onClick = model::logout) { Text("ログアウト") }
+                }
             AccountAccessState.Registered ->
-                Text("ログイン済みです。「つながる」からコミュニティコードまたはQRコードで参加申請できます。")
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("ログイン済みです。「つながる」からコミュニティコードまたはQRコードで参加申請できます。")
+                    OutlinedButton(onClick = model::logout) { Text("ログアウト") }
+                }
             AccountAccessState.Rejected -> {
                 Text("コミュニティへの参加申請は承認されませんでした。申請先へご確認ください。")
                 OutlinedButton(
@@ -100,9 +107,13 @@ private fun AccountOverview(
                 ) {
                     Text("別のアカウントでログイン")
                 }
+                OutlinedButton(onClick = model::logout) { Text("ログアウト") }
             }
             AccountAccessState.Member ->
-                Text("会員としてログインしています。参加中のコミュニティ機能を利用できます。")
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("会員としてログインしています。参加中のコミュニティ機能を利用できます。")
+                    OutlinedButton(onClick = model::logout) { Text("ログアウト") }
+                }
         }
         StatusMessage(state)
     }
@@ -111,12 +122,24 @@ private fun AccountOverview(
 private fun requestBiometricAuthentication(
     activity: FragmentActivity,
     onSuccess: () -> Unit,
+    onError: (String) -> Unit,
 ) {
-    val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG
-    if (BiometricManager.from(activity).canAuthenticate(authenticators) !=
-        BiometricManager.BIOMETRIC_SUCCESS
-    ) {
-        return
+    val authenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK
+    val biometricManager = BiometricManager.from(activity)
+    when (biometricManager.canAuthenticate(authenticators)) {
+        BiometricManager.BIOMETRIC_SUCCESS -> Unit
+        BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> {
+            onError("この端末は指紋・顔認証に対応していません。")
+            return
+        }
+        BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
+            onError("端末の設定で指紋または顔認証を登録してください。")
+            return
+        }
+        else -> {
+            onError("指紋・顔認証を利用できません。端末のロック設定を確認してください。")
+            return
+        }
     }
     val prompt = BiometricPrompt(
         activity,
@@ -126,6 +149,18 @@ private fun requestBiometricAuthentication(
                 result: BiometricPrompt.AuthenticationResult,
             ) {
                 onSuccess()
+            }
+
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                if (errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON &&
+                    errorCode != BiometricPrompt.ERROR_USER_CANCELED
+                ) {
+                    onError(errString.toString().ifBlank { "生体認証に失敗しました。" })
+                }
+            }
+
+            override fun onAuthenticationFailed() {
+                onError("指紋または顔を認識できませんでした。もう一度お試しください。")
             }
         },
     )

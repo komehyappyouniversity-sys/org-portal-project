@@ -1,8 +1,13 @@
 package jp.komehyappyo.member.next.feature.community
 
 import android.app.Activity
+import android.content.res.Configuration
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,14 +25,27 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import jp.komehyappyo.member.next.core.model.RadioPlaybackRecord
+import jp.komehyappyo.member.next.core.model.RadioProgram
+import jp.komehyappyo.member.next.core.model.CommunityAuditLog
 import jp.komehyappyo.member.next.core.model.CommunityMembershipStatus
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Composable
 fun CommunityRoot(model: CommunityFeatureModel) {
@@ -35,10 +53,24 @@ fun CommunityRoot(model: CommunityFeatureModel) {
     val sessionState by model.session.state.collectAsStateWithLifecycle()
     val activity = LocalContext.current as Activity
     val uriHandler = LocalUriHandler.current
+    var selectedVideoId by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedVideo = state.distributedVideos.firstOrNull { it.id == selectedVideoId }
 
     LaunchedEffect(sessionState.authenticationToken) {
         model.refreshPublicCommunities()
         if (sessionState.authenticationToken != null) model.refresh()
+    }
+    LaunchedEffect(sessionState.selectedCommunityId) {
+        model.refreshRadioPrograms()
+    }
+
+    if (selectedVideo != null) {
+        VimeoVideoDetailScreen(
+            model = model,
+            video = selectedVideo,
+            onBack = { selectedVideoId = null },
+        )
+        return
     }
 
     Column(
@@ -51,6 +83,24 @@ fun CommunityRoot(model: CommunityFeatureModel) {
         Text("つながる")
         if (state.isLoading) CircularProgressIndicator()
         state.message?.let { Text(it) }
+
+        Text("インターネットラジオ")
+        if (state.radioPrograms.isEmpty()) {
+            Text("コミュニティを選択すると、番組一覧を表示できます。")
+        } else {
+            RadioSection(
+                programs = state.radioPrograms,
+                records = state.radioPlaybackRecords,
+                playingProgramId = state.radioPlayingProgramId,
+                currentUserId = sessionState.userId,
+                formatter = radioDateTimeFormatter(),
+                isLoading = state.isLoading,
+                onToggle = model::toggleRadioPlayback,
+                isPlayable = model::isRadioPlayable,
+            )
+            HorizontalDivider()
+        }
+
         Text("コミュニティを探す")
         Text("公開中のコミュニティを見て回れます。")
         OutlinedTextField(
@@ -224,6 +274,499 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                     }
                     HorizontalDivider()
                 }
+
+                Text("管理者コンソール")
+                if (state.adminAccess?.role == "owner") {
+                    Text("複数管理者の設定")
+                    OutlinedTextField(
+                        value = state.adminQuery,
+                        onValueChange = model::updateAdminQuery,
+                        label = { Text("氏名・メールアドレス・UIDで検索") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (model.administratorCandidates().isEmpty()) {
+                        Text("追加できる承認済み会員が見つかりません。")
+                    }
+                    model.administratorCandidates().forEach { member ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column {
+                                Text(member.applicantName ?: "氏名未登録")
+                                Text(member.applicantEmail ?: member.userId)
+                            }
+                            Button(
+                                onClick = { model.saveAdministrator(member.userId) },
+                                enabled = !state.isLoading,
+                            ) { Text("管理者に追加") }
+                        }
+                    }
+                    state.administrators.forEach { admin ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text("${admin.userId} (${admin.role})")
+                            if (admin.isActive) {
+                                TextButton(onClick = { model.deactivateAdministrator(admin) }) {
+                                    Text("無効化")
+                                }
+                            } else {
+                                Text("無効")
+                            }
+                        }
+                    }
+                }
+
+                Text("会員管理")
+                state.communityMembers.forEach { member ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(member.applicantName ?: member.userId)
+                        if (member.status == CommunityMembershipStatus.Approved) {
+                            TextButton(onClick = { model.suspendMember(member) }) {
+                                Text("利用停止")
+                            }
+                        } else {
+                            Text(when (member.status) {
+                                CommunityMembershipStatus.Pending -> "承認待ち"
+                                CommunityMembershipStatus.Rejected -> "停止中"
+                                CommunityMembershipStatus.Approved -> "参加中"
+                            })
+                        }
+                    }
+                }
+
+                Text("監査ログ")
+                if (state.auditLogs.isEmpty()) {
+                    Text("監査ログはまだありません。")
+                }
+                state.auditLogs.forEach { log ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(auditActionText(log.action))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            log.actorUserId?.takeIf { it.isNotBlank() }?.let {
+                                Text("操作: $it")
+                            }
+                            log.targetUserId?.takeIf { it.isNotBlank() }?.let {
+                                Text("対象: $it")
+                            }
+                        }
+                        log.createdAt?.let { createdAt ->
+                            Text(auditCreatedAtText(createdAt))
+                        }
+                    }
+                    HorizontalDivider()
+                }
+
+                Text("Vimeo動画管理")
+                var managedVideoId by remember { mutableStateOf("") }
+                var managedVideoTitle by remember { mutableStateOf("") }
+                var managedVideoDescription by remember { mutableStateOf("") }
+                var managedVimeoId by remember { mutableStateOf("") }
+                var managedVimeoUrl by remember { mutableStateOf("") }
+                var managedThumbnailUrl by remember { mutableStateOf("") }
+                var vimeoAccessToken by remember { mutableStateOf("") }
+                var selectedVimeoVideoIds by remember { mutableStateOf(setOf<String>()) }
+                var vimeoUserId by remember(state.vimeoConfiguration.userId) {
+                    mutableStateOf(state.vimeoConfiguration.userId)
+                }
+                var vimeoQuery by remember(state.vimeoConfiguration.query) {
+                    mutableStateOf(state.vimeoConfiguration.query)
+                }
+                Text("Vimeo接続設定")
+                Text(if (state.vimeoConfiguration.hasAccessToken) "接続設定済み" else "未設定")
+                OutlinedTextField(
+                    value = vimeoAccessToken,
+                    onValueChange = { vimeoAccessToken = it },
+                    label = { Text("Vimeoアクセストークン") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = vimeoUserId,
+                    onValueChange = { vimeoUserId = it },
+                    label = { Text("VimeoユーザーID") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = vimeoQuery,
+                    onValueChange = { vimeoQuery = it },
+                    label = { Text("動画検索キーワード（任意）") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Button(onClick = {
+                    model.saveVimeoConfiguration(vimeoAccessToken, vimeoUserId, vimeoQuery)
+                    vimeoAccessToken = ""
+                }) { Text("Vimeo接続設定を保存") }
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("Vimeoフォルダ")
+                    TextButton(onClick = model::refreshVimeoFolders) { Text("フォルダを取得") }
+                }
+                if (state.vimeoFolders.isNotEmpty()) {
+                    TextButton(onClick = model::refreshVimeoLibrary) { Text("すべての動画を取得") }
+                    state.vimeoFolders.forEach { folder ->
+                        TextButton(onClick = { model.refreshVimeoFolderVideos(folder) }) {
+                            Text(folder.name)
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("Vimeo動画一覧")
+                    TextButton(onClick = model::refreshVimeoLibrary) { Text("Vimeoから取得") }
+                }
+                if (state.vimeoLibraryVideos.isEmpty()) {
+                    Text("Vimeoから取得すると、動画を選択して登録できます。")
+                }
+                if (state.vimeoLibraryVideos.isNotEmpty()) {
+                    Text("複数選択して一括公開")
+                    state.vimeoLibraryVideos.forEach { video ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(video.title, modifier = Modifier.weight(1f))
+                            TextButton(onClick = {
+                                selectedVimeoVideoIds = if (video.vimeoVideoId in selectedVimeoVideoIds) {
+                                    selectedVimeoVideoIds - video.vimeoVideoId
+                                } else {
+                                    selectedVimeoVideoIds + video.vimeoVideoId
+                                }
+                            }) {
+                                Text(if (video.vimeoVideoId in selectedVimeoVideoIds) "選択済み" else "選択")
+                            }
+                        }
+                    }
+                    Button(
+                        onClick = {
+                            model.saveCommunityVideos(
+                                state.vimeoLibraryVideos.filter {
+                                    it.vimeoVideoId in selectedVimeoVideoIds
+                                },
+                                isPublished = true,
+                            )
+                            selectedVimeoVideoIds = emptySet()
+                            model.clearVimeoLibrary()
+                        },
+                        enabled = selectedVimeoVideoIds.isNotEmpty(),
+                    ) {
+                        Text("選択した動画をまとめて公開")
+                    }
+                    Text("個別にタイトルや説明を編集する場合は、下の動画を選択してください。")
+                }
+                state.vimeoLibraryVideos.forEach { video ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        TextButton(onClick = {
+                            managedVideoId = video.vimeoVideoId
+                            managedVideoTitle = video.title
+                            managedVideoDescription = video.description
+                            managedVimeoId = video.vimeoVideoId
+                            managedVimeoUrl = video.videoUrl.orEmpty()
+                            managedThumbnailUrl = video.thumbnailUrl.orEmpty()
+                            model.clearVimeoLibrary()
+                        }) {
+                            Column {
+                                Text(video.title)
+                                Text(video.vimeoVideoId)
+                            }
+                        }
+                        Text(
+                            if (state.managedVideos.any { it.vimeoVideoId == video.vimeoVideoId }) {
+                                "登録済み"
+                            } else {
+                                "選択"
+                            },
+                        )
+                    }
+                }
+                HorizontalDivider()
+                Text("登録済み動画")
+                OutlinedTextField(
+                    value = managedVideoId,
+                    onValueChange = { managedVideoId = it },
+                    label = { Text("動画ID（編集時のみ）") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = managedVideoTitle,
+                    onValueChange = { managedVideoTitle = it },
+                    label = { Text("動画タイトル") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = managedVimeoId,
+                    onValueChange = { managedVimeoId = it },
+                    label = { Text("Vimeo動画ID") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = managedVimeoUrl,
+                    onValueChange = { managedVimeoUrl = it },
+                    label = { Text("Vimeo URL（任意）") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = managedVideoDescription,
+                    onValueChange = { managedVideoDescription = it },
+                    label = { Text("説明") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                )
+                OutlinedTextField(
+                    value = managedThumbnailUrl,
+                    onValueChange = { managedThumbnailUrl = it },
+                    label = { Text("サムネイルURL（任意）") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = {
+                        model.saveCommunityVideo(
+                            managedVideoId,
+                            managedVideoTitle,
+                            managedVideoDescription,
+                            managedVimeoId,
+                            managedVimeoUrl,
+                            managedThumbnailUrl,
+                            false,
+                        )
+                    }) { Text("下書き保存") }
+                    Button(onClick = {
+                        model.saveCommunityVideo(
+                            managedVideoId,
+                            managedVideoTitle,
+                            managedVideoDescription,
+                            managedVimeoId,
+                            managedVimeoUrl,
+                            managedThumbnailUrl,
+                            true,
+                        )
+                    }) { Text("公開して保存") }
+                }
+                state.managedVideos.forEach { video ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        TextButton(onClick = {
+                            managedVideoId = video.id
+                            managedVideoTitle = video.title
+                            managedVideoDescription = video.description
+                            managedVimeoId = video.vimeoVideoId
+                            managedVimeoUrl = video.videoUrl.orEmpty()
+                            managedThumbnailUrl = video.thumbnailUrl.orEmpty()
+                        }) { Text(video.title) }
+                        Text("${if (video.isPublished) "公開" else "下書き"}")
+                        TextButton(onClick = {
+                            model.saveCommunityVideo(
+                                video.id,
+                                video.title,
+                                video.description,
+                                video.vimeoVideoId,
+                                video.videoUrl.orEmpty(),
+                                video.thumbnailUrl.orEmpty(),
+                                !video.isPublished,
+                            )
+                        }) { Text(if (video.isPublished) "非公開" else "公開") }
+                    }
+                }
+            }
+
+            if (state.distributedVideos.isNotEmpty()) {
+                Text("Vimeo配信動画")
+                state.distributedVideos.forEach { video ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedVideoId = video.id }
+                            .padding(vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        video.thumbnailUrl?.takeIf(String::isNotBlank)?.let { thumbnail ->
+                            AsyncImage(
+                                model = thumbnail,
+                                contentDescription = "${video.title}のサムネイル",
+                                modifier = Modifier.fillMaxWidth().height(140.dp),
+                            )
+                        }
+                        Text(video.title)
+                        Text("視聴・メモ")
+                    }
+                    HorizontalDivider()
+                }
+            }
+            if (false && state.distributedVideos.isNotEmpty()) {
+                Text("Vimeo配信動画")
+                    state.distributedVideos.forEach { video ->
+                    var memo by remember(video.id) {
+                        mutableStateOf("")
+                    }
+                    var editingMemoId by remember("${video.id}:editingMemo") { mutableStateOf<String?>(null) }
+                    var editingMemoText by remember("${video.id}:editingMemoText") { mutableStateOf("") }
+                    var question by remember("${video.id}:question") {
+                        mutableStateOf("")
+                    }
+                    var playbackSeconds by remember("${video.id}:position") {
+                        mutableStateOf(0.0)
+                    }
+                    var playbackCommandId by remember("${video.id}:playbackCommand") {
+                        mutableStateOf(0)
+                    }
+                    var playbackCommand by remember("${video.id}:playbackAction") {
+                        mutableStateOf<VimeoPlaybackCommand?>(null)
+                    }
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        VimeoPlayerView(
+                            videoId = video.vimeoVideoId,
+                            playbackCommand = playbackCommand,
+                            initialPlaybackSeconds = playbackSeconds,
+                            isLandscape = false,
+                            modifier = Modifier.fillMaxWidth().height(210.dp),
+                            onTimeChanged = { playbackSeconds = it },
+                        )
+                        androidx.compose.foundation.layout.Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Button(onClick = {
+                                playbackCommandId += 1
+                                playbackCommand = VimeoPlaybackCommand(
+                                    action = VimeoPlaybackAction.Play,
+                                    requestId = playbackCommandId,
+                                )
+                            }) { Text("再生") }
+                            Button(onClick = {
+                                playbackCommandId += 1
+                                playbackCommand = VimeoPlaybackCommand(
+                                    action = VimeoPlaybackAction.Pause,
+                                    requestId = playbackCommandId,
+                                )
+                            }) { Text("一時停止") }
+                            Button(onClick = {
+                                playbackCommandId += 1
+                                playbackCommand = VimeoPlaybackCommand(
+                                    action = VimeoPlaybackAction.Stop,
+                                    requestId = playbackCommandId,
+                                )
+                            }) { Text("停止") }
+                        }
+                        Text("再生位置: ${playbackSeconds.toInt() / 60}:${(playbackSeconds.toInt() % 60).toString().padStart(2, '0')}")
+                        video.thumbnailUrl?.takeIf(String::isNotBlank)?.let { thumbnail ->
+                            AsyncImage(
+                                model = thumbnail,
+                                contentDescription = "${video.title}のサムネイル",
+                                modifier = Modifier.fillMaxWidth().height(120.dp),
+                            )
+                        }
+                        Text(video.title)
+                        if (video.description.isNotBlank()) Text(video.description)
+                        val url = "https://player.vimeo.com/video/${video.vimeoVideoId}"
+                        TextButton(onClick = { uriHandler.openUri(url) }) {
+                            Text("Vimeoで再生")
+                        }
+                        Text("メモを追加")
+                        OutlinedTextField(
+                            value = memo,
+                            onValueChange = { memo = it },
+                            label = { Text("動画メモ") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 3,
+                        )
+                        Button(onClick = {
+                            model.addVideoMemo(video, memo, playbackSeconds)
+                            memo = ""
+                        }) {
+                            Text("メモを追加")
+                        }
+                        model.videoMemosFor(video).forEach { entry ->
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text(
+                                    if (entry.createdAtMillis == 0L) "以前のメモ" else
+                                        "${Instant.ofEpochMilli(entry.createdAtMillis).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm"))} / 再生位置 ${entry.playbackSeconds.toInt() / 60}:${(entry.playbackSeconds.toInt() % 60).toString().padStart(2, '0')}",
+                                )
+                                if (editingMemoId == entry.id) {
+                                    OutlinedTextField(
+                                        value = editingMemoText,
+                                        onValueChange = { editingMemoText = it },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        minLines = 3,
+                                    )
+                                    Row {
+                                        Button(onClick = {
+                                            model.updateVideoMemo(video, entry, editingMemoText)
+                                            editingMemoId = null
+                                        }) { Text("更新") }
+                                        TextButton(onClick = { editingMemoId = null }) { Text("取消") }
+                                    }
+                                } else {
+                                    Text(entry.text)
+                                    Row {
+                                        TextButton(onClick = {
+                                            editingMemoId = entry.id
+                                            editingMemoText = entry.text
+                                        }) { Text("編集") }
+                                        TextButton(onClick = { model.deleteVideoMemo(video, entry) }) { Text("削除") }
+                                    }
+                                }
+                            }
+                        }
+                        OutlinedTextField(
+                            value = question,
+                            onValueChange = { question = it },
+                            label = { Text("動画について質問") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 3,
+                        )
+                        Button(
+                            onClick = {
+                                model.submitVideoQuestion(video, memo, question, playbackSeconds)
+                                question = ""
+                            },
+                            enabled = question.trim().isNotEmpty(),
+                        ) {
+                            Text("質問を送信")
+                        }
+                        model.questionsFor(video).forEach { item ->
+                            Text("質問: ${item.questionText}")
+                            if (item.answerText.isNotBlank()) {
+                                Text("回答: ${item.answerText}")
+                            } else {
+                                Text("回答待ち")
+                            }
+                        }
+                    }
+                    HorizontalDivider()
+                }
             }
 
             Text("コミュニティへ参加")
@@ -265,3 +808,198 @@ fun CommunityRoot(model: CommunityFeatureModel) {
         }
     }
 }
+
+@Composable
+private fun VimeoVideoDetailScreen(
+    model: CommunityFeatureModel,
+    video: jp.komehyappyo.member.next.core.model.DistributedVideo,
+    onBack: () -> Unit,
+) {
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    var memo by rememberSaveable(video.id) { mutableStateOf("") }
+    var editingMemoId by rememberSaveable("${video.id}:editingMemo") { mutableStateOf<String?>(null) }
+    var editingMemoText by rememberSaveable("${video.id}:editingMemoText") { mutableStateOf("") }
+    var playbackSeconds by rememberSaveable("${video.id}:position") { mutableStateOf(0.0) }
+    var playbackCommandId by rememberSaveable("${video.id}:playbackCommand") { mutableStateOf(0) }
+    var playbackCommand by remember { mutableStateOf<VimeoPlaybackCommand?>(null) }
+
+    fun sendCommand(action: VimeoPlaybackAction, positionSeconds: Double? = null) {
+        playbackCommandId += 1
+        playbackCommand = VimeoPlaybackCommand(action, playbackCommandId, positionSeconds)
+    }
+
+    if (isLandscape) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+            VimeoPlayerView(
+                videoId = video.vimeoVideoId,
+                playbackCommand = playbackCommand,
+                initialPlaybackSeconds = playbackSeconds,
+                isLandscape = isLandscape,
+                onTimeChanged = { playbackSeconds = it },
+                modifier = Modifier.fillMaxHeight().aspectRatio(16f / 9f),
+            )
+        }
+        return
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        TextButton(onClick = onBack) { Text("動画一覧へ戻る") }
+        VimeoPlayerView(
+            videoId = video.vimeoVideoId,
+            playbackCommand = playbackCommand,
+            initialPlaybackSeconds = playbackSeconds,
+            isLandscape = isLandscape,
+            onTimeChanged = { playbackSeconds = it },
+            modifier = Modifier.fillMaxWidth().height(210.dp),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { sendCommand(VimeoPlaybackAction.Play) }) { Text("再生") }
+            Button(onClick = { sendCommand(VimeoPlaybackAction.Pause) }) { Text("一時停止") }
+            Button(onClick = { sendCommand(VimeoPlaybackAction.Stop) }) { Text("停止") }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = {
+                sendCommand(VimeoPlaybackAction.Seek, (playbackSeconds - 1).coerceAtLeast(0.0))
+            }) { Text("-1秒") }
+            OutlinedButton(onClick = {
+                sendCommand(VimeoPlaybackAction.Seek, playbackSeconds + 1)
+            }) { Text("+1秒") }
+        }
+        Text("再生位置: ${playbackSeconds.toInt() / 60}:${(playbackSeconds.toInt() % 60).toString().padStart(2, '0')}")
+        Text(video.title)
+        Text("メモを追加")
+        OutlinedTextField(
+            value = memo,
+            onValueChange = { memo = it },
+            label = { Text("動画メモ") },
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 3,
+        )
+        Button(
+            onClick = {
+                model.addVideoMemo(video, memo, playbackSeconds)
+                memo = ""
+            },
+            enabled = memo.trim().isNotEmpty(),
+        ) { Text("メモを追加") }
+        model.videoMemosFor(video).forEach { entry ->
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    if (entry.createdAtMillis == 0L) "以前のメモ" else
+                        "${Instant.ofEpochMilli(entry.createdAtMillis).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm"))} / 再生位置 ${entry.playbackSeconds.toInt() / 60}:${(entry.playbackSeconds.toInt() % 60).toString().padStart(2, '0')}",
+                )
+                if (editingMemoId == entry.id) {
+                    OutlinedTextField(
+                        value = editingMemoText,
+                        onValueChange = { editingMemoText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3,
+                    )
+                    Row {
+                        Button(onClick = {
+                            model.updateVideoMemo(video, entry, editingMemoText)
+                            editingMemoId = null
+                        }) { Text("更新") }
+                        TextButton(onClick = { editingMemoId = null }) { Text("取消") }
+                    }
+                } else {
+                    Text(entry.text)
+                    Row {
+                        TextButton(onClick = {
+                            sendCommand(VimeoPlaybackAction.SeekAndPlay, entry.playbackSeconds)
+                        }, enabled = entry.createdAtMillis != 0L) { Text("この位置から再生") }
+                        TextButton(onClick = {
+                            editingMemoId = entry.id
+                            editingMemoText = entry.text
+                        }) { Text("編集") }
+                        TextButton(onClick = { model.deleteVideoMemo(video, entry) }) { Text("削除") }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RadioSection(
+    programs: List<RadioProgram>,
+    records: List<RadioPlaybackRecord>,
+    currentUserId: String,
+    playingProgramId: String?,
+    isLoading: Boolean,
+    formatter: DateTimeFormatter,
+    onToggle: (RadioProgram) -> Unit,
+    isPlayable: (RadioProgram) -> Boolean,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        programs.forEach { program ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(program.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(program.description)
+                Text("配信開始: ${formatter.format(program.broadcastStartAt.atZone(ZoneId.systemDefault()))}")
+                val record = records.firstOrNull {
+                    it.userId == currentUserId && it.programId == program.id
+                }
+                record?.let {
+                    Text(
+                        "再生回数: ${it.playCount} 回 / 最終再生: " +
+                            (it.lastPlayedAt?.let { time ->
+                                formatter.format(time.atZone(ZoneId.systemDefault()))
+                            } ?: "未再生")
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { onToggle(program) },
+                        enabled = !isLoading,
+                    ) {
+                        Text(
+                            when {
+                                !isPlayable(program) -> "配信前"
+                                playingProgramId == program.id -> "停止"
+                                else -> "再生"
+                            },
+                        )
+                    }
+                    if (playingProgramId == program.id) {
+                        Text("再生中")
+                    }
+                }
+            }
+            HorizontalDivider()
+        }
+    }
+}
+
+private fun radioDateTimeFormatter(): DateTimeFormatter =
+    DateTimeFormatter.ofPattern("M月d日 HH:mm", Locale.JAPAN)
+
+private fun auditActionText(action: String): String = when (action) {
+    "membership.approved" -> "参加申請承認"
+    "membership.rejected" -> "参加申請却下"
+    "membership.suspended" -> "会員を利用停止"
+    "administrator.added" -> "管理者を追加"
+    "administrator.deactivated" -> "管理者を無効化"
+    else -> action
+}
+
+private fun auditCreatedAtText(createdAt: String): String = runCatching {
+    Instant.parse(createdAt).atZone(ZoneId.systemDefault()).format(
+        DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm"),
+    )
+}.getOrNull() ?: createdAt

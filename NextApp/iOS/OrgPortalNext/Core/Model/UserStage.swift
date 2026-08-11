@@ -64,6 +64,31 @@ public struct Community: Identifiable, Equatable, Codable, Sendable {
     }
 }
 
+public struct CommunityAuditLog: Identifiable, Equatable, Codable, Sendable {
+    public let id: String
+    public let action: String
+    public let actorUserId: String?
+    public let targetUserId: String?
+    public let communityId: String
+    public let createdAt: Date?
+
+    public init(
+        id: String,
+        action: String,
+        actorUserId: String? = nil,
+        targetUserId: String? = nil,
+        communityId: String,
+        createdAt: Date? = nil
+    ) {
+        self.id = id
+        self.action = action
+        self.actorUserId = actorUserId
+        self.targetUserId = targetUserId
+        self.communityId = communityId
+        self.createdAt = createdAt
+    }
+}
+
 public struct CommunityMembership: Identifiable, Equatable, Codable, Sendable {
     public let id: String
     public let communityId: String
@@ -221,6 +246,100 @@ public struct CommunityAdminAccess: Equatable, Codable, Sendable {
             || isLegacyFullAccess
             || permissions.contains(Self.memberReviewPermission)
             || permissions.contains(Self.legacyMemberReviewPermission)
+    }
+}
+
+public struct CommunityAdmin: Identifiable, Equatable, Codable, Sendable {
+    public var id: String { userId }
+    public let userId: String
+    public let role: String
+    public let permissions: Set<String>
+    public let isActive: Bool
+
+    public init(
+        userId: String,
+        role: String = "admin",
+        permissions: Set<String> = [],
+        isActive: Bool = true
+    ) {
+        self.userId = userId
+        self.role = role
+        self.permissions = permissions
+        self.isActive = isActive
+    }
+}
+
+public struct DistributedVideo: Identifiable, Equatable, Codable, Sendable {
+    public let id: String
+    public let communityId: String
+    public let title: String
+    public let description: String
+    public let videoURL: URL?
+    public let vimeoVideoId: String
+    public let thumbnailURL: URL?
+    public let isPublished: Bool
+    public let isMembersOnly: Bool
+    public let sortOrder: Int
+
+    public init(
+        id: String,
+        communityId: String,
+        title: String,
+        description: String = "",
+        videoURL: URL? = nil,
+        vimeoVideoId: String,
+        thumbnailURL: URL? = nil,
+        isPublished: Bool = false,
+        isMembersOnly: Bool = false,
+        sortOrder: Int = 0
+    ) {
+        self.id = id
+        self.communityId = communityId
+        self.title = title
+        self.description = description
+        self.videoURL = videoURL
+        self.vimeoVideoId = vimeoVideoId
+        self.thumbnailURL = thumbnailURL
+        self.isPublished = isPublished
+        self.isMembersOnly = isMembersOnly
+        self.sortOrder = sortOrder
+    }
+}
+
+public struct VideoQuestion: Identifiable, Equatable, Codable, Sendable {
+    public let id: String
+    public let communityId: String
+    public let memberUid: String
+    public let videoId: String
+    public let videoTitle: String
+    public let playbackSeconds: Double
+    public let memoText: String
+    public let questionText: String
+    public let answerText: String
+    public let createdAt: Date?
+
+    public init(
+        id: String,
+        communityId: String,
+        memberUid: String,
+        videoId: String,
+        videoTitle: String,
+        playbackSeconds: Double = 0,
+        memoText: String = "",
+        questionText: String,
+        answerText: String = "",
+        createdAt: Date? = nil
+    ) {
+        self.id = id
+        self.communityId = communityId
+        self.memberUid = memberUid
+        self.videoId = videoId
+        self.videoTitle = videoTitle
+        self.playbackSeconds = playbackSeconds
+        self.memoText = memoText
+        self.questionText = questionText
+        self.answerText = answerText
+        self.createdAt = createdAt
     }
 }
 

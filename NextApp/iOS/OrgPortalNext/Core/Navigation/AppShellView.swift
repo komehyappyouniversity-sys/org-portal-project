@@ -15,6 +15,7 @@ public struct AppShellView<
     Profile: View
 >: View {
     @State private var selection: AppTab = .home
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     private let home: Home
     private let tools: Tools
@@ -49,6 +50,7 @@ public struct AppShellView<
                 .tag(AppTab.profile)
         }
         .tint(DesignTokens.brandGreen)
+        .toolbar(verticalSizeClass == .compact ? .hidden : .visible, for: .tabBar)
     }
 }
 

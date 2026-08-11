@@ -1,7 +1,9 @@
 import LocalAuthentication
+import AVFoundation
 import Security
 import SwiftData
 import SwiftUI
+import WebKit
 import VisionKit
 import DataLayer
 import DesignSystem
@@ -37,8 +39,6 @@ struct OrgPortalNextApp: App {
                 MeetingMinutesRecord.self,
                 SnsCustomLinkRecord.self,
                 FavoriteBookmarkRecord.self,
-                PersonalVideoRecord.self,
-                VideoMemoRecord.self,
                 FriendContactRecord.self,
                 FriendInteractionHistoryRecord.self
             )
@@ -62,8 +62,6 @@ private struct AppBootstrapView: View {
     @StateObject private var meetingMinutesModel: MeetingMinutesFeatureModel
     @StateObject private var snsPostingAssistantModel: SnsPostingAssistantFeatureModel
     @StateObject private var favoriteBookmarkModel: FavoriteBookmarkFeatureModel
-    @StateObject private var personalVideoModel: PersonalVideoFeatureModel
-    @StateObject private var videoQuestionModel: VideoQuestionFeatureModel
     @StateObject private var friendExchangeModel: FriendExchangeFeatureModel
     @StateObject private var appBackupModel: AppBackupFeatureModel
     @StateObject private var appSession: AppSession
@@ -169,21 +167,7 @@ private struct AppBootstrapView: View {
                 repository: favoriteBookmarkRepository
             )
         )
-        let personalVideoRepository = SwiftDataPersonalVideoRepository(modelContainer: modelContainer)
-        _personalVideoModel = StateObject(
-            wrappedValue: PersonalVideoFeatureModel(
-                repository: personalVideoRepository
-            )
-        )
-        let videoQuestionRepository = FirebaseRESTVideoQuestionRepository(
-            projectId: firebaseProjectID
-        )
-        _videoQuestionModel = StateObject(
-            wrappedValue: VideoQuestionFeatureModel(
-                repository: videoQuestionRepository,
-                session: session
-            )
-        )
+
         _friendExchangeModel = StateObject(
             wrappedValue: FriendExchangeFeatureModel(
                 repository: friendExchangeRepository
@@ -200,7 +184,6 @@ private struct AppBootstrapView: View {
                     recordingStore: meetingRecordingStore,
                     snsCustomLinkRepository: snsCustomLinkRepository,
                     favoriteBookmarkRepository: favoriteBookmarkRepository,
-                    personalVideoRepository: personalVideoRepository,
                     friendExchangeRepository: friendExchangeRepository
                 )
             )
@@ -215,7 +198,6 @@ private struct AppBootstrapView: View {
                 cashDistributionModel: cashDistributionModel,
                 meetingMinutesModel: meetingMinutesModel,
                 favoriteBookmarkModel: favoriteBookmarkModel,
-                personalVideoModel: personalVideoModel,
                 appBackupModel: appBackupModel
             ),
             tools: ToolsHubView(
@@ -226,8 +208,6 @@ private struct AppBootstrapView: View {
                 snsPostingAssistantModel: snsPostingAssistantModel,
                 favoriteBookmarkModel: favoriteBookmarkModel,
                 friendExchangeModel: friendExchangeModel,
-                personalVideoModel: personalVideoModel,
-                videoQuestionModel: videoQuestionModel,
             ),
             community: ConnectedRootView(
                 communityModel: communityModel,
@@ -236,6 +216,341 @@ private struct AppBootstrapView: View {
             ),
             profile: AccountRootView(model: accountModel)
         )
+    }
+}
+
+private struct VimeoVideoMemo: Codable, Identifiable, Equatable {
+    let id: String
+    var text: String
+    let playbackSeconds: Double
+    let createdAt: Date
+    var updatedAt: Date
+}
+
+@MainActor
+private struct VimeoMemoStore {
+    private let defaults = UserDefaults.standard
+    private let storageKey = "vimeo_video_memos"
+
+    func entries(communityId: String, videoId: String) -> [VimeoVideoMemo] {
+        let stored = values()[key(communityId: communityId, videoId: videoId)] ?? ""
+        guard !stored.isEmpty else { return [] }
+        if let data = stored.data(using: .utf8),
+           let entries = try? JSONDecoder().decode([VimeoVideoMemo].self, from: data) {
+            return entries.sorted { $0.createdAt > $1.createdAt }
+        }
+        return [VimeoVideoMemo(
+            id: "legacy",
+            text: stored,
+            playbackSeconds: 0,
+            createdAt: .distantPast,
+            updatedAt: .distantPast
+        )]
+    }
+
+    func serialized(_ entries: [VimeoVideoMemo]) -> String {
+        guard !entries.isEmpty,
+              let data = try? JSONEncoder().encode(entries),
+              let value = String(data: data, encoding: .utf8) else { return "" }
+        return value
+    }
+
+    func save(communityId: String, videoId: String, entries: [VimeoVideoMemo]) {
+        var current = values()
+        let memoKey = key(communityId: communityId, videoId: videoId)
+        let serialized = serialized(entries)
+        if serialized.isEmpty {
+            current.removeValue(forKey: memoKey)
+        } else {
+            current[memoKey] = serialized
+        }
+        defaults.set(current, forKey: storageKey)
+    }
+
+    func saveAll(_ values: [String: String]) {
+        defaults.set(values, forKey: storageKey)
+    }
+
+    private func values() -> [String: String] {
+        defaults.dictionary(forKey: storageKey) as? [String: String] ?? [:]
+    }
+
+    private func key(communityId: String, videoId: String) -> String {
+        "\(communityId):\(videoId)"
+    }
+}
+
+private struct VimeoPlayerCommand: Equatable {
+    enum Action: Equatable {
+        case play
+        case pause
+        case stop
+        case seek(Double)
+        case seekAndPlay(Double)
+    }
+
+    let action: Action
+    let token = UUID()
+}
+
+@MainActor
+private struct VimeoPlayerView: UIViewRepresentable {
+    let videoId: String
+    let command: VimeoPlayerCommand?
+    let initialPlaybackSeconds: Double
+    let onTimeChanged: (Double) -> Void
+    let onDurationChanged: (Double) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onTimeChanged: onTimeChanged, onDurationChanged: onDurationChanged)
+    }
+
+    func makeUIView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.allowsInlineMediaPlayback = true
+        configuration.mediaTypesRequiringUserActionForPlayback = []
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.isOpaque = false
+        webView.backgroundColor = .black
+        webView.loadHTMLString(
+            """
+            <html><body style='margin:0;background:#000'>
+            <iframe src='https://player.vimeo.com/video/\(videoId)#t=\(initialPlaybackSeconds)s'
+              style='width:100%;height:100%;border:0' allow='autoplay; fullscreen'
+              allowfullscreen></iframe>
+            <script src='https://player.vimeo.com/api/player.js'></script>
+            <script>
+              const vimeoFrame = document.querySelector('iframe');
+              const vimeoPlayer = new Vimeo.Player(vimeoFrame);
+              window.vimeoPlaybackSeconds = 0;
+              window.vimeoDurationSeconds = 0;
+              const initialPlaybackSeconds = \(initialPlaybackSeconds);
+              const updateDuration = () => {
+                vimeoPlayer.getDuration().then((seconds) => {
+                  window.vimeoDurationSeconds = seconds || 0;
+                });
+              };
+              const restoreInitialPlaybackPosition = () => {
+                if (initialPlaybackSeconds <= 0) { return Promise.resolve(0); }
+                return vimeoPlayer.setCurrentTime(initialPlaybackSeconds).then((seconds) => {
+                  window.vimeoPlaybackSeconds = seconds || initialPlaybackSeconds;
+                  return window.vimeoPlaybackSeconds;
+                });
+              };
+              vimeoPlayer.ready().then(() => {
+                updateDuration();
+                return restoreInitialPlaybackPosition();
+              }).then(() => {
+                if (initialPlaybackSeconds <= 0) {
+                  return vimeoPlayer.getCurrentTime().then((seconds) => {
+                    window.vimeoPlaybackSeconds = seconds || 0;
+                  });
+                }
+              });
+              vimeoPlayer.on('loaded', updateDuration);
+              vimeoPlayer.on('durationchange', (data) => {
+                window.vimeoDurationSeconds = data.duration || window.vimeoDurationSeconds;
+              });
+              vimeoPlayer.on('timeupdate', (data) => {
+                window.vimeoPlaybackSeconds = data.seconds || 0;
+                window.vimeoDurationSeconds = data.duration || window.vimeoDurationSeconds;
+              });
+              window.vimeoCurrentTime = () => window.vimeoPlaybackSeconds;
+              window.vimeoDuration = () => window.vimeoDurationSeconds;
+              window.vimeoPlay = () => vimeoPlayer.play();
+              window.vimeoPause = () => vimeoPlayer.pause();
+              window.vimeoStop = () => vimeoPlayer.pause().then(() => vimeoPlayer.setCurrentTime(0));
+              window.vimeoSeek = (seconds) => vimeoPlayer.setCurrentTime(seconds);
+              window.vimeoSeekAndPlay = (seconds) => vimeoPlayer.setCurrentTime(seconds).then(() => vimeoPlayer.play());
+            </script></body></html>
+            """,
+            baseURL: URL(string: "https://player.vimeo.com")
+        )
+        context.coordinator.start(webView)
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        context.coordinator.apply(command, to: webView)
+    }
+
+    static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
+        coordinator.stop()
+    }
+
+    @MainActor
+    final class Coordinator {
+        private let onTimeChanged: (Double) -> Void
+        private let onDurationChanged: (Double) -> Void
+        private var timer: Timer?
+        private var lastCommandToken: UUID?
+
+        init(onTimeChanged: @escaping (Double) -> Void, onDurationChanged: @escaping (Double) -> Void) {
+            self.onTimeChanged = onTimeChanged
+            self.onDurationChanged = onDurationChanged
+        }
+
+        func start(_ webView: WKWebView) {
+            refreshPlaybackState(in: webView)
+            timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self, weak webView] _ in
+                Task { @MainActor [weak self, weak webView] in
+                    guard let self, let webView else { return }
+                    self.refreshPlaybackState(in: webView)
+                }
+            }
+        }
+
+        private func refreshPlaybackState(in webView: WKWebView) {
+            webView.evaluateJavaScript("window.vimeoCurrentTime ? window.vimeoCurrentTime() : 0") { [weak self] value, _ in
+                if let seconds = value as? Double {
+                    self?.onTimeChanged(seconds)
+                }
+            }
+            webView.evaluateJavaScript("window.vimeoDuration ? window.vimeoDuration() : 0") { [weak self] value, _ in
+                if let seconds = value as? Double, seconds > 0 {
+                    self?.onDurationChanged(seconds)
+                }
+            }
+        }
+
+        func apply(_ command: VimeoPlayerCommand?, to webView: WKWebView) {
+            guard let command, command.token != lastCommandToken else { return }
+            lastCommandToken = command.token
+            let script: String
+            switch command.action {
+            case .play: script = "window.vimeoPlay ? window.vimeoPlay() : null"
+            case .pause: script = "window.vimeoPause ? window.vimeoPause() : null"
+            case .stop: script = "window.vimeoStop ? window.vimeoStop() : null"
+            case let .seek(seconds):
+                script = "window.vimeoSeek ? window.vimeoSeek(\(seconds)) : null"
+            case let .seekAndPlay(seconds):
+                script = "window.vimeoSeekAndPlay ? window.vimeoSeekAndPlay(\(seconds)) : null"
+            }
+            webView.evaluateJavaScript(script)
+        }
+
+        func stop() {
+            timer?.invalidate()
+            timer = nil
+        }
+    }
+}
+
+private struct VimeoPlayerControlsView: View {
+    enum Layout {
+        case standard
+        case sliderOnly
+        case actionsOnly
+    }
+
+    let seekTo: (VimeoPlayerCommand) -> Void
+    @Binding var playbackSeconds: Double
+    let duration: Double
+    let layout: Layout
+
+    @State private var isScrubbing = false
+    @State private var scrubSeconds = 0.0
+
+    var body: some View {
+        switch layout {
+        case .standard:
+            VStack(alignment: .leading, spacing: 8) {
+                playbackSlider
+                HStack(spacing: 8) { playbackActions }
+            }
+        case .sliderOnly:
+            playbackSlider
+        case .actionsOnly:
+            VStack(spacing: 6) { playbackActions }
+        }
+    }
+
+    private var playbackSlider: some View {
+        HStack(spacing: 8) {
+            Slider(
+                value: Binding(
+                    get: { isScrubbing ? scrubSeconds : playbackSeconds },
+                    set: { scrubSeconds = $0 }
+                ),
+                in: 0...(duration > 0 ? duration : 1),
+                onEditingChanged: { editing in
+                    if editing {
+                        scrubSeconds = playbackSeconds
+                        isScrubbing = true
+                    } else {
+                        let target = scrubSeconds
+                        isScrubbing = false
+                        playbackSeconds = target
+                        seekTo(VimeoPlayerCommand(action: .seek(target)))
+                    }
+                }
+            )
+            .accessibilityElement(children: .combine)
+
+            Text("\(formatPlayback(isScrubbing ? scrubSeconds : playbackSeconds)) / \(formatPlayback(duration))")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .frame(minWidth: 95, alignment: .trailing)
+        }
+    }
+
+    @ViewBuilder
+    private var playbackActions: some View {
+        Button {
+            seekTo(VimeoPlayerCommand(action: .play))
+        } label: {
+            Label("再生", systemImage: "play.fill")
+        }
+        .buttonStyle(.borderedProminent)
+        .labelStyle(.iconOnly)
+        .frame(height: 44)
+
+        Button {
+            seekTo(VimeoPlayerCommand(action: .pause))
+        } label: {
+            Label("一時停止", systemImage: "pause.fill")
+        }
+        .buttonStyle(.bordered)
+        .labelStyle(.iconOnly)
+        .frame(height: 44)
+
+        Button {
+            seekTo(VimeoPlayerCommand(action: .stop))
+        } label: {
+            Label("停止", systemImage: "stop.fill")
+        }
+        .buttonStyle(.bordered)
+        .labelStyle(.iconOnly)
+        .frame(height: 44)
+
+        Button("-1秒") {
+            seek(by: -1)
+        }
+        .buttonStyle(.bordered)
+        .frame(height: 44)
+
+        Button("+1秒") {
+            seek(by: 1)
+        }
+        .buttonStyle(.bordered)
+        .frame(height: 44)
+    }
+
+    private func seek(by seconds: Double) {
+        let next: Double
+        if duration > 0 {
+            next = min(max(playbackSeconds + seconds, 0), duration)
+        } else {
+            next = max(playbackSeconds + seconds, 0)
+        }
+        playbackSeconds = next
+        seekTo(VimeoPlayerCommand(action: .seek(next)))
+    }
+
+    private func formatPlayback(_ seconds: Double) -> String {
+        let clamped = max(0, Int(seconds.rounded()))
+        return "\(clamped / 60):\(String(format: "%02d", clamped % 60))"
     }
 }
 
@@ -248,6 +563,16 @@ private final class CommunityFeatureModel: ObservableObject {
     @Published private(set) var items: [(CommunityMembership, Community)] = []
     @Published private(set) var adminAccess: CommunityAdminAccess?
     @Published private(set) var pendingApplications: [CommunityMembership] = []
+    @Published private(set) var administrators: [CommunityAdmin] = []
+    @Published private(set) var communityMembers: [CommunityMembership] = []
+    @Published private(set) var distributedVideos: [DistributedVideo] = []
+    @Published private(set) var managedVideos: [DistributedVideo] = []
+    @Published private(set) var vimeoLibraryVideos: [DistributedVideo] = []
+    @Published private(set) var vimeoFolders: [VimeoFolder] = []
+    @Published private(set) var vimeoConfiguration = VimeoConfiguration()
+    @Published private(set) var videoQuestions: [VideoQuestion] = []
+    @Published private(set) var auditLogs: [CommunityAuditLog] = []
+    private let memoStore: VimeoMemoStore
     @Published private(set) var reviewingUserId: String?
     @Published private(set) var isLoading = false
     @Published var message: String?
@@ -256,14 +581,154 @@ private final class CommunityFeatureModel: ObservableObject {
     private let repository: any CommunityRepository
     let session: AppSession
 
-    init(repository: any CommunityRepository, session: AppSession) {
+    init(
+        repository: any CommunityRepository,
+        session: AppSession,
+        memoStore: VimeoMemoStore = VimeoMemoStore()
+    ) {
         self.repository = repository
         self.session = session
+        self.memoStore = memoStore
+    }
+
+    func memos(for video: DistributedVideo) -> [VimeoVideoMemo] {
+        memoStore.entries(communityId: video.communityId, videoId: video.id)
+    }
+
+    func addMemo(_ text: String, for video: DistributedVideo, playbackSeconds: Double) {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            message = "メモを入力してください。"
+            return
+        }
+        var entries = memos(for: video)
+        entries.append(VimeoVideoMemo(
+            id: UUID().uuidString,
+            text: normalized,
+            playbackSeconds: playbackSeconds,
+            createdAt: Date(),
+            updatedAt: Date()
+        ))
+        persistMemos(entries, for: video, successMessage: "動画メモを追加しました。")
+    }
+
+    func updateMemo(_ entry: VimeoVideoMemo, text: String, for video: DistributedVideo) {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            message = "メモを入力してください。"
+            return
+        }
+        let entries = memos(for: video).map { item in
+            item.id == entry.id
+                ? VimeoVideoMemo(
+                    id: item.id,
+                    text: normalized,
+                    playbackSeconds: item.playbackSeconds,
+                    createdAt: item.createdAt,
+                    updatedAt: Date()
+                )
+                : item
+        }
+        persistMemos(entries, for: video, successMessage: "動画メモを更新しました。")
+    }
+
+    func deleteMemo(_ entry: VimeoVideoMemo, for video: DistributedVideo) {
+        let entries = memos(for: video).filter { $0.id != entry.id }
+        persistMemos(entries, for: video, successMessage: "動画メモを削除しました。")
+    }
+
+    private func persistMemos(
+        _ entries: [VimeoVideoMemo],
+        for video: DistributedVideo,
+        successMessage: String
+    ) {
+        guard let userId = session.authenticatedUserId,
+              let token = session.authenticationToken else { return }
+        let payload = memoStore.serialized(entries)
+        Task {
+            do {
+                try await repository.saveVideoMemo(
+                    userId: userId,
+                    communityId: video.communityId,
+                    videoId: video.id,
+                    memo: payload,
+                    idToken: token
+                )
+                memoStore.save(communityId: video.communityId, videoId: video.id, entries: entries)
+                message = successMessage
+            } catch {
+                message = error.localizedDescription
+            }
+        }
+    }
+
+    func questions(for video: DistributedVideo) -> [VideoQuestion] {
+        videoQuestions.filter { $0.videoId == video.id }
+    }
+
+    func submitVideoQuestion(
+        _ question: String,
+        memo: String,
+        for video: DistributedVideo,
+        playbackSeconds: Double
+    ) {
+        guard let userId = session.authenticatedUserId,
+              let token = session.authenticationToken,
+              let communityId = session.selectedCommunityId else { return }
+        Task {
+            do {
+                try await repository.saveVideoQuestion(
+                    communityId: communityId,
+                    memberUid: userId,
+                    video: video,
+                    memoText: memo,
+                    questionText: question,
+                    playbackSeconds: playbackSeconds,
+                    idToken: token
+                )
+                message = "質問を送信しました。"
+                await refreshManagement()
+            } catch {
+                message = error.localizedDescription
+            }
+        }
     }
 
     var isLoggedIn: Bool {
         session.authenticatedUserId != nil && session.authenticationToken != nil
     }
+
+    var canReviewMembers: Bool {
+        adminAccess?.canReviewMembers == true
+    }
+
+    var isOwner: Bool {
+        adminAccess?.role == "owner"
+    }
+
+    var administratorCandidates: [CommunityMembership] {
+        let activeAdminIDs = Set(
+            administrators.filter(\.isActive).map(\.userId)
+        )
+        let query = adminQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        return communityMembers
+            .filter { member in
+                guard member.status == .approved,
+                      !activeAdminIDs.contains(member.userId) else { return false }
+                guard !query.isEmpty else { return true }
+                return [
+                    member.userId,
+                    member.applicantName,
+                    member.applicantFurigana,
+                    member.applicantEmail
+                ].compactMap { $0 }.contains {
+                    $0.localizedCaseInsensitiveContains(query)
+                }
+            }
+            .sorted { ($0.applicantName ?? $0.userId) < ($1.applicantName ?? $1.userId) }
+    }
+
+    @Published var adminQuery = ""
 
     func refreshPublicCommunities() {
         isLoading = true
@@ -299,6 +764,10 @@ private final class CommunityFeatureModel: ObservableObject {
         }
         guard community.joinEnabled else {
             message = "このコミュニティは現在、参加申請を受け付けていません。"
+            return
+        }
+        if membershipStatus(for: community.id) != nil {
+            message = "このコミュニティには既に参加申請済みです。状態を確認してください。"
             return
         }
         candidate = community
@@ -385,7 +854,12 @@ private final class CommunityFeatureModel: ObservableObject {
         Task { await refreshManagement() }
     }
 
-    func review(_ application: CommunityMembership, status: CommunityMembershipStatus) {
+    func review(
+        _ application: CommunityMembership,
+        status: CommunityMembershipStatus,
+        auditAction: String? = nil,
+        successMessage: String? = nil
+    ) {
         guard status == .approved || status == .rejected,
               let communityId = session.selectedCommunityId,
               let reviewerUserId = session.authenticatedUserId,
@@ -399,9 +873,11 @@ private final class CommunityFeatureModel: ObservableObject {
                     applicantUserId: application.userId,
                     reviewerUserId: reviewerUserId,
                     status: status,
+                    auditAction: auditAction,
                     idToken: token
                 )
-                message = status == .approved ? "参加申請を承認しました。" : "参加申請を却下しました。"
+                message = successMessage
+                    ?? (status == .approved ? "参加申請を承認しました。" : "参加申請を却下しました。")
                 await refreshManagement()
             } catch {
                 message = error.localizedDescription
@@ -416,6 +892,13 @@ private final class CommunityFeatureModel: ObservableObject {
               let token = session.authenticationToken else {
             adminAccess = nil
             pendingApplications = []
+            administrators = []
+            communityMembers = []
+            distributedVideos = []
+            managedVideos = []
+            vimeoLibraryVideos = []
+            vimeoConfiguration = VimeoConfiguration()
+            auditLogs = []
             return
         }
         do {
@@ -431,11 +914,276 @@ private final class CommunityFeatureModel: ObservableObject {
                     idToken: token
                 )
                 : []
+            administrators = access?.canReviewMembers == true
+                ? try await repository.administrators(
+                    communityId: communityId,
+                    idToken: token
+                )
+                : []
+            communityMembers = access?.canReviewMembers == true
+                ? try await repository.communityMembers(
+                    communityId: communityId,
+                    idToken: token
+                )
+                : []
+            managedVideos = access?.canReviewMembers == true
+                ? try await repository.adminCommunityVideos(
+                    communityId: communityId,
+                    idToken: token
+                )
+                : []
+            vimeoLibraryVideos = []
+            vimeoConfiguration = access?.canReviewMembers == true
+                ? (try? await repository.vimeoConfiguration(
+                    communityId: communityId,
+                    idToken: token
+                )) ?? VimeoConfiguration()
+                : VimeoConfiguration()
+            distributedVideos = try await repository.communityVideos(
+                communityId: communityId,
+                idToken: token
+            )
+            auditLogs = access?.canReviewMembers == true
+                ? (try? await repository.auditLogs(communityId: communityId, idToken: token)) ?? []
+                : []
+            if let remoteMemos = try? await repository.videoMemos(
+                userId: userId,
+                idToken: token
+            ) {
+                memoStore.saveAll(remoteMemos)
+            }
+            videoQuestions = (try? await repository.videoQuestions(
+                communityId: communityId,
+                memberUid: userId,
+                idToken: token
+            )) ?? []
         } catch {
             adminAccess = nil
             pendingApplications = []
+            administrators = []
+            communityMembers = []
+            distributedVideos = []
+            managedVideos = []
+            vimeoLibraryVideos = []
+            vimeoConfiguration = VimeoConfiguration()
+            auditLogs = []
             message = error.localizedDescription
         }
+    }
+
+    func saveVimeoConfiguration(accessToken: String, userId: String, query: String) {
+        guard let communityId = session.selectedCommunityId,
+              let token = session.authenticationToken,
+              !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !userId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            message = "VimeoアクセストークンとユーザーIDを入力してください。"
+            return
+        }
+        Task {
+            do {
+                try await repository.saveVimeoConfiguration(
+                    communityId: communityId,
+                    accessToken: accessToken,
+                    userId: userId,
+                    query: query,
+                    idToken: token
+                )
+                message = "Vimeo接続設定を保存しました。"
+                await refreshManagement()
+            } catch {
+                message = "Vimeo接続設定の保存に失敗しました: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func refreshVimeoLibrary() {
+        guard let communityId = session.selectedCommunityId,
+              let token = session.authenticationToken,
+              adminAccess?.canReviewMembers == true else { return }
+        Task {
+            do {
+                vimeoLibraryVideos = try await repository.vimeoLibraryVideos(
+                    communityId: communityId,
+                    idToken: token
+                )
+                message = "Vimeoから\(vimeoLibraryVideos.count)件の動画を取得しました。"
+            } catch {
+                vimeoLibraryVideos = []
+                message = "Vimeo動画の取得に失敗しました: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func clearVimeoLibrary() {
+        vimeoLibraryVideos = []
+    }
+
+    func saveCommunityVideos(_ videos: [DistributedVideo], isPublished: Bool) {
+        guard let communityId = session.selectedCommunityId,
+              let token = session.authenticationToken,
+              !videos.isEmpty else { return }
+        Task {
+            do {
+                for video in videos {
+                    try await repository.saveCommunityVideo(
+                        communityId: communityId,
+                        videoId: video.vimeoVideoId,
+                        title: video.title,
+                        description: video.description,
+                        vimeoVideoId: video.vimeoVideoId,
+                        vimeoURL: video.videoURL?.absoluteString ?? "",
+                        thumbnailURL: video.thumbnailURL?.absoluteString ?? "",
+                        isPublished: isPublished,
+                        idToken: token
+                    )
+                }
+                message = "\(videos.count)件の動画を\(isPublished ? "公開" : "下書き保存")しました。"
+                await refreshManagement()
+            } catch {
+                message = "動画の一括保存に失敗しました: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func refreshVimeoFolders() {
+        guard let communityId = session.selectedCommunityId,
+              let token = session.authenticationToken,
+              adminAccess?.canReviewMembers == true else { return }
+        Task {
+            do {
+                vimeoFolders = try await repository.vimeoFolders(communityId: communityId, idToken: token)
+                message = "Vimeoから\(vimeoFolders.count)件のフォルダを取得しました。"
+            } catch {
+                vimeoFolders = []
+                message = "Vimeoフォルダの取得に失敗しました: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func refreshVimeoFolderVideos(folder: VimeoFolder) {
+        guard let communityId = session.selectedCommunityId,
+              let token = session.authenticationToken,
+              adminAccess?.canReviewMembers == true else { return }
+        Task {
+            do {
+                vimeoLibraryVideos = try await repository.vimeoFolderVideos(
+                    communityId: communityId,
+                    folderId: folder.id,
+                    idToken: token
+                )
+                message = "「\(folder.name)」から\(vimeoLibraryVideos.count)件の動画を取得しました。"
+            } catch {
+                vimeoLibraryVideos = []
+                message = "Vimeoフォルダ内動画の取得に失敗しました: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func saveCommunityVideo(
+        videoId: String,
+        title: String,
+        description: String,
+        vimeoVideoId: String,
+        vimeoURL: String,
+        thumbnailURL: String,
+        isPublished: Bool
+    ) {
+        guard let communityId = session.selectedCommunityId,
+              let token = session.authenticationToken else { return }
+        Task {
+            do {
+                try await repository.saveCommunityVideo(
+                    communityId: communityId,
+                    videoId: videoId,
+                    title: title,
+                    description: description,
+                    vimeoVideoId: vimeoVideoId,
+                    vimeoURL: vimeoURL,
+                    thumbnailURL: thumbnailURL,
+                    isPublished: isPublished,
+                    idToken: token
+                )
+                message = "動画を保存しました。"
+                await refreshManagement()
+            } catch {
+                message = error.localizedDescription
+            }
+        }
+    }
+
+    func saveAdministrator(_ adminUserId: String) {
+        guard let communityId = session.selectedCommunityId,
+              let actorUserId = session.authenticatedUserId,
+              let token = session.authenticationToken else { return }
+        guard isOwner else {
+            message = "管理者の追加はOwnerのみが操作できます。"
+            return
+        }
+        let normalized = adminUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            message = "管理者のユーザーIDを入力してください。"
+            return
+        }
+        isLoading = true
+        Task {
+            do {
+                try await repository.saveAdministrator(
+                    communityId: communityId,
+                    adminUserId: normalized,
+                    role: "admin",
+                    permissions: [CommunityAdminAccess.memberReviewPermission],
+                    isActive: true,
+                    actorUserId: actorUserId,
+                    idToken: token
+                )
+                message = "管理者を追加しました。"
+                await refreshManagement()
+                isLoading = false
+            } catch {
+                isLoading = false
+                message = error.localizedDescription
+            }
+        }
+    }
+
+    func deactivateAdministrator(_ admin: CommunityAdmin) {
+        guard let communityId = session.selectedCommunityId,
+              let actorUserId = session.authenticatedUserId,
+              let token = session.authenticationToken else { return }
+        guard isOwner else {
+            message = "管理者の無効化はOwnerのみが操作できます。"
+            return
+        }
+        guard admin.userId != session.authenticatedUserId else {
+            message = "自分自身の管理者権限はこの画面から無効化できません。"
+            return
+        }
+        Task {
+            do {
+                try await repository.saveAdministrator(
+                    communityId: communityId,
+                    adminUserId: admin.userId,
+                    role: admin.role,
+                    permissions: admin.permissions,
+                    isActive: false,
+                    actorUserId: actorUserId,
+                    idToken: token
+                )
+                message = "管理者を無効化しました。"
+                await refreshManagement()
+            } catch {
+                message = error.localizedDescription
+            }
+        }
+    }
+
+    func suspendMember(_ member: CommunityMembership) {
+        review(
+            member,
+            status: .rejected,
+            auditAction: "membership.suspended",
+            successMessage: "会員を利用停止しました。"
+        )
     }
 }
 
@@ -518,23 +1266,27 @@ private struct ConnectedRootView: View {
     @ObservedObject var communityModel: CommunityFeatureModel
     @ObservedObject var postModel: PostFeatureModel
     @ObservedObject var announcementModel: AnnouncementFeatureModel
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var selection = 0
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("つながる", selection: $selection) {
-                Text("コミュニティ").tag(0)
-                Text("投稿").tag(1)
-                Text("お知らせ").tag(2)
+            if verticalSizeClass != .compact {
+                Picker("つながる", selection: $selection) {
+                    Text("コミュニティ").tag(0)
+                    Text("投稿").tag(1)
+                    Text("お知らせ").tag(2)
+                }
+                .pickerStyle(.segmented)
+                .padding(.leading, 24)
+                .padding(.trailing, 24)
+                .padding(.top, 12)
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 24)
-            .padding(.top, 12)
             if selection == 0 {
                 CommunityRootView(model: communityModel)
             } else if selection == 1 {
                 PostRootView(model: postModel)
-            } else {
+            } else if selection == 2 {
                 AnnouncementRootView(model: announcementModel)
             }
         }
@@ -680,46 +1432,313 @@ private struct AnnouncementDetailView: View {
     }
 }
 
+private struct VimeoVideoDetailView: View {
+    @ObservedObject var model: CommunityFeatureModel
+    let video: DistributedVideo
+    let onPlaybackChanged: (Double) -> Void
+
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @State private var memoDraft = ""
+    @State private var memoEditDrafts: [String: String] = [:]
+    @State private var editingMemoIDs: Set<String> = []
+    @State private var questionDraft = ""
+    @State private var playbackSeconds: Double
+    @State private var playbackDuration = 0.0
+    @State private var playerCommand: VimeoPlayerCommand?
+    @FocusState private var isMemoFocused: Bool
+    @FocusState private var isQuestionFocused: Bool
+
+    init(
+        model: CommunityFeatureModel,
+        video: DistributedVideo,
+        initialPlaybackSeconds: Double,
+        onPlaybackChanged: @escaping (Double) -> Void
+    ) {
+        self.model = model
+        self.video = video
+        self.onPlaybackChanged = onPlaybackChanged
+        _playbackSeconds = State(initialValue: initialPlaybackSeconds)
+    }
+
+    var body: some View {
+        GeometryReader { viewport in
+            ScrollViewReader { scrollProxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        VimeoPlayerView(
+                            videoId: video.vimeoVideoId,
+                            command: playerCommand,
+                            initialPlaybackSeconds: playbackSeconds,
+                            onTimeChanged: { seconds in
+                                playbackSeconds = seconds
+                                onPlaybackChanged(seconds)
+                            },
+                            onDurationChanged: { playbackDuration = $0 }
+                        )
+                        .frame(maxWidth: .infinity)
+                        .frame(height: verticalSizeClass == .compact
+                            ? viewport.size.height
+                            : 210)
+                        .id("selected-video-player")
+
+                        if verticalSizeClass != .compact {
+                            VimeoPlayerControlsView(
+                                seekTo: { playerCommand = $0 },
+                                playbackSeconds: $playbackSeconds,
+                                duration: playbackDuration,
+                                layout: .standard
+                            )
+                            Text("再生位置: \(Int(playbackSeconds) / 60):\(String(format: "%02d", Int(playbackSeconds) % 60))")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            Text(video.title)
+                                .font(.headline)
+
+                            Text("メモを追加")
+                                .font(.subheadline.bold())
+                            memoComposer(viewportWidth: viewport.size.width)
+                            questionComposer(viewportWidth: viewport.size.width)
+                            memoListSection
+                        }
+                    }
+                    .padding(verticalSizeClass == .compact ? 0 : 16)
+                }
+                .scrollDisabled(verticalSizeClass == .compact)
+                .onChange(of: verticalSizeClass) { _, newSizeClass in
+                    guard newSizeClass != .compact else { return }
+                    DispatchQueue.main.async {
+                        scrollProxy.scrollTo("selected-video-player", anchor: .top)
+                    }
+                }
+            }
+        }
+        .navigationTitle(verticalSizeClass == .compact ? "" : video.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(verticalSizeClass == .compact ? .hidden : .visible, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("キーボードを閉じる") {
+                    isMemoFocused = false
+                    isQuestionFocused = false
+                }
+            }
+        }
+        .statusBarHidden(verticalSizeClass == .compact)
+        .onAppear { onPlaybackChanged(playbackSeconds) }
+        .onDisappear { onPlaybackChanged(playbackSeconds) }
+    }
+
+    @ViewBuilder
+    private func memoComposer(viewportWidth: CGFloat) -> some View {
+        TextEditor(text: $memoDraft)
+            .font(.body)
+            .foregroundStyle(.primary)
+            .focused($isMemoFocused)
+            .frame(width: viewportWidth * 0.8, height: 110)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(8)
+            .scrollContentBackground(.hidden)
+            .background(Color.white)
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.secondary.opacity(0.25))
+            }
+        Button("メモを追加") {
+            model.addMemo(
+                memoDraft,
+                for: video,
+                playbackSeconds: playbackSeconds
+            )
+            memoDraft = ""
+            isMemoFocused = false
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(memoDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
+    @ViewBuilder
+    private func questionComposer(viewportWidth: CGFloat) -> some View {
+        Text("質問を送信")
+            .font(.subheadline.bold())
+        TextEditor(text: $questionDraft)
+            .font(.body)
+            .focused($isQuestionFocused)
+            .frame(width: viewportWidth * 0.8, height: 90)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(8)
+            .scrollContentBackground(.hidden)
+            .background(Color.white)
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.secondary.opacity(0.25))
+            }
+        Button("質問を送信") {
+            model.submitVideoQuestion(
+                questionDraft,
+                memo: memoDraft,
+                for: video,
+                playbackSeconds: playbackSeconds
+            )
+            questionDraft = ""
+            isQuestionFocused = false
+        }
+        .buttonStyle(.bordered)
+        .disabled(questionDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
+    @ViewBuilder
+    private var memoListSection: some View {
+        ForEach(model.memos(for: video)) { entry in
+            let editText = Binding<String>(
+                get: { memoEditDrafts[entry.id] ?? entry.text },
+                set: { memoEditDrafts[entry.id] = $0 }
+            )
+            VStack(alignment: .leading, spacing: 8) {
+                Text(entry.createdAt == .distantPast
+                    ? "以前のメモ"
+                    : "\(entry.createdAt.formatted(date: .abbreviated, time: .shortened)) / 再生位置 \(Int(entry.playbackSeconds) / 60):\(String(format: "%02d", Int(entry.playbackSeconds) % 60))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if editingMemoIDs.contains(entry.id) {
+                    TextEditor(text: editText)
+                        .frame(minHeight: 80)
+                        .padding(6)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.secondary.opacity(0.25))
+                        }
+                    HStack {
+                        Button("更新") {
+                            model.updateMemo(entry, text: editText.wrappedValue, for: video)
+                            editingMemoIDs.remove(entry.id)
+                        }
+                        Button("取消", role: .cancel) {
+                            editingMemoIDs.remove(entry.id)
+                        }
+                    }
+                } else {
+                    Text(entry.text)
+                    HStack {
+                        Button("この位置から再生") {
+                            playerCommand = VimeoPlayerCommand(
+                                action: .seekAndPlay(entry.playbackSeconds)
+                            )
+                        }
+                        .disabled(entry.createdAt == .distantPast)
+                        Button("編集") {
+                            memoEditDrafts[entry.id] = entry.text
+                            editingMemoIDs.insert(entry.id)
+                        }
+                        Button("削除", role: .destructive) {
+                            model.deleteMemo(entry, for: video)
+                        }
+                    }
+                }
+            }
+            .padding(10)
+            .background(Color.secondary.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+    }
+}
+
 private struct CommunityRootView: View {
     @ObservedObject var model: CommunityFeatureModel
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @State private var newAdminUserId = ""
+    @State private var videoMemoDrafts: [String: String] = [:]
+    @State private var videoMemoEditDrafts: [String: String] = [:]
+    @State private var editingVideoMemoIDs: Set<String> = []
+    @State private var videoQuestionDrafts: [String: String] = [:]
+    @State private var videoPlaybackPositions: [String: Double] = [:]
+    @State private var videoPlaybackDurations: [String: Double] = [:]
+    @State private var videoPlayerCommands: [String: VimeoPlayerCommand] = [:]
+    @SceneStorage("activeVimeoVideoID") private var activeVideoID = ""
+    @SceneStorage("activeVimeoPlaybackSeconds") private var activePlaybackSeconds = 0.0
+    @FocusState private var isVideoMemoFocused: Bool
+    @FocusState private var isVideoQuestionFocused: Bool
+    @State private var landscapeViewportHeight: CGFloat = 0
+    @State private var pendingVideoScrollID: String?
 
     var body: some View {
         NavigationStack {
-            ScrollView {
+            GeometryReader { viewport in
+                ScrollViewReader { scrollProxy in
+                    ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    if model.isLoading { ProgressView() }
-                    if let message = model.message {
-                        Text(message)
-                            .foregroundStyle(.secondary)
-                            .padding()
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.secondary.opacity(0.08))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
-                    publicCommunitySection
-                    if !model.isLoggedIn {
-                        ContentUnavailableView(
-                            "ログインが必要です",
-                            systemImage: "person.crop.circle.badge.exclamationmark",
-                            description: Text("マイページで会員登録またはログイン後に参加申請できます。")
-                        )
-                    } else {
-                        membershipSection
-                        if model.adminAccess?.canReviewMembers == true {
-                            applicationReviewSection
+                    if verticalSizeClass != .compact {
+                        if model.isLoading { ProgressView() }
+                        if let message = model.message {
+                            Text(message)
+                                .foregroundStyle(.secondary)
+                                .padding()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.secondary.opacity(0.08))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
                         }
+                        publicCommunitySection
+                        if !model.isLoggedIn {
+                            ContentUnavailableView(
+                                "ログインが必要です",
+                                systemImage: "person.crop.circle.badge.exclamationmark",
+                                description: Text("マイページで会員登録またはログイン後に参加申請できます。")
+                            )
+                        } else {
+                            membershipSection
+                            if model.canReviewMembers {
+                                applicationReviewSection
+                            }
+                        }
+                    }
+                    if model.isLoggedIn, !model.distributedVideos.isEmpty {
+                        videoSelectionSection
+                    }
+                    if verticalSizeClass != .compact, model.isLoggedIn {
                         joinSection
                     }
                 }
-                .padding(24)
-            }
-            .navigationTitle("つながる")
-            .task {
-                model.refreshPublicCommunities()
-                await model.refresh()
-            }
-            .sheet(isPresented: $model.showsScanner) {
-                CommunityQRScanner { model.receivedScan($0) }
+                .padding(verticalSizeClass == .compact ? 12 : 24)
+                    }
+                .navigationTitle(verticalSizeClass == .compact ? "" : "つながる")
+                .toolbar(verticalSizeClass == .compact ? .hidden : .visible, for: .navigationBar)
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("キーボードを閉じる") {
+                            isVideoMemoFocused = false
+                            isVideoQuestionFocused = false
+                        }
+                    }
+                }
+                .task {
+                    model.refreshPublicCommunities()
+                    await model.refresh()
+                }
+                .sheet(isPresented: $model.showsScanner) {
+                    CommunityQRScanner { model.receivedScan($0) }
+                }
+                .onAppear {
+                    landscapeViewportHeight = viewport.size.height
+                }
+                .onChange(of: viewport.size) { _, newSize in
+                    landscapeViewportHeight = newSize.height
+                }
+                .onChange(of: verticalSizeClass) { _, newSizeClass in
+                    guard newSizeClass != .compact else { return }
+                    let videoID = activeVideoID.isEmpty
+                        ? model.distributedVideos.first?.id
+                        : activeVideoID
+                    guard let videoID else { return }
+                    pendingVideoScrollID = videoID
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        guard pendingVideoScrollID == videoID else { return }
+                        scrollProxy.scrollTo(videoID, anchor: .top)
+                        pendingVideoScrollID = nil
+                    }
+                }
+                }
             }
         }
     }
@@ -870,6 +1889,354 @@ private struct CommunityRootView: View {
                 .background(.background)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             }
+            Text("管理者コンソール").font(.title3.bold())
+            if model.isOwner {
+                Text("複数管理者の設定")
+                TextField("氏名・メールアドレス・UIDで検索", text: $model.adminQuery)
+                    .textFieldStyle(.roundedBorder)
+                if model.administratorCandidates.isEmpty {
+                    Text("追加できる承認済み会員が見つかりません。")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(model.administratorCandidates) { member in
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(member.applicantName ?? "氏名未登録")
+                            Text(member.applicantEmail ?? member.userId)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("管理者に追加") {
+                            model.saveAdministrator(member.userId)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.isLoading)
+                    }
+                }
+                ForEach(model.administrators) { admin in
+                    HStack {
+                        Text("\(admin.userId) (\(admin.role))")
+                            .font(.footnote)
+                            .textSelection(.enabled)
+                        Spacer()
+                        if admin.isActive {
+                            Button("無効化") { model.deactivateAdministrator(admin) }
+                                .buttonStyle(.bordered)
+                        } else {
+                            Text("無効").foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            } else {
+                Text("管理者の追加・無効化はOwnerのみが操作できます。")
+                    .foregroundStyle(.secondary)
+            }
+            Text("会員管理").font(.title3.bold())
+            ForEach(model.communityMembers) { member in
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(member.applicantName ?? member.userId)
+                        Text(adminMemberStatusText(member))
+                            .font(.footnote)
+                            .foregroundStyle(statusColor(member.status))
+                    }
+                    Spacer()
+                    if member.status == .approved {
+                        Button("利用停止") { model.suspendMember(member) }
+                            .buttonStyle(.bordered)
+                    }
+                }
+            }
+            Text("監査ログ").font(.title3.bold())
+            if model.auditLogs.isEmpty {
+                Text("監査ログはまだありません。")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(model.auditLogs, id: \.id) { log in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(auditActionText(log.action)).font(.headline)
+                    HStack {
+                        if let actorUserId = log.actorUserId, !actorUserId.isEmpty {
+                            Text("操作: \(actorUserId)")
+                        }
+                        if let targetUserId = log.targetUserId, !targetUserId.isEmpty {
+                            Text("対象: \(targetUserId)")
+                        }
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    if let createdAt = log.createdAt {
+                        Text(createdAt.formatted(date: .abbreviated, time: .shortened))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding()
+                .background(.background)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+            }
+            AdminVideoManagementSection(model: model)
+        }
+    }
+
+    private struct AdminVideoManagementSection: View {
+        @ObservedObject var model: CommunityFeatureModel
+        @State private var videoId = ""
+        @State private var title = ""
+        @State private var description = ""
+        @State private var vimeoVideoId = ""
+        @State private var vimeoURL = ""
+        @State private var thumbnailURL = ""
+        @State private var vimeoAccessToken = ""
+        @State private var selectedVimeoVideoIDs: Set<String> = []
+        @State private var vimeoUserID = ""
+        @State private var vimeoQuery = ""
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Vimeo動画管理").font(.title3.bold())
+                Text("Vimeo接続設定").font(.headline)
+                Text(model.vimeoConfiguration.hasAccessToken ? "接続設定済み" : "未設定")
+                    .font(.footnote)
+                    .foregroundStyle(model.vimeoConfiguration.hasAccessToken ? .green : .secondary)
+                SecureField("Vimeoアクセストークン", text: $vimeoAccessToken)
+                    .textFieldStyle(.roundedBorder)
+                TextField("VimeoユーザーID", text: $vimeoUserID)
+                    .textFieldStyle(.roundedBorder)
+                TextField("動画検索キーワード（任意）", text: $vimeoQuery)
+                    .textFieldStyle(.roundedBorder)
+                Button("Vimeo接続設定を保存") {
+                    model.saveVimeoConfiguration(
+                        accessToken: vimeoAccessToken,
+                        userId: vimeoUserID,
+                        query: vimeoQuery
+                    )
+                    vimeoAccessToken = ""
+                }
+                .buttonStyle(.bordered)
+                Divider()
+                HStack {
+                    Text("Vimeoフォルダ").font(.headline)
+                    Spacer()
+                    Button("フォルダを取得") { model.refreshVimeoFolders() }
+                        .buttonStyle(.bordered)
+                }
+                if !model.vimeoFolders.isEmpty {
+                    Button("すべての動画を取得") { model.refreshVimeoLibrary() }
+                        .buttonStyle(.bordered)
+                    ForEach(model.vimeoFolders) { folder in
+                        Button(folder.name) { model.refreshVimeoFolderVideos(folder: folder) }
+                            .buttonStyle(.bordered)
+                    }
+                }
+                HStack {
+                    Text("Vimeo動画一覧").font(.headline)
+                    Spacer()
+                    Button("Vimeoから取得") { model.refreshVimeoLibrary() }
+                        .buttonStyle(.bordered)
+                }
+                if model.vimeoLibraryVideos.isEmpty {
+                    Text("Vimeoから取得すると、動画を選択して登録できます。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                if !model.vimeoLibraryVideos.isEmpty {
+                    Text("複数選択して一括公開")
+                        .font(.headline)
+                    ForEach(model.vimeoLibraryVideos) { video in
+                        Toggle(video.title, isOn: Binding(
+                            get: { selectedVimeoVideoIDs.contains(video.vimeoVideoId) },
+                            set: { isSelected in
+                                if isSelected {
+                                    selectedVimeoVideoIDs.insert(video.vimeoVideoId)
+                                } else {
+                                    selectedVimeoVideoIDs.remove(video.vimeoVideoId)
+                                }
+                            }
+                        ))
+                    }
+                    Button("選択した動画をまとめて公開") {
+                        let selectedVideos = model.vimeoLibraryVideos.filter {
+                            selectedVimeoVideoIDs.contains($0.vimeoVideoId)
+                        }
+                        model.saveCommunityVideos(selectedVideos, isPublished: true)
+                        selectedVimeoVideoIDs.removeAll()
+                        model.clearVimeoLibrary()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(selectedVimeoVideoIDs.isEmpty)
+                    Text("個別にタイトルや説明を編集する場合は、下の動画を選択してください。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(model.vimeoLibraryVideos) { video in
+                    Button {
+                        videoId = video.vimeoVideoId
+                        title = video.title
+                        description = video.description
+                        vimeoVideoId = video.vimeoVideoId
+                        vimeoURL = video.videoURL?.absoluteString ?? ""
+                        thumbnailURL = video.thumbnailURL?.absoluteString ?? ""
+                        model.clearVimeoLibrary()
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(video.title).foregroundStyle(.primary)
+                                Text(video.vimeoVideoId)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text(model.managedVideos.contains(where: { $0.vimeoVideoId == video.vimeoVideoId }) ? "登録済み" : "選択")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+                Divider()
+                Text("登録済み動画").font(.headline)
+                ForEach(model.managedVideos) { video in
+                    HStack {
+                        Button(video.title) {
+                            videoId = video.id
+                            title = video.title
+                            description = video.description
+                            vimeoVideoId = video.vimeoVideoId
+                            vimeoURL = video.videoURL?.absoluteString ?? ""
+                            thumbnailURL = video.thumbnailURL?.absoluteString ?? ""
+                        }
+                        Spacer()
+                        Text(video.isPublished ? "公開" : "下書き")
+                            .foregroundStyle(.secondary)
+                        Button(video.isPublished ? "非公開" : "公開") {
+                            model.saveCommunityVideo(
+                                videoId: video.id,
+                                title: video.title,
+                                description: video.description,
+                                vimeoVideoId: video.vimeoVideoId,
+                                vimeoURL: video.videoURL?.absoluteString ?? "",
+                                thumbnailURL: video.thumbnailURL?.absoluteString ?? "",
+                                isPublished: !video.isPublished
+                            )
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+                TextField("動画ID（編集時のみ）", text: $videoId)
+                    .textFieldStyle(.roundedBorder)
+                TextField("動画タイトル", text: $title)
+                    .textFieldStyle(.roundedBorder)
+                TextField("Vimeo動画ID", text: $vimeoVideoId)
+                    .textFieldStyle(.roundedBorder)
+                TextField("Vimeo URL（任意）", text: $vimeoURL)
+                    .textFieldStyle(.roundedBorder)
+                TextField("説明", text: $description, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(2...5)
+                TextField("サムネイルURL（任意）", text: $thumbnailURL)
+                    .textFieldStyle(.roundedBorder)
+                HStack {
+                    Button("下書き保存") { save(isPublished: false) }
+                    Button("公開して保存") { save(isPublished: true) }
+                        .buttonStyle(.borderedProminent)
+                }
+            }
+            .padding()
+            .background(.background)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .onChange(of: model.vimeoConfiguration) { configuration in
+                vimeoUserID = configuration.userId
+                vimeoQuery = configuration.query
+            }
+        }
+
+        private func save(isPublished: Bool) {
+            model.saveCommunityVideo(
+                videoId: videoId,
+                title: title,
+                description: description,
+                vimeoVideoId: vimeoVideoId,
+                vimeoURL: vimeoURL,
+                thumbnailURL: thumbnailURL,
+                isPublished: isPublished
+            )
+        }
+    }
+
+    private func videoPlayerControls(
+        for video: DistributedVideo,
+        playbackSeconds: Binding<Double>,
+        durationSeconds: Double,
+        layout: VimeoPlayerControlsView.Layout = .standard
+    ) -> some View {
+        VimeoPlayerControlsView(
+            seekTo: { command in
+                videoPlayerCommands[video.id] = command
+            },
+            playbackSeconds: playbackSeconds,
+            duration: durationSeconds,
+            layout: layout
+        )
+    }
+
+    private var videoSelectionSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Vimeo配信動画")
+                .font(.title2.bold())
+            ForEach(model.distributedVideos) { video in
+                NavigationLink {
+                    VimeoVideoDetailView(
+                        model: model,
+                        video: video,
+                        initialPlaybackSeconds: activeVideoID == video.id
+                            ? activePlaybackSeconds
+                            : (videoPlaybackPositions[video.vimeoVideoId] ?? 0),
+                        onPlaybackChanged: { seconds in
+                            videoPlaybackPositions[video.vimeoVideoId] = seconds
+                            activeVideoID = video.id
+                            activePlaybackSeconds = seconds
+                        }
+                    )
+                } label: {
+                    HStack(spacing: 14) {
+                        AsyncImage(url: video.thumbnailURL) { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        } placeholder: {
+                            ZStack {
+                                Color.secondary.opacity(0.12)
+                                Image(systemName: "play.rectangle.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .frame(width: 120, height: 68)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(video.title)
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                                .multilineTextAlignment(.leading)
+                            Text("視聴・メモ")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(10)
+                    .background(Color.secondary.opacity(0.07))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .id(video.id)
+            }
         }
     }
 
@@ -909,6 +2276,34 @@ private struct CommunityRootView: View {
         case .pending: "承認待ち"
         case .approved: "参加中"
         case .rejected: "承認されませんでした"
+        }
+    }
+
+    private func adminMemberStatusText(_ member: CommunityMembership) -> String {
+        switch member.status {
+        case .pending:
+            "承認待ち"
+        case .approved:
+            "参加中"
+        case .rejected:
+            member.joinedAt == nil ? "承認されませんでした" : "利用停止中"
+        }
+    }
+
+    private func auditActionText(_ action: String) -> String {
+        switch action {
+        case "membership.approved":
+            "参加申請承認"
+        case "membership.rejected":
+            "参加申請却下"
+        case "membership.suspended":
+            "会員を利用停止"
+        case "administrator.added":
+            "管理者を追加"
+        case "administrator.deactivated":
+            "管理者を無効化"
+        default:
+            action
         }
     }
 
@@ -1027,6 +2422,13 @@ private final class AccountFeatureModel: ObservableObject {
         message = nil
     }
 
+    func logout() {
+        session.logout()
+        accessState = .guest
+        screen = .overview
+        message = "ログアウトしました。"
+    }
+
     func register(
         name: String,
         furigana: String,
@@ -1092,7 +2494,6 @@ private final class AccountFeatureModel: ObservableObject {
         Task {
             do {
                 let account = try await operation()
-                session.updateUserStage(.guest)
                 session.updateAuthenticatedUser(
                     userId: account.userId,
                     idToken: account.idToken
@@ -1165,14 +2566,22 @@ private struct AccountRootView: View {
                     .buttonStyle(.plain)
             case .pendingApproval:
                 Text("コミュニティへの参加申請を確認中です。承認後に会員向け機能が追加されます。")
+                Button("ログアウト") { model.logout() }
+                    .buttonStyle(.bordered)
             case .registered:
                 Text("ログイン済みです。「つながる」からコミュニティコードまたはQRコードで参加申請できます。")
+                Button("ログアウト") { model.logout() }
+                    .buttonStyle(.bordered)
             case .rejected:
                 Text("コミュニティへの参加申請は承認されませんでした。申請先へご確認ください。")
                 Button("別のアカウントでログイン") { model.show(.login) }
                     .buttonStyle(.bordered)
+                Button("ログアウト") { model.logout() }
+                    .buttonStyle(.bordered)
             case .member:
                 Text("会員としてログインしています。参加中のコミュニティ機能を利用できます。")
+                Button("ログアウト") { model.logout() }
+                    .buttonStyle(.bordered)
             }
             status
         }
