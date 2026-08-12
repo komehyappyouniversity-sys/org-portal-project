@@ -228,7 +228,7 @@ private struct AppBootstrapView: View {
                 postModel: postModel,
                 announcementModel: announcementModel
             ),
-            profile: AccountRootView(model: accountModel)
+            profile: AccountRootView(model: accountModel, communityModel: communityModel)
         )
     }
 }
@@ -1905,6 +1905,13 @@ private struct VimeoVideoDetailView: View {
 
 private struct CommunityRootView: View {
     @ObservedObject var model: CommunityFeatureModel
+    let isManagementMode: Bool
+
+    init(model: CommunityFeatureModel, isManagementMode: Bool = false) {
+        self.model = model
+        self.isManagementMode = isManagementMode
+    }
+
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.openURL) private var openURL
     @State private var newAdminUserId = ""
@@ -1940,7 +1947,7 @@ private struct CommunityRootView: View {
                 ScrollViewReader { scrollProxy in
                     ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    if verticalSizeClass != .compact {
+                    if isManagementMode {
                         if model.isLoading { ProgressView() }
                         if let message = model.message {
                             Text(message)
@@ -1950,33 +1957,55 @@ private struct CommunityRootView: View {
                                 .background(Color.secondary.opacity(0.08))
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                         }
-                        publicCommunitySection
-                        if !model.isLoggedIn {
-                            ContentUnavailableView(
-                                "ログインが必要です",
-                                systemImage: "person.crop.circle.badge.exclamationmark",
-                                description: Text("マイページで会員登録またはログイン後に参加申請できます。")
-                            )
+                        if model.canReviewMembers {
+                            Text("運営モード").font(.title2.bold())
+                            applicationReviewSection
                         } else {
-                            membershipSection
-                            if model.canReviewMembers {
-                                applicationReviewSection
+                            ContentUnavailableView(
+                                "運営権限がありません",
+                                systemImage: "person.crop.circle.badge.exclamationmark",
+                                description: Text("運営者向け権限を持つアカウントでのみ利用できます。")
+                            )
+                        }
+                    } else {
+                        if verticalSizeClass != .compact {
+                            if model.isLoading { ProgressView() }
+                            if let message = model.message {
+                                Text(message)
+                                    .foregroundStyle(.secondary)
+                                    .padding()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.secondary.opacity(0.08))
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                            publicCommunitySection
+                            if !model.isLoggedIn {
+                                ContentUnavailableView(
+                                    "ログインが必要です",
+                                    systemImage: "person.crop.circle.badge.exclamationmark",
+                                    description: Text("マイページで会員登録またはログイン後に参加申請できます。")
+                                )
+                            } else {
+                                membershipSection
+                                if model.canReviewMembers {
+                                    applicationReviewSection
+                                }
                             }
                         }
-                    }
-                    if model.isLoggedIn {
-                        bookingSection
-                    }
-                    if model.isLoggedIn, !model.distributedVideos.isEmpty {
-                        videoSelectionSection
-                    }
-                    if verticalSizeClass != .compact, model.isLoggedIn {
-                        joinSection
+                        if model.isLoggedIn {
+                            bookingSection
+                        }
+                        if model.isLoggedIn, !model.distributedVideos.isEmpty {
+                            videoSelectionSection
+                        }
+                        if verticalSizeClass != .compact, model.isLoggedIn {
+                            joinSection
+                        }
                     }
                 }
                 .padding(verticalSizeClass == .compact ? 12 : 24)
                     }
-                .navigationTitle(verticalSizeClass == .compact ? "" : "つながる")
+                .navigationTitle(isManagementMode ? "運営モード" : (verticalSizeClass == .compact ? "" : "つながる"))
                 .toolbar(verticalSizeClass == .compact ? .hidden : .visible, for: .navigationBar)
                 .toolbar {
                     ToolbarItemGroup(placement: .keyboard) {
@@ -2912,6 +2941,7 @@ private final class AccountFeatureModel: ObservableObject {
         case register
         case login
         case resetPassword
+        case adminMode
     }
 
     @Published var screen: Screen = .overview
@@ -3042,6 +3072,7 @@ private final class AccountFeatureModel: ObservableObject {
 
 private struct AccountRootView: View {
     @ObservedObject var model: AccountFeatureModel
+    @ObservedObject var communityModel: CommunityFeatureModel
 
     var body: some View {
         NavigationStack {
@@ -3050,6 +3081,8 @@ private struct AccountRootView: View {
                     switch model.screen {
                     case .overview:
                         overview
+                    case .adminMode:
+                        ManagementModeRoot(model: model, communityModel: communityModel)
                     case .register:
                         AccountFormView(model: model, isRegistration: true)
                     case .login:
@@ -3098,6 +3131,11 @@ private struct AccountRootView: View {
                     .buttonStyle(.bordered)
             case .member:
                 Text("会員としてログインしています。参加中のコミュニティ機能を利用できます。")
+                if communityModel.canReviewMembers {
+                    Button("運営モードへ入る") { model.show(.adminMode) }
+                        .buttonStyle(.borderedProminent)
+                        .frame(maxWidth: .infinity)
+                }
                 Button("ログアウト") { model.logout() }
                     .buttonStyle(.bordered)
             }
@@ -3114,6 +3152,27 @@ private struct AccountRootView: View {
             Text(message)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+private struct ManagementModeRoot: View {
+    @ObservedObject var model: AccountFeatureModel
+    @ObservedObject var communityModel: CommunityFeatureModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Button("マイページへ戻る") {
+                model.show(.overview)
+            }
+            .buttonStyle(.bordered)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Divider()
+            CommunityRootView(
+                model: communityModel,
+                isManagementMode: true
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
