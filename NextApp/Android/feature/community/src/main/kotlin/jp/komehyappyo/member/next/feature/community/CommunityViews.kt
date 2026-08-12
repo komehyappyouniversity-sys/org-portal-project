@@ -826,6 +826,12 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                                     val canReserve = !event.paymentRequired && event.feeAmount <= 0 &&
                                         slot.isOpen && !slot.isFull &&
                                         state.bookingProcessingSlotId == null
+                                    val bookingLabel = when {
+                                        event.paymentRequired || event.feeAmount > 0 -> "決済準備中"
+                                        !slot.isOpen -> "受付停止中"
+                                        slot.isFull -> "満席"
+                                        else -> "予約"
+                                    }
                                     if (isBooked) {
                                         OutlinedButton(
                                             onClick = { bookingCancellationTarget = event to slot },
@@ -835,7 +841,7 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                                         Button(
                                             onClick = { model.reserveBooking(event, slot) },
                                             enabled = canReserve,
-                                        ) { Text(if (slot.isFull) "満席" else "予約") }
+                                        ) { Text(bookingLabel) }
                                     }
                                 }
                             }

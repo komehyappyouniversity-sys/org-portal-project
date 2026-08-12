@@ -2626,7 +2626,10 @@ private struct CommunityRootView: View {
                                             Text("この操作を取り消すことはできません。")
                                         }
                                     } else {
-                                        Button(slot.isFull ? "満席" : "予約") {
+                                        let bookingLabel = event.paymentRequired || event.feeAmount > 0
+                                            ? "決済準備中"
+                                            : !slot.isOpen ? "受付停止中" : slot.isFull ? "満席" : "予約"
+                                        Button(bookingLabel) {
                                             Task { await model.reserveBooking(event: event, slot: slot) }
                                         }
                                         .buttonStyle(.borderedProminent)
