@@ -19,6 +19,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.Instant
+import java.util.UUID
 
 interface CommunityRepository {
     suspend fun publicCommunities(query: String): Result<List<Community>>
@@ -984,23 +985,9 @@ class FirebaseRestCommunityRepository(
         buildList {
             for (index in 0 until documents.length()) {
                 val document = documents.optJSONObject(index) ?: continue
-                val fields = document.optJSONObject("fields") ?: continue
-                val vimeoId = string(fields, "vimeoVideoId") ?: continue
-                if (boolean(fields, "isPublished") != true) continue
-                add(
-                    DistributedVideo(
-                        id = document.optString("name").substringAfterLast("/"),
-                        communityId = communityId,
-                        title = string(fields, "title") ?: "Vimeo動画",
-                        description = string(fields, "description").orEmpty(),
-                        videoUrl = string(fields, "vimeoUrl") ?: string(fields, "videoUrl"),
-                        vimeoVideoId = vimeoId,
-                        thumbnailUrl = string(fields, "thumbnailUrl"),
-                        isPublished = true,
-                        isMembersOnly = boolean(fields, "isMembersOnly") ?: false,
-                        sortOrder = string(fields, "sortOrder")?.toIntOrNull() ?: 0,
-                    ),
-                )
+                val video = parseDistributedVideo(document, communityId)
+                if (!video.isPublished || video.isPremium) continue
+                add(video)
             }
         }.sortedWith(compareBy<DistributedVideo> { it.sortOrder }.thenBy { it.title })
     }
@@ -1138,22 +1125,9 @@ class FirebaseRestCommunityRepository(
         buildList {
             for (index in 0 until documents.length()) {
                 val document = documents.optJSONObject(index) ?: continue
-                val fields = document.optJSONObject("fields") ?: continue
-                val vimeoId = string(fields, "vimeoVideoId") ?: continue
-                add(
-                    DistributedVideo(
-                        id = document.optString("name").substringAfterLast("/"),
-                        communityId = communityId,
-                        title = string(fields, "title") ?: "Vimeo動画",
-                        description = string(fields, "description").orEmpty(),
-                        videoUrl = string(fields, "vimeoUrl") ?: string(fields, "videoUrl"),
-                        vimeoVideoId = vimeoId,
-                        thumbnailUrl = string(fields, "thumbnailUrl"),
-                        isPublished = boolean(fields, "isPublished") ?: false,
-                        isMembersOnly = boolean(fields, "isMembersOnly") ?: true,
-                        sortOrder = string(fields, "sortOrder")?.toIntOrNull() ?: 0,
-                    ),
-                )
+                val video = parseDistributedVideo(document, communityId)
+                if (video.isPremium) continue
+                add(video)
             }
         }.sortedWith(compareBy<DistributedVideo> { it.sortOrder }.thenBy { it.title })
     }
@@ -1192,28 +1166,31 @@ class FirebaseRestCommunityRepository(
                         "Vimeo動画の取得に失敗しました（HTTP $status）。",
                     )
                 }
-                val videos = JSONObject(responseText).optJSONArray("videos") ?: JSONArray()
-                buildList {
-                    for (index in 0 until videos.length()) {
-                        val video = videos.optJSONObject(index) ?: continue
-                        val vimeoVideoId = video.optString("id").trim()
-                        if (vimeoVideoId.isEmpty()) continue
-                        add(
-                            DistributedVideo(
-                                id = vimeoVideoId,
-                                communityId = communityId,
-                                title = video.optString("title", "Vimeo動画"),
-                                description = video.optString("description"),
-                                videoUrl = video.optString("link").ifBlank { null },
-                                vimeoVideoId = vimeoVideoId,
-                                thumbnailUrl = video.optString("thumbnailUrl").ifBlank { null },
-                                isPublished = false,
-                                isMembersOnly = true,
-                                sortOrder = 0,
-                            ),
-                        )
-                    }
-                }.sortedBy { it.title }
+                        val videos = JSONObject(responseText).optJSONArray("videos") ?: JSONArray()
+                        buildList {
+                            for (index in 0 until videos.length()) {
+                                val video = videos.optJSONObject(index) ?: continue
+                                val vimeoVideoId = video.optString("id").trim()
+                                if (vimeoVideoId.isEmpty()) continue
+                                add(
+                                    DistributedVideo(
+                                        id = vimeoVideoId,
+                                        communityId = communityId,
+                                        videoTitle = video.optString("title", "Vimeo動画"),
+                                        description = video.optString("description"),
+                                        videoUrl = video.optString("link").ifBlank { "" },
+                                        vimeoUrl = "https://vimeo.com/$vimeoVideoId",
+                                        providerVideoId = vimeoVideoId,
+                                        videoType = "distributed_vimeo",
+                                        thumbnailUrl = video.optString("thumbnailUrl").ifBlank { "" },
+                                        isPublished = false,
+                                        isMembersOnly = true,
+                                        isPremium = false,
+                                        sortOrder = 0,
+                                    ),
+                                )
+                            }
+                        }.sortedBy { it.title }
             } finally {
                 connection.disconnect()
             }
@@ -1581,20 +1558,6 @@ class FirebaseRestCommunityRepository(
     private fun serverTimestamp(fieldPath: String) = JSONObject()
         .put("fieldPath", fieldPath)
         .put("setToServerValue", "REQUEST_TIME")
-    private fun string(fields: JSONObject, key: String): String? =
-        fields.optJSONObject(key)?.optString("stringValue")?.takeIf { it.isNotEmpty() }
-    private fun boolean(fields: JSONObject, key: String): Boolean? =
-        fields.optJSONObject(key)?.takeIf { it.has("booleanValue") }?.optBoolean("booleanValue")
-    private fun timestamp(fields: JSONObject, key: String): String? =
-        fields.optJSONObject(key)?.optString("timestampValue")?.takeIf { it.isNotEmpty() }
-    private fun number(fields: JSONObject, key: String): Double? =
-        fields.optJSONObject(key)?.let { value ->
-            when {
-                value.has("doubleValue") -> value.optDouble("doubleValue")
-                value.has("integerValue") -> value.optString("integerValue").toDoubleOrNull()
-                else -> null
-            }
-        }
     private fun permissionValues(value: JSONObject?): Set<String> {
         if (value == null) return emptySet()
         value.optJSONObject("arrayValue")
@@ -1637,4 +1600,61 @@ class FirebaseRestCommunityRepository(
             }
         }
     }
+}
+
+private fun string(fields: JSONObject, key: String): String? =
+    fields.optJSONObject(key)?.optString("stringValue")?.takeIf { it.isNotEmpty() }
+private fun boolean(fields: JSONObject, key: String): Boolean? =
+    fields.optJSONObject(key)?.takeIf { it.has("booleanValue") }?.optBoolean("booleanValue")
+private fun timestamp(fields: JSONObject, key: String): String? =
+    fields.optJSONObject(key)?.optString("timestampValue")?.takeIf { it.isNotEmpty() }
+private fun number(fields: JSONObject, key: String): Double? =
+    fields.optJSONObject(key)?.let { value ->
+        when {
+            value.has("doubleValue") -> value.optDouble("doubleValue")
+            value.has("integerValue") -> value.optString("integerValue").toDoubleOrNull()
+            else -> null
+        }
+    }
+
+internal fun parseDistributedVideo(document: JSONObject, communityId: String): DistributedVideo {
+    val fields = document.optJSONObject("fields") ?: JSONObject()
+    val documentId = document.optString("name").substringAfterLast("/")
+    val providerVideoId = string(fields, "providerVideoId")
+        ?: string(fields, "vimeoVideoId")
+        ?: ""
+    val resolvedId = when {
+        documentId.isNotBlank() -> documentId
+        providerVideoId.isNotBlank() -> providerVideoId
+        else -> UUID.randomUUID().toString()
+    }
+    return DistributedVideo(
+        id = resolvedId,
+        communityId = communityId,
+        videoTitle = string(fields, "videoTitle")
+            ?: string(fields, "title")
+            ?: "Vimeo動画",
+        description = string(fields, "description") ?: "",
+        embedHtml = string(fields, "embedHtml") ?: "",
+        videoUrl = string(fields, "videoUrl") ?: "",
+        vimeoUrl = if (providerVideoId.isNotBlank()) {
+            "https://vimeo.com/$providerVideoId"
+        } else {
+            string(fields, "vimeoUrl") ?: string(fields, "videoUrl") ?: ""
+        },
+        providerVideoId = providerVideoId,
+        videoType = string(fields, "videoType") ?: "distributed_vimeo",
+        thumbnailUrl = string(fields, "thumbnailUrl") ?: "",
+        sortOrder = (number(fields, "sortOrder")?.toInt() ?: 0),
+        primaryCategoryId = string(fields, "primaryCategoryId")
+            ?: string(fields, "category")
+            ?: string(fields, "categoryId")
+            ?: "",
+        secondaryCategoryId = string(fields, "secondaryCategoryId") ?: "",
+        isPublished = boolean(fields, "isPublished") ?: false,
+        isMembersOnly = boolean(fields, "isMembersOnly") ?: false,
+        isPremium = boolean(fields, "isPremium") ?: false,
+        createdAt = timestamp(fields, "createdAt") ?: "",
+        updatedAt = timestamp(fields, "updatedAt") ?: "",
+    )
 }
