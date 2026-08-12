@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
@@ -40,6 +41,8 @@ import coil.compose.AsyncImage
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import jp.komehyappyo.member.next.core.model.RadioPlaybackRecord
 import jp.komehyappyo.member.next.core.model.RadioProgram
+import jp.komehyappyo.member.next.core.model.BookingEvent
+import jp.komehyappyo.member.next.core.model.BookingSlot
 import jp.komehyappyo.member.next.core.model.CommunityAuditLog
 import jp.komehyappyo.member.next.core.model.CommunityMembershipStatus
 import java.time.Instant
@@ -66,6 +69,7 @@ fun CommunityRoot(model: CommunityFeatureModel) {
     var bookingSlotEndAt by rememberSaveable { mutableStateOf("") }
     var bookingSlotCapacity by rememberSaveable { mutableStateOf("1") }
     var bookingSlotOpen by rememberSaveable { mutableStateOf(true) }
+    var bookingCancellationTarget by remember { mutableStateOf<Pair<BookingEvent, BookingSlot>?>(null) }
 
     LaunchedEffect(sessionState.authenticationToken) {
         model.refreshPublicCommunities()
@@ -82,6 +86,23 @@ fun CommunityRoot(model: CommunityFeatureModel) {
             onBack = { selectedVideoId = null },
         )
         return
+    }
+
+    bookingCancellationTarget?.let { (event, slot) ->
+        AlertDialog(
+            onDismissRequest = { bookingCancellationTarget = null },
+            title = { Text("予約をキャンセルしますか？") },
+            text = { Text("この操作を取り消すことはできません。") },
+            confirmButton = {
+                Button(onClick = {
+                    model.cancelBooking(event, slot)
+                    bookingCancellationTarget = null
+                }) { Text("予約をキャンセル") }
+            },
+            dismissButton = {
+                TextButton(onClick = { bookingCancellationTarget = null }) { Text("戻る") }
+            },
+        )
     }
 
     Column(
@@ -800,7 +821,7 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                                         state.bookingProcessingSlotId == null
                                     if (isBooked) {
                                         OutlinedButton(
-                                            onClick = { model.cancelBooking(event, slot) },
+                                            onClick = { bookingCancellationTarget = event to slot },
                                             enabled = state.bookingProcessingSlotId == null,
                                         ) { Text("予約をキャンセル") }
                                     } else {

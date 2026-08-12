@@ -1895,6 +1895,7 @@ private struct CommunityRootView: View {
     @State private var bookingSlotEndAt = Date().addingTimeInterval(3_600)
     @State private var bookingSlotCapacity = "1"
     @State private var bookingSlotOpen = true
+    @State private var bookingCancellationSlotID: String?
     @State private var videoMemoDrafts: [String: String] = [:]
     @State private var videoMemoEditDrafts: [String: String] = [:]
     @State private var editingVideoMemoIDs: Set<String> = []
@@ -2594,10 +2595,28 @@ private struct CommunityRootView: View {
                                     let isBooked = model.bookedSlotIDs.contains(slot.id)
                                     if isBooked {
                                         Button("予約をキャンセル") {
-                                            Task { await model.cancelBooking(event: event, slot: slot) }
+                                            bookingCancellationSlotID = slot.id
                                         }
                                         .buttonStyle(.bordered)
                                         .disabled(model.bookingProcessingSlotID != nil)
+                                        .confirmationDialog(
+                                            "予約をキャンセルしますか？",
+                                            isPresented: Binding(
+                                                get: { bookingCancellationSlotID == slot.id },
+                                                set: { if !$0 { bookingCancellationSlotID = nil } }
+                                            ),
+                                            titleVisibility: .visible
+                                        ) {
+                                            Button("予約をキャンセル", role: .destructive) {
+                                                bookingCancellationSlotID = nil
+                                                Task { await model.cancelBooking(event: event, slot: slot) }
+                                            }
+                                            Button("戻る", role: .cancel) {
+                                                bookingCancellationSlotID = nil
+                                            }
+                                        } message: {
+                                            Text("この操作を取り消すことはできません。")
+                                        }
                                     } else {
                                         Button(slot.isFull ? "満席" : "予約") {
                                             Task { await model.reserveBooking(event: event, slot: slot) }
