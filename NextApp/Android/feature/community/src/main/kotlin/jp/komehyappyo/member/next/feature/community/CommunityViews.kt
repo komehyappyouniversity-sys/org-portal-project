@@ -383,6 +383,9 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                 }
                 state.selectedManagedBookingEventId?.let {
                     Text("予約状況")
+                    TextButton(onClick = model::refreshBookingStatus) {
+                        Text("予約情報を更新")
+                    }
                     if (state.managedBookingSlots.isEmpty()) {
                         Text("予約枠はまだありません。")
                     }
@@ -770,6 +773,9 @@ fun CommunityRoot(model: CommunityFeatureModel) {
 
             if (state.bookingEvents.isNotEmpty()) {
                 Text("イベント予約")
+                TextButton(onClick = model::refreshBookingStatus) {
+                    Text("予約情報を更新")
+                }
                 if (state.myBookingReservations.isNotEmpty()) {
                     Text("自分の予約")
                     state.myBookingReservations.forEach { reservation ->

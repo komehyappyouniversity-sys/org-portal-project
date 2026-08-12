@@ -997,6 +997,15 @@ private final class CommunityFeatureModel: ObservableObject {
         }
     }
 
+    func refreshBookingStatus() {
+        Task {
+            await refreshBookingEvents()
+            if let eventID = selectedManagedBookingEventID {
+                await selectManagedBookingEvent(eventID)
+            }
+        }
+    }
+
     private func refreshBookingEvents() async {
         guard let communityID = session.selectedCommunityId,
               let token = session.authenticationToken else {
@@ -2198,6 +2207,10 @@ private struct CommunityRootView: View {
             }
             if model.selectedManagedBookingEventID != nil {
                 Text("予約状況").font(.headline)
+                Button("予約情報を更新") {
+                    model.refreshBookingStatus()
+                }
+                .buttonStyle(.bordered)
                 if model.managedBookingSlots.isEmpty {
                     Text("予約枠はまだありません。")
                         .foregroundStyle(.secondary)
@@ -2541,6 +2554,10 @@ private struct CommunityRootView: View {
             if !model.bookingEvents.isEmpty {
                 Text("イベント予約")
                     .font(.title2.bold())
+                Button("予約情報を更新") {
+                    model.refreshBookingStatus()
+                }
+                .buttonStyle(.bordered)
                 if !model.myBookingReservations.isEmpty {
                     Text("自分の予約")
                         .font(.headline)

@@ -508,6 +508,11 @@ class CommunityFeatureModel(
         refreshRadioPrograms()
     }
 
+    fun refreshBookingStatus() {
+        refreshBookingEvents()
+        mutableState.value.selectedManagedBookingEventId?.let(::selectManagedBookingEvent)
+    }
+
     private fun refreshBookingEvents() {
         val current = session.state.value
         val communityId = current.selectedCommunityId
