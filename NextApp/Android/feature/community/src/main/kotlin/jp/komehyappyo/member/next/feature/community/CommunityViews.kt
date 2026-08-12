@@ -744,6 +744,13 @@ fun CommunityRoot(model: CommunityFeatureModel) {
 
             if (state.bookingEvents.isNotEmpty()) {
                 Text("イベント予約")
+                if (state.myBookingReservations.isNotEmpty()) {
+                    Text("自分の予約")
+                    state.myBookingReservations.forEach { reservation ->
+                        val event = state.bookingEvents.firstOrNull { it.id == reservation.eventId }
+                        Text("${event?.title ?: "イベント"} / 予約枠: ${reservation.slotId}")
+                    }
+                }
                 state.bookingEvents.forEach { event ->
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),

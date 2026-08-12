@@ -76,6 +76,7 @@ data class BookingSlot(
 }
 
 data class BookingReservation(
+    val eventId: String = "",
     val slotId: String,
     val userId: String,
     val status: String,

@@ -112,6 +112,11 @@ interface CommunityRepository {
         userId: String,
         idToken: String,
     ): Result<Set<String>>
+    suspend fun myBookingReservations(
+        communityId: String,
+        userId: String,
+        idToken: String,
+    ): Result<List<BookingReservation>>
     suspend fun reserveBookingSlot(
         communityId: String,
         eventId: String,
@@ -887,6 +892,56 @@ class FirebaseRestCommunityRepository(
                 }
             }
         }
+    }
+
+    override suspend fun myBookingReservations(
+        communityId: String,
+        userId: String,
+        idToken: String,
+    ): Result<List<BookingReservation>> = runCatching {
+        val body = JSONObject().put(
+            "structuredQuery",
+            JSONObject()
+                .put(
+                    "from",
+                    JSONArray().put(
+                        JSONObject()
+                            .put("collectionId", "bookings")
+                            .put("allDescendants", true),
+                    ),
+                )
+                .put(
+                    "where",
+                    JSONObject().put(
+                        "fieldFilter",
+                        JSONObject()
+                            .put("field", JSONObject().put("fieldPath", "memberUid"))
+                            .put("op", "EQUAL")
+                            .put("value", stringValue(userId)),
+                    ),
+                ),
+        )
+        val rows = request("documents:runQuery", "POST", idToken, body) as JSONArray
+        buildList {
+            for (index in 0 until rows.length()) {
+                val fields = rows.optJSONObject(index)
+                    ?.optJSONObject("document")
+                    ?.optJSONObject("fields") ?: continue
+                if (string(fields, "organizationId") != communityId) continue
+                val eventId = string(fields, "eventId") ?: continue
+                val slotId = string(fields, "slotId") ?: continue
+                if (string(fields, "status") != "reserved") continue
+                add(
+                    BookingReservation(
+                        eventId = eventId,
+                        slotId = slotId,
+                        userId = userId,
+                        status = "reserved",
+                        purchaseStatus = string(fields, "purchaseStatus") ?: "not-required",
+                    ),
+                )
+            }
+        }.sortedWith(compareBy<BookingReservation> { it.eventId }.thenBy { it.slotId })
     }
 
     override suspend fun reserveBookingSlot(

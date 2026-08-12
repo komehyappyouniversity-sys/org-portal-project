@@ -793,6 +793,11 @@ public protocol CommunityRepository: Sendable {
         userId: String,
         idToken: String
     ) async throws -> Set<String>
+    func myBookingReservations(
+        communityId: String,
+        userId: String,
+        idToken: String
+    ) async throws -> [BookingReservation]
     func reserveBookingSlot(
         communityId: String,
         eventId: String,
@@ -1535,6 +1540,45 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
                   string(fields, "status") == "reserved" else { return nil }
             return string(fields, "slotId")
         })
+    }
+
+    public func myBookingReservations(
+        communityId: String,
+        userId: String,
+        idToken: String
+    ) async throws -> [BookingReservation] {
+        let body: [String: Any] = [
+            "structuredQuery": [
+                "from": [["collectionId": "bookings", "allDescendants": true]],
+                "where": [
+                    "fieldFilter": [
+                        "field": ["fieldPath": "memberUid"],
+                        "op": "EQUAL",
+                        "value": stringValue(userId)
+                    ]
+                ]
+            ]
+        ]
+        let rows = try await requestJSON(
+            path: "documents:runQuery",
+            method: "POST",
+            idToken: idToken,
+            body: body
+        ) as? [[String: Any]] ?? []
+        return rows.compactMap { row in
+            guard let fields = (row["document"] as? [String: Any])?["fields"] as? [String: Any],
+                  string(fields, "organizationId") == communityId,
+                  let eventId = string(fields, "eventId"),
+                  let slotId = string(fields, "slotId"),
+                  string(fields, "status") == "reserved" else { return nil }
+            return BookingReservation(
+                eventId: eventId,
+                slotId: slotId,
+                userId: userId,
+                status: "reserved",
+                purchaseStatus: string(fields, "purchaseStatus") ?? "not-required"
+            )
+        }.sorted { ($0.eventId, $0.slotId) < ($1.eventId, $1.slotId) }
     }
 
     public func reserveBookingSlot(
