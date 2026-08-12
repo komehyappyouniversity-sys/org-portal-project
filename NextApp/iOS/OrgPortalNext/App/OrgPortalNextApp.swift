@@ -571,6 +571,7 @@ private final class CommunityFeatureModel: ObservableObject {
     @Published private(set) var bookingSlots: [BookingSlot] = []
     @Published private(set) var bookedSlotIDs: Set<String> = []
     @Published private(set) var myBookingReservations: [BookingReservation] = []
+    @Published private(set) var myBookingSlots: [String: BookingSlot] = [:]
     @Published private(set) var bookingProcessingSlotID: String?
     @Published private(set) var managedVideos: [DistributedVideo] = []
     @Published private(set) var managedBookingEvents: [BookingEvent] = []
@@ -1004,16 +1005,30 @@ private final class CommunityFeatureModel: ObservableObject {
             bookingSlots = []
             bookedSlotIDs = []
             myBookingReservations = []
+            myBookingSlots = [:]
             bookingProcessingSlotID = nil
             return
         }
         do {
             bookingEvents = try await repository.bookingEvents(communityId: communityID, idToken: token)
-            myBookingReservations = (try? await repository.myBookingReservations(
+            let reservations = (try? await repository.myBookingReservations(
                 communityId: communityID,
                 userId: session.authenticatedUserId ?? "",
                 idToken: token
             )) ?? []
+            myBookingReservations = reservations
+            var slotsByID: [String: BookingSlot] = [:]
+            for eventID in Set(reservations.map(\.eventId)) {
+                let slots = (try? await repository.bookingSlots(
+                    communityId: communityID,
+                    eventId: eventID,
+                    idToken: token
+                )) ?? []
+                for slot in slots {
+                    slotsByID["\(eventID):\(slot.id)"] = slot
+                }
+            }
+            myBookingSlots = slotsByID
             if let selectedBookingEventID,
                bookingEvents.contains(where: { $0.id == selectedBookingEventID }) {
                 await refreshBookingDetails(eventID: selectedBookingEventID)
@@ -2529,7 +2544,11 @@ private struct CommunityRootView: View {
                         .font(.headline)
                     ForEach(model.myBookingReservations, id: \.slotId) { reservation in
                         let event = model.bookingEvents.first { $0.id == reservation.eventId }
-                        Text("\(event?.title ?? "イベント") / 予約枠: \(reservation.slotId)")
+                        let slot = model.myBookingSlots["\(reservation.eventId):\(reservation.slotId)"]
+                        Text(
+                            "\(event?.title ?? "イベント") / " +
+                                (slot?.startAt?.formatted(date: .abbreviated, time: .shortened) ?? "予約枠: \(reservation.slotId)")
+                        )
                             .foregroundStyle(.secondary)
                     }
                 }

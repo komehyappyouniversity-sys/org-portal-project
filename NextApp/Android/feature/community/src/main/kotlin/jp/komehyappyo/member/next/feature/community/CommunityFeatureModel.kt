@@ -58,6 +58,7 @@ data class CommunityUiState(
     val bookingSlots: List<BookingSlot> = emptyList(),
     val bookedSlotIds: Set<String> = emptySet(),
     val myBookingReservations: List<BookingReservation> = emptyList(),
+    val myBookingSlots: Map<String, BookingSlot> = emptyMap(),
     val bookingProcessingSlotId: String? = null,
     val adminQuery: String = "",
     val reviewingUserId: String? = null,
@@ -465,6 +466,7 @@ class CommunityFeatureModel(
                 bookingSlots = emptyList(),
                 bookedSlotIds = emptySet(),
                 myBookingReservations = emptyList(),
+                myBookingSlots = emptyMap(),
                 bookingProcessingSlotId = null,
                 reviewingUserId = null,
                 isLoading = false,
@@ -517,6 +519,7 @@ class CommunityFeatureModel(
                 bookingSlots = emptyList(),
                 bookedSlotIds = emptySet(),
                 myBookingReservations = emptyList(),
+                myBookingSlots = emptyMap(),
                 bookingProcessingSlotId = null,
             )
             return
@@ -526,16 +529,26 @@ class CommunityFeatureModel(
                 .onSuccess { events ->
                     val selectedEventId = mutableState.value.selectedBookingEventId
                         ?.takeIf { id -> events.any { it.id == id } }
+                    val reservations = repository.myBookingReservations(
+                        communityId,
+                        current.userId,
+                        token,
+                    ).getOrDefault(emptyList())
+                    val slots = reservations
+                        .map { it.eventId }
+                        .distinct()
+                        .flatMap { eventId ->
+                            repository.bookingSlots(communityId, eventId, token)
+                                .getOrDefault(emptyList())
+                        }
+                        .associateBy { "${it.eventId}:${it.id}" }
                     mutableState.value = mutableState.value.copy(
                         bookingEvents = events,
                         selectedBookingEventId = selectedEventId,
                         bookingSlots = if (selectedEventId == null) emptyList() else mutableState.value.bookingSlots,
                         bookedSlotIds = if (selectedEventId == null) emptySet() else mutableState.value.bookedSlotIds,
-                        myBookingReservations = repository.myBookingReservations(
-                            communityId,
-                            current.userId,
-                            token,
-                        ).getOrDefault(emptyList()),
+                        myBookingReservations = reservations,
+                        myBookingSlots = slots,
                     )
                     selectedEventId?.let(::refreshBookingDetails)
                 }
