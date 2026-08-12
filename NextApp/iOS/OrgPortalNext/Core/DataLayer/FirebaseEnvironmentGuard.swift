@@ -2020,44 +2020,6 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
         return community
     }
 
-    internal func parseDistributedVideo(
-        document: [String: Any],
-        fields: [String: Any],
-        communityId: String
-    ) -> DistributedVideo {
-        let id = document["name"] as? String
-        let documentID = id?.split(separator: "/").last.map(String.init) ?? ""
-        let vimeoVideoId = string(fields, "providerVideoId")
-            ?? string(fields, "vimeoVideoId")
-            ?? ""
-        let resolvedID = documentID.isEmpty ? (vimeoVideoId.isEmpty ? UUID().uuidString : vimeoVideoId) : documentID
-        return DistributedVideo(
-            id: resolvedID,
-            communityId: communityId,
-            videoTitle: string(fields, "videoTitle") ?? string(fields, "title") ?? "Vimeo動画",
-            description: string(fields, "description") ?? "",
-            embedHtml: string(fields, "embedHtml") ?? "",
-            videoUrl: string(fields, "videoUrl") ?? "",
-            vimeoUrl: string(fields, "vimeoUrl")
-                ?? string(fields, "videoUrl")
-                ?? (vimeoVideoId.isEmpty ? "" : "https://vimeo.com/\(vimeoVideoId)"),
-            providerVideoId: vimeoVideoId,
-            videoType: string(fields, "videoType") ?? "distributed_vimeo",
-            thumbnailUrl: string(fields, "thumbnailUrl") ?? "",
-            primaryCategoryId: string(fields, "primaryCategoryId")
-                ?? string(fields, "category")
-                ?? string(fields, "categoryId")
-                ?? "",
-            secondaryCategoryId: string(fields, "secondaryCategoryId") ?? "",
-            isPremium: bool(fields, "isPremium") ?? false,
-            createdAt: timestamp(fields, "createdAt"),
-            updatedAt: timestamp(fields, "updatedAt"),
-            isPublished: bool(fields, "isPublished") ?? false,
-            isMembersOnly: bool(fields, "isMembersOnly") ?? false,
-            sortOrder: Int(number(fields, "sortOrder") ?? 0)
-        )
-    }
-
     private func parseCommunity(_ document: [String: Any]) throws -> Community {
         guard let fields = document["fields"] as? [String: Any] else {
             throw CommunityRepositoryError.invalidResponse
@@ -2246,4 +2208,64 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
         }
         return try JSONSerialization.jsonObject(with: data)
     }
+}
+
+private func string(_ fields: [String: Any], _ key: String) -> String? {
+    (fields[key] as? [String: Any])?["stringValue"] as? String
+}
+
+private func bool(_ fields: [String: Any], _ key: String) -> Bool? {
+    (fields[key] as? [String: Any])?["booleanValue"] as? Bool
+}
+
+private func number(_ fields: [String: Any], _ key: String) -> Double? {
+    guard let value = fields[key] as? [String: Any] else { return nil }
+    if let doubleValue = value["doubleValue"] as? Double { return doubleValue }
+    if let integerValue = value["integerValue"] as? String { return Double(integerValue) }
+    return nil
+}
+
+private func timestamp(_ fields: [String: Any], _ key: String) -> Date? {
+    guard let value = (fields[key] as? [String: Any])?["timestampValue"] as? String else {
+        return nil
+    }
+    return ISO8601DateFormatter().date(from: value)
+}
+
+internal func parseDistributedVideo(
+    document: [String: Any],
+    fields: [String: Any],
+    communityId: String
+) -> DistributedVideo {
+    let id = document["name"] as? String
+    let documentID = id?.split(separator: "/").last.map(String.init) ?? ""
+    let vimeoVideoId = string(fields, "providerVideoId")
+        ?? string(fields, "vimeoVideoId")
+        ?? ""
+    let resolvedID = documentID.isEmpty ? (vimeoVideoId.isEmpty ? UUID().uuidString : vimeoVideoId) : documentID
+    return DistributedVideo(
+        id: resolvedID,
+        communityId: communityId,
+        videoTitle: string(fields, "videoTitle") ?? string(fields, "title") ?? "Vimeo動画",
+        description: string(fields, "description") ?? "",
+        embedHtml: string(fields, "embedHtml") ?? "",
+        videoUrl: string(fields, "videoUrl") ?? "",
+        vimeoUrl: vimeoVideoId.isEmpty
+            ? (string(fields, "vimeoUrl") ?? string(fields, "videoUrl") ?? "")
+            : "https://vimeo.com/\(vimeoVideoId)",
+        providerVideoId: vimeoVideoId,
+        videoType: string(fields, "videoType") ?? "distributed_vimeo",
+        thumbnailUrl: string(fields, "thumbnailUrl") ?? "",
+        primaryCategoryId: string(fields, "primaryCategoryId")
+            ?? string(fields, "category")
+            ?? string(fields, "categoryId")
+            ?? "",
+        secondaryCategoryId: string(fields, "secondaryCategoryId") ?? "",
+        isPremium: bool(fields, "isPremium") ?? false,
+        createdAt: timestamp(fields, "createdAt"),
+        updatedAt: timestamp(fields, "updatedAt"),
+        isPublished: bool(fields, "isPublished") ?? false,
+        isMembersOnly: bool(fields, "isMembersOnly") ?? false,
+        sortOrder: Int(number(fields, "sortOrder") ?? 0)
+    )
 }

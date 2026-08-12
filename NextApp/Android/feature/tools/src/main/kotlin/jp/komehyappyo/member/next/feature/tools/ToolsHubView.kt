@@ -39,18 +39,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import jp.komehyappyo.member.next.core.designsystem.EmptyState
 import jp.komehyappyo.member.next.core.designsystem.ErrorState
 import jp.komehyappyo.member.next.core.designsystem.FeatureCard
 import jp.komehyappyo.member.next.core.designsystem.LoadingState
+import jp.komehyappyo.member.next.core.model.DistributedVideo
 
 private sealed class ToolsDestination {
     data object Schedule : ToolsDestination()
@@ -227,6 +228,7 @@ private fun DistributedVideoListRoot(
     onSelect: (DistributedVideo) -> Unit,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
+    val errorMessage = state.errorMessage
 
     LaunchedEffect(Unit) {
         model.load()
@@ -237,9 +239,9 @@ private fun DistributedVideoListRoot(
             LoadingState()
         }
 
-        state.errorMessage != null && state.videos.isEmpty() -> {
+        errorMessage != null && state.videos.isEmpty() -> {
             ErrorState(
-                message = state.errorMessage,
+                message = errorMessage,
                 onRetry = { model.load() },
             )
         }
@@ -402,7 +404,7 @@ private fun DistributedVideoUrlPlayer(url: String) {
     )
 }
 
-private sealed interface VideoPlayerSource {
+internal sealed interface VideoPlayerSource {
     data class Html(val html: String) : VideoPlayerSource
     data class Url(val url: String) : VideoPlayerSource
     data object Empty : VideoPlayerSource

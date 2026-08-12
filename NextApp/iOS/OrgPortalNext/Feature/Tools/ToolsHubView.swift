@@ -195,13 +195,13 @@ public struct ToolsHubView: View {
                 case .distributedVideos:
                     DistributedVideoListRoot(
                         model: distributedVideoModel,
-                        onSelect: { destination = .distributedVideoPlayer($0) },
+                        onSelect: { self.destination = .distributedVideoPlayer($0) },
                     )
                 case let .distributedVideoPlayer(video):
                     DistributedVideoPlayerView(
                         video: video,
                         onBackToList: {
-                            destination = .distributedVideos
+                            self.destination = .distributedVideos
                         }
                     )
                 }
@@ -304,7 +304,7 @@ private struct DistributedVideoWebView: UIViewRepresentable {
     }
 }
 
-internal enum DistributedVideoPlayerSource {
+internal enum DistributedVideoPlayerSource: Equatable {
     case embedHtml(String)
     case url(String)
 }

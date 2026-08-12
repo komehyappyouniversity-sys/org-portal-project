@@ -1403,46 +1403,6 @@ class FirebaseRestCommunityRepository(
         )
     }
 
-internal fun parseDistributedVideo(document: JSONObject, communityId: String): DistributedVideo {
-    val fields = document.optJSONObject("fields") ?: JSONObject()
-    val documentId = document.optString("name").substringAfterLast("/")
-    val providerVideoId = string(fields, "providerVideoId")
-        ?: string(fields, "vimeoVideoId")
-        ?: ""
-    val resolvedId = when {
-        documentId.isNotBlank() -> documentId
-        providerVideoId.isNotBlank() -> providerVideoId
-        else -> UUID.randomUUID().toString()
-    }
-    return DistributedVideo(
-        id = resolvedId,
-        communityId = communityId,
-        videoTitle = string(fields, "videoTitle")
-            ?: string(fields, "title")
-            ?: "Vimeo動画",
-        description = string(fields, "description") ?: "",
-        embedHtml = string(fields, "embedHtml") ?: "",
-        videoUrl = string(fields, "videoUrl") ?: "",
-        vimeoUrl = string(fields, "vimeoUrl")
-            ?: string(fields, "videoUrl")
-            ?: if (providerVideoId.isNotBlank()) "https://vimeo.com/$providerVideoId" else "",
-        providerVideoId = providerVideoId,
-        videoType = string(fields, "videoType") ?: "distributed_vimeo",
-        thumbnailUrl = string(fields, "thumbnailUrl") ?: "",
-        sortOrder = (number(fields, "sortOrder")?.toInt() ?: 0),
-        primaryCategoryId = string(fields, "primaryCategoryId")
-            ?: string(fields, "category")
-            ?: string(fields, "categoryId")
-            ?: "",
-        secondaryCategoryId = string(fields, "secondaryCategoryId") ?: "",
-        isPublished = boolean(fields, "isPublished") ?: false,
-        isMembersOnly = boolean(fields, "isMembersOnly") ?: false,
-        isPremium = boolean(fields, "isPremium") ?: false,
-        createdAt = timestamp(fields, "createdAt") ?: "",
-        updatedAt = timestamp(fields, "updatedAt") ?: "",
-    )
-}
-
     private fun parseMembership(
         document: JSONObject,
         userId: String?,
@@ -1598,20 +1558,6 @@ internal fun parseDistributedVideo(document: JSONObject, communityId: String): D
     private fun serverTimestamp(fieldPath: String) = JSONObject()
         .put("fieldPath", fieldPath)
         .put("setToServerValue", "REQUEST_TIME")
-    private fun string(fields: JSONObject, key: String): String? =
-        fields.optJSONObject(key)?.optString("stringValue")?.takeIf { it.isNotEmpty() }
-    private fun boolean(fields: JSONObject, key: String): Boolean? =
-        fields.optJSONObject(key)?.takeIf { it.has("booleanValue") }?.optBoolean("booleanValue")
-    private fun timestamp(fields: JSONObject, key: String): String? =
-        fields.optJSONObject(key)?.optString("timestampValue")?.takeIf { it.isNotEmpty() }
-    private fun number(fields: JSONObject, key: String): Double? =
-        fields.optJSONObject(key)?.let { value ->
-            when {
-                value.has("doubleValue") -> value.optDouble("doubleValue")
-                value.has("integerValue") -> value.optString("integerValue").toDoubleOrNull()
-                else -> null
-            }
-        }
     private fun permissionValues(value: JSONObject?): Set<String> {
         if (value == null) return emptySet()
         value.optJSONObject("arrayValue")
@@ -1654,4 +1600,61 @@ internal fun parseDistributedVideo(document: JSONObject, communityId: String): D
             }
         }
     }
+}
+
+private fun string(fields: JSONObject, key: String): String? =
+    fields.optJSONObject(key)?.optString("stringValue")?.takeIf { it.isNotEmpty() }
+private fun boolean(fields: JSONObject, key: String): Boolean? =
+    fields.optJSONObject(key)?.takeIf { it.has("booleanValue") }?.optBoolean("booleanValue")
+private fun timestamp(fields: JSONObject, key: String): String? =
+    fields.optJSONObject(key)?.optString("timestampValue")?.takeIf { it.isNotEmpty() }
+private fun number(fields: JSONObject, key: String): Double? =
+    fields.optJSONObject(key)?.let { value ->
+        when {
+            value.has("doubleValue") -> value.optDouble("doubleValue")
+            value.has("integerValue") -> value.optString("integerValue").toDoubleOrNull()
+            else -> null
+        }
+    }
+
+internal fun parseDistributedVideo(document: JSONObject, communityId: String): DistributedVideo {
+    val fields = document.optJSONObject("fields") ?: JSONObject()
+    val documentId = document.optString("name").substringAfterLast("/")
+    val providerVideoId = string(fields, "providerVideoId")
+        ?: string(fields, "vimeoVideoId")
+        ?: ""
+    val resolvedId = when {
+        documentId.isNotBlank() -> documentId
+        providerVideoId.isNotBlank() -> providerVideoId
+        else -> UUID.randomUUID().toString()
+    }
+    return DistributedVideo(
+        id = resolvedId,
+        communityId = communityId,
+        videoTitle = string(fields, "videoTitle")
+            ?: string(fields, "title")
+            ?: "Vimeo動画",
+        description = string(fields, "description") ?: "",
+        embedHtml = string(fields, "embedHtml") ?: "",
+        videoUrl = string(fields, "videoUrl") ?: "",
+        vimeoUrl = if (providerVideoId.isNotBlank()) {
+            "https://vimeo.com/$providerVideoId"
+        } else {
+            string(fields, "vimeoUrl") ?: string(fields, "videoUrl") ?: ""
+        },
+        providerVideoId = providerVideoId,
+        videoType = string(fields, "videoType") ?: "distributed_vimeo",
+        thumbnailUrl = string(fields, "thumbnailUrl") ?: "",
+        sortOrder = (number(fields, "sortOrder")?.toInt() ?: 0),
+        primaryCategoryId = string(fields, "primaryCategoryId")
+            ?: string(fields, "category")
+            ?: string(fields, "categoryId")
+            ?: "",
+        secondaryCategoryId = string(fields, "secondaryCategoryId") ?: "",
+        isPublished = boolean(fields, "isPublished") ?: false,
+        isMembersOnly = boolean(fields, "isMembersOnly") ?: false,
+        isPremium = boolean(fields, "isPremium") ?: false,
+        createdAt = timestamp(fields, "createdAt") ?: "",
+        updatedAt = timestamp(fields, "updatedAt") ?: "",
+    )
 }

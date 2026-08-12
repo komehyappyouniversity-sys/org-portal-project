@@ -7,8 +7,8 @@ final class DistributedVideoFeatureModelTests: XCTestCase {
     func testFiltersOutMembersOnlyAndPremiumVideosForUnapprovedCommunity() {
         let sourceVideos = [
             distributedVideo(id: "public", title: "公開動画", sortOrder: 1),
-            distributedVideo(id: "member", title: "限定動画", isMembersOnly: true, sortOrder: 0),
-            distributedVideo(id: "premium", title: "有料動画", isPremium: true, sortOrder: 2),
+            distributedVideo(id: "member", title: "限定動画", sortOrder: 0, isMembersOnly: true),
+            distributedVideo(id: "premium", title: "有料動画", sortOrder: 2, isPremium: true),
             distributedVideo(id: "another", title: "別公開動画", sortOrder: 3),
         ]
 
@@ -23,8 +23,8 @@ final class DistributedVideoFeatureModelTests: XCTestCase {
     func testAllowsMembersOnlyVideoWhenCommunityIsApproved() {
         let sourceVideos = [
             distributedVideo(id: "public", title: "公開動画", sortOrder: 1),
-            distributedVideo(id: "member", title: "限定動画", isMembersOnly: true, sortOrder: 0),
-            distributedVideo(id: "premium", title: "有料動画", isPremium: true, sortOrder: 2),
+            distributedVideo(id: "member", title: "限定動画", sortOrder: 0, isMembersOnly: true),
+            distributedVideo(id: "premium", title: "有料動画", sortOrder: 2, isPremium: true),
             distributedVideo(id: "another", title: "別公開動画", sortOrder: 3),
         ]
 
