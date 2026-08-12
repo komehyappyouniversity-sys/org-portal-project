@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
@@ -40,6 +41,8 @@ import coil.compose.AsyncImage
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import jp.komehyappyo.member.next.core.model.RadioPlaybackRecord
 import jp.komehyappyo.member.next.core.model.RadioProgram
+import jp.komehyappyo.member.next.core.model.BookingEvent
+import jp.komehyappyo.member.next.core.model.BookingSlot
 import jp.komehyappyo.member.next.core.model.CommunityAuditLog
 import jp.komehyappyo.member.next.core.model.CommunityMembershipStatus
 import java.time.Instant
@@ -66,6 +69,7 @@ fun CommunityRoot(model: CommunityFeatureModel) {
     var bookingSlotEndAt by rememberSaveable { mutableStateOf("") }
     var bookingSlotCapacity by rememberSaveable { mutableStateOf("1") }
     var bookingSlotOpen by rememberSaveable { mutableStateOf(true) }
+    var bookingCancellationTarget by remember { mutableStateOf<Pair<BookingEvent, BookingSlot>?>(null) }
 
     LaunchedEffect(sessionState.authenticationToken) {
         model.refreshPublicCommunities()
@@ -82,6 +86,23 @@ fun CommunityRoot(model: CommunityFeatureModel) {
             onBack = { selectedVideoId = null },
         )
         return
+    }
+
+    bookingCancellationTarget?.let { (event, slot) ->
+        AlertDialog(
+            onDismissRequest = { bookingCancellationTarget = null },
+            title = { Text("予約をキャンセルしますか？") },
+            text = { Text("この操作を取り消すことはできません。") },
+            confirmButton = {
+                Button(onClick = {
+                    model.cancelBooking(event, slot)
+                    bookingCancellationTarget = null
+                }) { Text("予約をキャンセル") }
+            },
+            dismissButton = {
+                TextButton(onClick = { bookingCancellationTarget = null }) { Text("戻る") }
+            },
+        )
     }
 
     Column(
@@ -362,6 +383,9 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                 }
                 state.selectedManagedBookingEventId?.let {
                     Text("予約状況")
+                    TextButton(onClick = model::refreshBookingStatus) {
+                        Text("予約情報を更新")
+                    }
                     if (state.managedBookingSlots.isEmpty()) {
                         Text("予約枠はまだありません。")
                     }
@@ -377,7 +401,12 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                             Text("定員 ${slot.capacity}名 / 予約 ${slot.reservedCount}名 / 残席 ${slot.remainingCount}名")
                             Text(if (slot.isOpen) "受付中" else "受付停止中")
                             reservations.forEach { reservation ->
-                                Text("${reservation.userId} / ${reservation.status} / ${reservation.purchaseStatus}")
+                                val memberName = state.communityMembers
+                                    .firstOrNull { it.userId == reservation.userId }
+                                    ?.applicantName
+                                    ?.takeIf(String::isNotBlank)
+                                    ?: reservation.userId
+                                Text("$memberName / ${reservation.status} / ${reservation.purchaseStatus}")
                             }
                         }
                     }
@@ -744,11 +773,18 @@ fun CommunityRoot(model: CommunityFeatureModel) {
 
             if (state.bookingEvents.isNotEmpty()) {
                 Text("イベント予約")
+                TextButton(onClick = model::refreshBookingStatus) {
+                    Text("予約情報を更新")
+                }
                 if (state.myBookingReservations.isNotEmpty()) {
                     Text("自分の予約")
                     state.myBookingReservations.forEach { reservation ->
                         val event = state.bookingEvents.firstOrNull { it.id == reservation.eventId }
-                        Text("${event?.title ?: "イベント"} / 予約枠: ${reservation.slotId}")
+                        val slot = state.myBookingSlots["${reservation.eventId}:${reservation.slotId}"]
+                        Text(
+                            "${event?.title ?: "イベント"} / " +
+                                (slot?.startAt ?: "予約枠: ${reservation.slotId}"),
+                        )
                     }
                 }
                 state.bookingEvents.forEach { event ->
@@ -759,6 +795,9 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                         Text(event.title)
                         event.eventDate?.let { Text("開催日: $it") }
                         if (event.description.isNotBlank()) Text(event.description)
+                        if (state.myBookingReservations.any { it.eventId == event.id }) {
+                            Text("このイベントは予約済みです。")
+                        }
                         Text(
                             if (event.paymentRequired || event.feeAmount > 0) {
                                 "料金: ${event.feeAmount}円（決済準備中のため予約できません）"
@@ -766,6 +805,13 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                                 "無料イベント"
                             },
                         )
+                        event.zoomUrl?.takeIf(String::isNotBlank)?.let { zoomUrl ->
+                            if (state.myBookingReservations.any { it.eventId == event.id }) {
+                                TextButton(onClick = { uriHandler.openUri(zoomUrl) }) {
+                                    Text("Zoom参加リンクを開く")
+                                }
+                            }
+                        }
                         OutlinedButton(
                             onClick = { model.selectBookingEvent(event.id) },
                             enabled = state.selectedBookingEventId != event.id,
@@ -789,16 +835,22 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                                     val canReserve = !event.paymentRequired && event.feeAmount <= 0 &&
                                         slot.isOpen && !slot.isFull &&
                                         state.bookingProcessingSlotId == null
+                                    val bookingLabel = when {
+                                        event.paymentRequired || event.feeAmount > 0 -> "決済準備中"
+                                        !slot.isOpen -> "受付停止中"
+                                        slot.isFull -> "満席"
+                                        else -> "予約"
+                                    }
                                     if (isBooked) {
                                         OutlinedButton(
-                                            onClick = { model.cancelBooking(event, slot) },
+                                            onClick = { bookingCancellationTarget = event to slot },
                                             enabled = state.bookingProcessingSlotId == null,
                                         ) { Text("予約をキャンセル") }
                                     } else {
                                         Button(
                                             onClick = { model.reserveBooking(event, slot) },
                                             enabled = canReserve,
-                                        ) { Text(if (slot.isFull) "満席" else "予約") }
+                                        ) { Text(bookingLabel) }
                                     }
                                 }
                             }

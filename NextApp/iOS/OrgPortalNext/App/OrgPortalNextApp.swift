@@ -571,6 +571,7 @@ private final class CommunityFeatureModel: ObservableObject {
     @Published private(set) var bookingSlots: [BookingSlot] = []
     @Published private(set) var bookedSlotIDs: Set<String> = []
     @Published private(set) var myBookingReservations: [BookingReservation] = []
+    @Published private(set) var myBookingSlots: [String: BookingSlot] = [:]
     @Published private(set) var bookingProcessingSlotID: String?
     @Published private(set) var managedVideos: [DistributedVideo] = []
     @Published private(set) var managedBookingEvents: [BookingEvent] = []
@@ -996,6 +997,15 @@ private final class CommunityFeatureModel: ObservableObject {
         }
     }
 
+    func refreshBookingStatus() {
+        Task {
+            await refreshBookingEvents()
+            if let eventID = selectedManagedBookingEventID {
+                await selectManagedBookingEvent(eventID)
+            }
+        }
+    }
+
     private func refreshBookingEvents() async {
         guard let communityID = session.selectedCommunityId,
               let token = session.authenticationToken else {
@@ -1004,16 +1014,30 @@ private final class CommunityFeatureModel: ObservableObject {
             bookingSlots = []
             bookedSlotIDs = []
             myBookingReservations = []
+            myBookingSlots = [:]
             bookingProcessingSlotID = nil
             return
         }
         do {
             bookingEvents = try await repository.bookingEvents(communityId: communityID, idToken: token)
-            myBookingReservations = (try? await repository.myBookingReservations(
+            let reservations = (try? await repository.myBookingReservations(
                 communityId: communityID,
                 userId: session.authenticatedUserId ?? "",
                 idToken: token
             )) ?? []
+            myBookingReservations = reservations
+            var slotsByID: [String: BookingSlot] = [:]
+            for eventID in Set(reservations.map(\.eventId)) {
+                let slots = (try? await repository.bookingSlots(
+                    communityId: communityID,
+                    eventId: eventID,
+                    idToken: token
+                )) ?? []
+                for slot in slots {
+                    slotsByID["\(eventID):\(slot.id)"] = slot
+                }
+            }
+            myBookingSlots = slotsByID
             if let selectedBookingEventID,
                bookingEvents.contains(where: { $0.id == selectedBookingEventID }) {
                 await refreshBookingDetails(eventID: selectedBookingEventID)
@@ -1868,6 +1892,7 @@ private struct VimeoVideoDetailView: View {
 private struct CommunityRootView: View {
     @ObservedObject var model: CommunityFeatureModel
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.openURL) private var openURL
     @State private var newAdminUserId = ""
     @State private var bookingEventID = ""
     @State private var bookingEventTitle = ""
@@ -1880,6 +1905,7 @@ private struct CommunityRootView: View {
     @State private var bookingSlotEndAt = Date().addingTimeInterval(3_600)
     @State private var bookingSlotCapacity = "1"
     @State private var bookingSlotOpen = true
+    @State private var bookingCancellationSlotID: String?
     @State private var videoMemoDrafts: [String: String] = [:]
     @State private var videoMemoEditDrafts: [String: String] = [:]
     @State private var editingVideoMemoIDs: Set<String> = []
@@ -2181,6 +2207,10 @@ private struct CommunityRootView: View {
             }
             if model.selectedManagedBookingEventID != nil {
                 Text("予約状況").font(.headline)
+                Button("予約情報を更新") {
+                    model.refreshBookingStatus()
+                }
+                .buttonStyle(.bordered)
                 if model.managedBookingSlots.isEmpty {
                     Text("予約枠はまだありません。")
                         .foregroundStyle(.secondary)
@@ -2194,7 +2224,10 @@ private struct CommunityRootView: View {
                         Text(slot.isOpen ? "受付中" : "受付停止中")
                             .font(.subheadline)
                         ForEach(reservations, id: \.userId) { reservation in
-                            Text("\(reservation.userId) / \(reservation.status) / \(reservation.purchaseStatus)")
+                            let memberName = model.communityMembers.first {
+                                $0.userId == reservation.userId
+                            }?.applicantName ?? reservation.userId
+                            Text("\(memberName) / \(reservation.status) / \(reservation.purchaseStatus)")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -2521,12 +2554,20 @@ private struct CommunityRootView: View {
             if !model.bookingEvents.isEmpty {
                 Text("イベント予約")
                     .font(.title2.bold())
+                Button("予約情報を更新") {
+                    model.refreshBookingStatus()
+                }
+                .buttonStyle(.bordered)
                 if !model.myBookingReservations.isEmpty {
                     Text("自分の予約")
                         .font(.headline)
                     ForEach(model.myBookingReservations, id: \.slotId) { reservation in
                         let event = model.bookingEvents.first { $0.id == reservation.eventId }
-                        Text("\(event?.title ?? "イベント") / 予約枠: \(reservation.slotId)")
+                        let slot = model.myBookingSlots["\(reservation.eventId):\(reservation.slotId)"]
+                        Text(
+                            "\(event?.title ?? "イベント") / " +
+                                (slot?.startAt?.formatted(date: .abbreviated, time: .shortened) ?? "予約枠: \(reservation.slotId)")
+                        )
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -2542,11 +2583,22 @@ private struct CommunityRootView: View {
                         if !event.description.isEmpty {
                             Text(event.description)
                         }
+                        if model.myBookingReservations.contains(where: { $0.eventId == event.id }) {
+                            Text("このイベントは予約済みです。")
+                                .foregroundStyle(.secondary)
+                        }
                         Text(
                             event.paymentRequired || event.feeAmount > 0
                                 ? "料金: \(event.feeAmount)円（決済準備中のため予約できません）"
                                 : "無料イベント"
                         )
+                        if model.myBookingReservations.contains(where: { $0.eventId == event.id }),
+                           let zoomURL = event.zoomURL {
+                            Button("Zoom参加リンクを開く") {
+                                openURL(zoomURL)
+                            }
+                            .buttonStyle(.bordered)
+                        }
                         Button(
                             model.selectedBookingEventID == event.id ? "予約枠を表示中" : "予約枠を見る"
                         ) {
@@ -2572,12 +2624,33 @@ private struct CommunityRootView: View {
                                     let isBooked = model.bookedSlotIDs.contains(slot.id)
                                     if isBooked {
                                         Button("予約をキャンセル") {
-                                            Task { await model.cancelBooking(event: event, slot: slot) }
+                                            bookingCancellationSlotID = slot.id
                                         }
                                         .buttonStyle(.bordered)
                                         .disabled(model.bookingProcessingSlotID != nil)
+                                        .confirmationDialog(
+                                            "予約をキャンセルしますか？",
+                                            isPresented: Binding(
+                                                get: { bookingCancellationSlotID == slot.id },
+                                                set: { if !$0 { bookingCancellationSlotID = nil } }
+                                            ),
+                                            titleVisibility: .visible
+                                        ) {
+                                            Button("予約をキャンセル", role: .destructive) {
+                                                bookingCancellationSlotID = nil
+                                                Task { await model.cancelBooking(event: event, slot: slot) }
+                                            }
+                                            Button("戻る", role: .cancel) {
+                                                bookingCancellationSlotID = nil
+                                            }
+                                        } message: {
+                                            Text("この操作を取り消すことはできません。")
+                                        }
                                     } else {
-                                        Button(slot.isFull ? "満席" : "予約") {
+                                        let bookingLabel = event.paymentRequired || event.feeAmount > 0
+                                            ? "決済準備中"
+                                            : !slot.isOpen ? "受付停止中" : slot.isFull ? "満席" : "予約"
+                                        Button(bookingLabel) {
                                             Task { await model.reserveBooking(event: event, slot: slot) }
                                         }
                                         .buttonStyle(.borderedProminent)
