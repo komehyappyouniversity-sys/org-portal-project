@@ -772,6 +772,11 @@ public protocol CommunityRepository: Sendable {
         eventId: String,
         idToken: String
     ) async throws -> [BookingSlot]
+    func bookingReservations(
+        communityId: String,
+        eventId: String,
+        idToken: String
+    ) async throws -> [BookingReservation]
     func saveBookingSlot(
         communityId: String,
         eventId: String,
@@ -1428,6 +1433,43 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
                 isOpen: bool(fields, "isOpen") ?? true
             )
         }.sorted { ($0.startAt ?? .distantFuture) < ($1.startAt ?? .distantFuture) }
+    }
+
+    public func bookingReservations(
+        communityId: String,
+        eventId: String,
+        idToken: String
+    ) async throws -> [BookingReservation] {
+        let body: [String: Any] = [
+            "structuredQuery": [
+                "from": [["collectionId": "bookings", "allDescendants": true]],
+                "where": [
+                    "fieldFilter": [
+                        "field": ["fieldPath": "eventId"],
+                        "op": "EQUAL",
+                        "value": stringValue(eventId)
+                    ]
+                ]
+            ]
+        ]
+        let rows = try await requestJSON(
+            path: "documents:runQuery",
+            method: "POST",
+            idToken: idToken,
+            body: body
+        ) as? [[String: Any]] ?? []
+        return rows.compactMap { row in
+            guard let fields = (row["document"] as? [String: Any])?["fields"] as? [String: Any],
+                  string(fields, "organizationId") == communityId,
+                  let slotId = string(fields, "slotId"),
+                  let userId = string(fields, "memberUid") else { return nil }
+            return BookingReservation(
+                slotId: slotId,
+                userId: userId,
+                status: string(fields, "status") ?? "reserved",
+                purchaseStatus: string(fields, "purchaseStatus") ?? "not-required"
+            )
+        }.sorted { ($0.slotId, $0.userId) < ($1.slotId, $1.userId) }
     }
 
     public func saveBookingSlot(
