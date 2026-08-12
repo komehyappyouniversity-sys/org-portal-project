@@ -380,17 +380,20 @@ public struct BookingSlot: Identifiable, Equatable, Codable, Sendable {
 }
 
 public struct BookingReservation: Equatable, Codable, Sendable {
+    public let eventId: String
     public let slotId: String
     public let userId: String
     public let status: String
     public let purchaseStatus: String
 
     public init(
+        eventId: String = "",
         slotId: String,
         userId: String,
         status: String,
         purchaseStatus: String = "not-required"
     ) {
+        self.eventId = eventId
         self.slotId = slotId
         self.userId = userId
         self.status = status

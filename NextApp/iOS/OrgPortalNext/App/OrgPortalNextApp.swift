@@ -570,6 +570,7 @@ private final class CommunityFeatureModel: ObservableObject {
     @Published private(set) var selectedBookingEventID: String?
     @Published private(set) var bookingSlots: [BookingSlot] = []
     @Published private(set) var bookedSlotIDs: Set<String> = []
+    @Published private(set) var myBookingReservations: [BookingReservation] = []
     @Published private(set) var bookingProcessingSlotID: String?
     @Published private(set) var managedVideos: [DistributedVideo] = []
     @Published private(set) var managedBookingEvents: [BookingEvent] = []
@@ -1002,11 +1003,17 @@ private final class CommunityFeatureModel: ObservableObject {
             selectedBookingEventID = nil
             bookingSlots = []
             bookedSlotIDs = []
+            myBookingReservations = []
             bookingProcessingSlotID = nil
             return
         }
         do {
             bookingEvents = try await repository.bookingEvents(communityId: communityID, idToken: token)
+            myBookingReservations = (try? await repository.myBookingReservations(
+                communityId: communityID,
+                userId: session.authenticatedUserId ?? "",
+                idToken: token
+            )) ?? []
             if let selectedBookingEventID,
                bookingEvents.contains(where: { $0.id == selectedBookingEventID }) {
                 await refreshBookingDetails(eventID: selectedBookingEventID)
@@ -2514,6 +2521,15 @@ private struct CommunityRootView: View {
             if !model.bookingEvents.isEmpty {
                 Text("イベント予約")
                     .font(.title2.bold())
+                if !model.myBookingReservations.isEmpty {
+                    Text("自分の予約")
+                        .font(.headline)
+                    ForEach(model.myBookingReservations, id: \.slotId) { reservation in
+                        let event = model.bookingEvents.first { $0.id == reservation.eventId }
+                        Text("\(event?.title ?? "イベント") / 予約枠: \(reservation.slotId)")
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 ForEach(model.bookingEvents) { event in
                     VStack(alignment: .leading, spacing: 8) {
                         Text(event.title)

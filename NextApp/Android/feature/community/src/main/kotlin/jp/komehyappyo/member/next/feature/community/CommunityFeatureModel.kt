@@ -57,6 +57,7 @@ data class CommunityUiState(
     val selectedBookingEventId: String? = null,
     val bookingSlots: List<BookingSlot> = emptyList(),
     val bookedSlotIds: Set<String> = emptySet(),
+    val myBookingReservations: List<BookingReservation> = emptyList(),
     val bookingProcessingSlotId: String? = null,
     val adminQuery: String = "",
     val reviewingUserId: String? = null,
@@ -463,6 +464,7 @@ class CommunityFeatureModel(
                 selectedBookingEventId = null,
                 bookingSlots = emptyList(),
                 bookedSlotIds = emptySet(),
+                myBookingReservations = emptyList(),
                 bookingProcessingSlotId = null,
                 reviewingUserId = null,
                 isLoading = false,
@@ -514,6 +516,7 @@ class CommunityFeatureModel(
                 selectedBookingEventId = null,
                 bookingSlots = emptyList(),
                 bookedSlotIds = emptySet(),
+                myBookingReservations = emptyList(),
                 bookingProcessingSlotId = null,
             )
             return
@@ -528,6 +531,11 @@ class CommunityFeatureModel(
                         selectedBookingEventId = selectedEventId,
                         bookingSlots = if (selectedEventId == null) emptyList() else mutableState.value.bookingSlots,
                         bookedSlotIds = if (selectedEventId == null) emptySet() else mutableState.value.bookedSlotIds,
+                        myBookingReservations = repository.myBookingReservations(
+                            communityId,
+                            current.userId,
+                            token,
+                        ).getOrDefault(emptyList()),
                     )
                     selectedEventId?.let(::refreshBookingDetails)
                 }
