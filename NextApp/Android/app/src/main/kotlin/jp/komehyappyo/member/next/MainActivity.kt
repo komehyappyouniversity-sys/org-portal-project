@@ -19,6 +19,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.fragment.app.FragmentActivity
 import jp.komehyappyo.member.next.core.data.FirebaseRestAnnouncementRepository
@@ -262,7 +263,13 @@ class MainActivity : FragmentActivity() {
                 ConnectedRoot(communityModel, postModel, announcementModel)
             },
             myPage = {
-                AccountRoot(accountModel, this@MainActivity)
+                val communityState by communityModel.state.collectAsStateWithLifecycle()
+                AccountRoot(
+                    model = accountModel,
+                    activity = this@MainActivity,
+                    canEnterManagementMode = communityState.adminAccess?.canReviewMembers == true,
+                    managementContent = { CommunityRoot(communityModel) },
+                )
             },
         )
     }

@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-enum class AccountScreen { Overview, Register, Login, ResetPassword }
+enum class AccountScreen { Overview, Register, Login, ResetPassword, Management }
 
 data class AccountUiState(
     val screen: AccountScreen = AccountScreen.Overview,

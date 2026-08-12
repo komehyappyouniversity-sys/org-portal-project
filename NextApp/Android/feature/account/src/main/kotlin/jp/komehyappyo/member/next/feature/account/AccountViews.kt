@@ -12,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Divider
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -31,14 +32,20 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import jp.komehyappyo.member.next.core.model.AccountAccessState
 
+// `feature:account` must not depend on `feature:community` directly (see
+// docs/Codex実装指示書_タスク1-3.md の共通制約). The App layer decides whether
+// management mode is available and supplies the management screen content.
 @Composable
 fun AccountRoot(
     model: AccountFeatureModel,
     activity: FragmentActivity,
+    canEnterManagementMode: Boolean,
+    managementContent: @Composable () -> Unit,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
     when (state.screen) {
-        AccountScreen.Overview -> AccountOverview(state, model, activity)
+        AccountScreen.Overview -> AccountOverview(state, model, activity, canEnterManagementMode)
+        AccountScreen.Management -> ManagementModeRoot(managementContent) { model.show(AccountScreen.Overview) }
         AccountScreen.Register -> AccountForm(true, state, model)
         AccountScreen.Login -> AccountForm(false, state, model)
         AccountScreen.ResetPassword -> ResetPasswordForm(state, model)
@@ -50,6 +57,7 @@ private fun AccountOverview(
     state: AccountUiState,
     model: AccountFeatureModel,
     activity: FragmentActivity,
+    canEnterManagementMode: Boolean,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
@@ -97,6 +105,14 @@ private fun AccountOverview(
             AccountAccessState.Registered ->
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("ログイン済みです。「つながる」からコミュニティコードまたはQRコードで参加申請できます。")
+                    if (canEnterManagementMode) {
+                        OutlinedButton(
+                            onClick = { model.show(AccountScreen.Management) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("運営モードへ入る")
+                        }
+                    }
                     OutlinedButton(onClick = model::logout) { Text("ログアウト") }
                 }
             AccountAccessState.Rejected -> {
@@ -112,10 +128,37 @@ private fun AccountOverview(
             AccountAccessState.Member ->
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("会員としてログインしています。参加中のコミュニティ機能を利用できます。")
+                    if (canEnterManagementMode) {
+                        OutlinedButton(
+                            onClick = { model.show(AccountScreen.Management) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("運営モードへ入る")
+                        }
+                    }
                     OutlinedButton(onClick = model::logout) { Text("ログアウト") }
                 }
         }
         StatusMessage(state)
+    }
+}
+
+@Composable
+private fun ManagementModeRoot(
+    managementContent: @Composable () -> Unit,
+    onBack: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("運営モード")
+        Divider()
+        Button(onClick = onBack) { Text("マイページへ戻る") }
+        managementContent()
     }
 }
 
