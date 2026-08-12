@@ -37,15 +37,29 @@ data class Community(
 data class DistributedVideo(
     val id: String,
     val communityId: String,
-    val title: String,
+    val videoTitle: String,
     val description: String = "",
-    val videoUrl: String? = null,
-    val vimeoVideoId: String,
-    val thumbnailUrl: String? = null,
+    val embedHtml: String = "",
+    val videoUrl: String = "",
+    val vimeoUrl: String = "",
+    val providerVideoId: String = "",
+    val videoType: String = "distributed_vimeo",
+    val thumbnailUrl: String = "",
+    val sortOrder: Int = 0,
+    val primaryCategoryId: String = "",
+    val secondaryCategoryId: String = "",
     val isPublished: Boolean = false,
     val isMembersOnly: Boolean = false,
-    val sortOrder: Int = 0,
-)
+    val isPremium: Boolean = false,
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
+) {
+    val title: String
+        get() = videoTitle
+
+    val vimeoVideoId: String
+        get() = providerVideoId
+}
 
 data class BookingEvent(
     val id: String,

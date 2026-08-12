@@ -37,6 +37,7 @@ import jp.komehyappyo.member.next.core.data.RoomMeetingMinutesRepository
 import jp.komehyappyo.member.next.core.data.RoomSnsCustomLinkRepository
 import jp.komehyappyo.member.next.core.data.RoomFavoriteBookmarkRepository
 import jp.komehyappyo.member.next.core.data.RoomFriendExchangeRepository
+import jp.komehyappyo.member.next.core.model.CommunityMembershipStatus
 import jp.komehyappyo.member.next.core.designsystem.OrgPortalTheme
 import jp.komehyappyo.member.next.core.navigation.AppShell
 import jp.komehyappyo.member.next.core.notifications.NotificationService
@@ -45,6 +46,7 @@ import jp.komehyappyo.member.next.feature.tools.AppBackupFeatureModel
 import jp.komehyappyo.member.next.feature.tools.CashDistributionFeatureModel
 import jp.komehyappyo.member.next.feature.tools.GuestHomeView
 import jp.komehyappyo.member.next.feature.tools.ScheduleFeatureModel
+import jp.komehyappyo.member.next.feature.tools.DistributedVideoFeatureModel
 import jp.komehyappyo.member.next.feature.tools.ToolsHubRoot
 import jp.komehyappyo.member.next.feature.tools.MeetingMinutesFeatureModel
 import jp.komehyappyo.member.next.feature.tools.MeetingRecordingService
@@ -98,14 +100,31 @@ class MainActivity : FragmentActivity() {
             )
         }
         val accountModel: AccountFeatureModel = viewModel(factory = accountFactory)
+        val communityRepository = remember {
+            FirebaseRestCommunityRepository(BuildConfig.FIREBASE_PROJECT_ID)
+        }
         val communityFactory = remember {
             CommunityFeatureModel.Factory(
-                FirebaseRestCommunityRepository(BuildConfig.FIREBASE_PROJECT_ID),
+                communityRepository,
                 appSession,
                 VimeoMemoStore(applicationContext),
             )
         }
         val communityModel: CommunityFeatureModel = viewModel(factory = communityFactory)
+        val distributedVideoFactory = remember {
+            DistributedVideoFeatureModel.Factory(
+                communityRepository,
+                appSession,
+                canViewMembersOnlyVideo = { communityId ->
+                    communityModel.state.value.memberships.any {
+                        it.first.status == CommunityMembershipStatus.Approved && it.second.id == communityId
+                    }
+                },
+            )
+        }
+        val distributedVideoModel: DistributedVideoFeatureModel = viewModel(
+            factory = distributedVideoFactory,
+        )
         val announcementFactory = remember {
             AnnouncementFeatureModel.Factory(
                 FirebaseRestAnnouncementRepository(BuildConfig.FIREBASE_PROJECT_ID),
@@ -236,6 +255,7 @@ class MainActivity : FragmentActivity() {
                     snsPostingAssistantModel,
                     favoriteBookmarkModel,
                     friendExchangeModel,
+                    distributedVideoModel,
                 )
             },
             connect = {

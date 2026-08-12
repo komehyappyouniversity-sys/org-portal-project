@@ -67,6 +67,7 @@ private struct AppBootstrapView: View {
     @StateObject private var appSession: AppSession
     @StateObject private var accountModel: AccountFeatureModel
     @StateObject private var communityModel: CommunityFeatureModel
+    @StateObject private var distributedVideoModel: DistributedVideoFeatureModel
     @StateObject private var announcementModel: AnnouncementFeatureModel
     @StateObject private var postModel: PostFeatureModel
 
@@ -91,11 +92,23 @@ private struct AppBootstrapView: View {
         let firebaseProjectID = Bundle.main.object(
             forInfoDictionaryKey: "FirebaseProjectID"
         ) as? String ?? ""
+        let communityRepository = FirebaseRESTCommunityRepository(projectId: firebaseProjectID)
         let community = CommunityFeatureModel(
-            repository: FirebaseRESTCommunityRepository(projectId: firebaseProjectID),
+            repository: communityRepository,
             session: session
         )
         _communityModel = StateObject(wrappedValue: community)
+        _distributedVideoModel = StateObject(
+            wrappedValue: DistributedVideoFeatureModel(
+                repository: communityRepository,
+                session: session,
+                canViewMembersOnlyVideo: { communityId in
+                    community.items.contains {
+                        $0.0.status == .approved && $0.1.id == communityId
+                    }
+                },
+            )
+        )
         _announcementModel = StateObject(
             wrappedValue: AnnouncementFeatureModel(
                 repository: FirebaseRESTAnnouncementRepository(projectId: firebaseProjectID),
@@ -208,6 +221,7 @@ private struct AppBootstrapView: View {
                 snsPostingAssistantModel: snsPostingAssistantModel,
                 favoriteBookmarkModel: favoriteBookmarkModel,
                 friendExchangeModel: friendExchangeModel,
+                distributedVideoModel: distributedVideoModel,
             ),
             community: ConnectedRootView(
                 communityModel: communityModel,

@@ -1,6 +1,7 @@
 import DesignSystem
 import Model
 import SwiftUI
+import WebKit
 
 public struct ToolsHubView: View {
     private enum Destination: Identifiable {
@@ -12,6 +13,8 @@ public struct ToolsHubView: View {
         case favorites
         case friends
         case manual
+        case distributedVideos
+        case distributedVideoPlayer(DistributedVideo)
 
         var id: String {
             switch self {
@@ -23,8 +26,10 @@ public struct ToolsHubView: View {
             case .favorites: "favorites"
             case .friends: "friends"
             case .manual: "manual"
+            case .distributedVideos: "distributedVideos"
+            case let .distributedVideoPlayer(video): "distributedVideoPlayer:\(video.id)"
+            }
         }
-    }
     }
 
     @ObservedObject private var scheduleModel: ScheduleFeatureModel
@@ -34,6 +39,7 @@ public struct ToolsHubView: View {
     @ObservedObject private var snsPostingAssistantModel: SnsPostingAssistantFeatureModel
     @ObservedObject private var favoriteBookmarkModel: FavoriteBookmarkFeatureModel
     @ObservedObject private var friendExchangeModel: FriendExchangeFeatureModel
+    @ObservedObject private var distributedVideoModel: DistributedVideoFeatureModel
     @State private var destination: Destination?
 
     public init(
@@ -43,7 +49,8 @@ public struct ToolsHubView: View {
         meetingMinutesModel: MeetingMinutesFeatureModel,
         snsPostingAssistantModel: SnsPostingAssistantFeatureModel,
         favoriteBookmarkModel: FavoriteBookmarkFeatureModel,
-        friendExchangeModel: FriendExchangeFeatureModel
+        friendExchangeModel: FriendExchangeFeatureModel,
+        distributedVideoModel: DistributedVideoFeatureModel
     ) {
         self.scheduleModel = scheduleModel
         self.diaryModel = diaryModel
@@ -52,6 +59,7 @@ public struct ToolsHubView: View {
         self.snsPostingAssistantModel = snsPostingAssistantModel
         self.favoriteBookmarkModel = favoriteBookmarkModel
         self.friendExchangeModel = friendExchangeModel
+        self.distributedVideoModel = distributedVideoModel
     }
 
     public var body: some View {
@@ -118,6 +126,16 @@ public struct ToolsHubView: View {
                 }
                 .buttonStyle(.plain)
                 Button {
+                    destination = .distributedVideos
+                } label: {
+                    FeatureCard(
+                        "配信動画",
+                        subtitle: "Vimeo配信動画を一覧で開き再生できます。",
+                        systemImage: "play.rectangle"
+                    )
+                }
+                .buttonStyle(.plain)
+                Button {
                     destination = .friends
                 } label: {
                     FeatureCard(
@@ -174,6 +192,172 @@ public struct ToolsHubView: View {
                     FriendExchangeRootView(model: friendExchangeModel)
                 case .manual:
                     ManualListView()
+                case .distributedVideos:
+                    DistributedVideoListRoot(
+                        model: distributedVideoModel,
+                        onSelect: { destination = .distributedVideoPlayer($0) },
+                    )
+                case let .distributedVideoPlayer(video):
+                    DistributedVideoPlayerView(
+                        video: video,
+                        onBackToList: {
+                            destination = .distributedVideos
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+private struct DistributedVideoListRoot: View {
+    @ObservedObject var model: DistributedVideoFeatureModel
+    let onSelect: (DistributedVideo) -> Void
+
+    var body: some View {
+        Group {
+            if model.isLoading && model.videos.isEmpty {
+                LoadingState()
+            } else if let message = model.errorMessage, model.videos.isEmpty {
+                ErrorState(message: message) {
+                    Task {
+                        await model.load()
+                    }
+                }
+            } else if model.videos.isEmpty {
+                EmptyState("配信動画はまだありません", systemImage: "play.rectangle")
+            } else {
+                List {
+                    ForEach(model.videos) { video in
+                        Button {
+                            onSelect(video)
+                        } label: {
+                            DistributedVideoCell(video: video)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .navigationTitle("配信動画")
+        .task {
+            await model.load()
+        }
+    }
+}
+
+private struct DistributedVideoPlayerView: View {
+    let video: DistributedVideo
+    let onBackToList: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button {
+                    onBackToList()
+                } label: {
+                    Label("一覧へ戻る", systemImage: "chevron.left")
+                }
+                .buttonStyle(.bordered)
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+
+            switch distributedVideoSource(for: video) {
+            case .embedHtml(let value):
+                DistributedVideoWebView(html: value, url: nil)
+            case .url(let value):
+                DistributedVideoWebView(html: nil, url: value)
+            case .none:
+                EmptyState("この動画に再生情報がありません。", systemImage: "video.slash")
+            }
+        }
+        .navigationTitle(video.title)
+        .ignoresSafeArea()
+    }
+}
+
+private struct DistributedVideoWebView: UIViewRepresentable {
+    let html: String?
+    let url: String?
+
+    func makeUIView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.allowsInlineMediaPlayback = true
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.isOpaque = false
+        webView.backgroundColor = .black
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        if let html {
+            webView.loadHTMLString(html, baseURL: URL(string: "https://player.vimeo.com"))
+            return
+        }
+        guard let url, let link = URL(string: url) else {
+            webView.stopLoading()
+            return
+        }
+        webView.load(.init(url: link))
+    }
+}
+
+internal enum DistributedVideoPlayerSource {
+    case embedHtml(String)
+    case url(String)
+}
+
+internal func distributedVideoSource(for video: DistributedVideo) -> DistributedVideoPlayerSource? {
+    if !video.embedHtml.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return .embedHtml(video.embedHtml)
+    }
+    if !video.vimeoUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return .url(video.vimeoUrl)
+    }
+    if !video.videoUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return .url(video.videoUrl)
+    }
+    return nil
+}
+
+private struct DistributedVideoCell: View {
+    let video: DistributedVideo
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if let thumbnail = URL(string: video.thumbnailUrl) {
+                AsyncImage(url: thumbnail) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                } placeholder: {
+                    Color.secondary.opacity(0.2)
+                }
+                .frame(width: 96, height: 54)
+                .clipped()
+            } else {
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.2))
+                    .frame(width: 96, height: 54)
+                    .overlay {
+                        Image(systemName: "play.rectangle")
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(video.title)
+                    .font(.headline)
+                    .lineLimit(1)
+                Text(video.description)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                if video.isMembersOnly {
+                    Text("メンバー限定")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
                 }
             }
         }

@@ -272,34 +272,75 @@ public struct CommunityAdmin: Identifiable, Equatable, Codable, Sendable {
 public struct DistributedVideo: Identifiable, Equatable, Codable, Sendable {
     public let id: String
     public let communityId: String
-    public let title: String
+    public let videoTitle: String
     public let description: String
-    public let videoURL: URL?
-    public let vimeoVideoId: String
-    public let thumbnailURL: URL?
+    public let embedHtml: String
+    public let videoUrl: String
+    public let vimeoUrl: String
+    public let providerVideoId: String
+    public let videoType: String
+    public let thumbnailUrl: String
+    public let isPremium: Bool
+    public let primaryCategoryId: String
+    public let secondaryCategoryId: String
+    public let createdAt: Date?
+    public let updatedAt: Date?
     public let isPublished: Bool
     public let isMembersOnly: Bool
     public let sortOrder: Int
 
+    public var title: String {
+        videoTitle
+    }
+
+    public var videoURL: URL? {
+        URL(string: vimeoUrl)
+            ?? URL(string: videoUrl)
+    }
+
+    public var vimeoVideoId: String {
+        providerVideoId
+    }
+
+    public var thumbnailURL: URL? {
+        URL(string: thumbnailUrl)
+    }
+
     public init(
         id: String,
         communityId: String,
-        title: String,
+        videoTitle: String,
         description: String = "",
-        videoURL: URL? = nil,
-        vimeoVideoId: String,
-        thumbnailURL: URL? = nil,
+        embedHtml: String = "",
+        videoUrl: String = "",
+        vimeoUrl: String = "",
+        providerVideoId: String = "",
+        videoType: String = "distributed_vimeo",
+        thumbnailUrl: String = "",
+        primaryCategoryId: String = "",
+        secondaryCategoryId: String = "",
+        isPremium: Bool = false,
+        createdAt: Date? = nil,
+        updatedAt: Date? = nil,
         isPublished: Bool = false,
         isMembersOnly: Bool = false,
         sortOrder: Int = 0
     ) {
         self.id = id
         self.communityId = communityId
-        self.title = title
+        self.videoTitle = videoTitle
         self.description = description
-        self.videoURL = videoURL
-        self.vimeoVideoId = vimeoVideoId
-        self.thumbnailURL = thumbnailURL
+        self.embedHtml = embedHtml
+        self.videoUrl = videoUrl
+        self.vimeoUrl = vimeoUrl
+        self.providerVideoId = providerVideoId
+        self.videoType = videoType
+        self.thumbnailUrl = thumbnailUrl
+        self.primaryCategoryId = primaryCategoryId
+        self.secondaryCategoryId = secondaryCategoryId
+        self.isPremium = isPremium
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
         self.isPublished = isPublished
         self.isMembersOnly = isMembersOnly
         self.sortOrder = sortOrder

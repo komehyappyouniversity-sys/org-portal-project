@@ -1622,23 +1622,15 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
         ) as? [String: Any]
         let documents = response?["documents"] as? [[String: Any]] ?? []
         return documents.compactMap { document in
-            guard let fields = document["fields"] as? [String: Any],
-                  let vimeoVideoId = string(fields, "vimeoVideoId"),
-                  bool(fields, "isPublished") == true else { return nil }
-            let id = (document["name"] as? String)?.split(separator: "/").last.map(String.init) ?? vimeoVideoId
-            return DistributedVideo(
-                id: id,
+            let fields = document["fields"] as? [String: Any] ?? [:]
+            let video = parseDistributedVideo(
+                document: document,
+                fields: fields,
                 communityId: communityId,
-                title: string(fields, "title") ?? "Vimeo動画",
-                description: string(fields, "description") ?? "",
-                videoURL: (string(fields, "vimeoUrl") ?? string(fields, "videoUrl"))
-                    .flatMap(URL.init(string:)),
-                vimeoVideoId: vimeoVideoId,
-                thumbnailURL: string(fields, "thumbnailUrl").flatMap(URL.init(string:)),
-                isPublished: true,
-                isMembersOnly: bool(fields, "isMembersOnly") ?? false,
-                sortOrder: Int(string(fields, "sortOrder") ?? "0") ?? 0
             )
+            guard video.isPublished,
+                  !video.isPremium else { return nil }
+            return video
         }.sorted {
             $0.sortOrder == $1.sortOrder
                 ? $0.title < $1.title
@@ -1780,21 +1772,13 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
         ) as? [String: Any]
         let documents = response?["documents"] as? [[String: Any]] ?? []
         return documents.compactMap { document in
-            guard let fields = document["fields"] as? [String: Any],
-                  let vimeoVideoId = string(fields, "vimeoVideoId") else { return nil }
-            let id = (document["name"] as? String)?.split(separator: "/").last.map(String.init) ?? vimeoVideoId
-            return DistributedVideo(
-                id: id,
+            let fields = document["fields"] as? [String: Any] ?? [:]
+            let video = parseDistributedVideo(
+                document: document,
+                fields: fields,
                 communityId: communityId,
-                title: string(fields, "title") ?? "Vimeo動画",
-                description: string(fields, "description") ?? "",
-                videoURL: (string(fields, "vimeoUrl") ?? string(fields, "videoUrl")).flatMap(URL.init(string:)),
-                vimeoVideoId: vimeoVideoId,
-                thumbnailURL: string(fields, "thumbnailUrl").flatMap(URL.init(string:)),
-                isPublished: bool(fields, "isPublished") ?? false,
-                isMembersOnly: bool(fields, "isMembersOnly") ?? true,
-                sortOrder: Int(string(fields, "sortOrder") ?? "0") ?? 0
             )
+            return video.isPremium ? nil : video
         }.sorted {
             $0.sortOrder == $1.sortOrder ? $0.title < $1.title : $0.sortOrder < $1.sortOrder
         }
@@ -1829,11 +1813,12 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
             return DistributedVideo(
                 id: vimeoVideoId,
                 communityId: communityId,
-                title: item["title"] as? String ?? "Vimeo動画",
+                videoTitle: item["title"] as? String ?? "Vimeo動画",
                 description: item["description"] as? String ?? "",
-                videoURL: (item["link"] as? String).flatMap(URL.init(string:)),
-                vimeoVideoId: vimeoVideoId,
-                thumbnailURL: (item["thumbnailUrl"] as? String).flatMap(URL.init(string:)),
+                videoUrl: item["link"] as? String ?? "",
+                vimeoUrl: "https://vimeo.com/\(vimeoVideoId)",
+                providerVideoId: vimeoVideoId,
+                thumbnailUrl: item["thumbnailUrl"] as? String ?? "",
                 isPublished: false,
                 isMembersOnly: true,
                 sortOrder: 0
@@ -1898,11 +1883,12 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
             return DistributedVideo(
                 id: vimeoVideoId,
                 communityId: communityId,
-                title: item["title"] as? String ?? "Vimeo動画",
+                videoTitle: item["title"] as? String ?? "Vimeo動画",
                 description: item["description"] as? String ?? "",
-                videoURL: (item["link"] as? String).flatMap(URL.init(string:)),
-                vimeoVideoId: vimeoVideoId,
-                thumbnailURL: (item["thumbnailUrl"] as? String).flatMap(URL.init(string:)),
+                videoUrl: item["link"] as? String ?? "",
+                vimeoUrl: "https://vimeo.com/\(vimeoVideoId)",
+                providerVideoId: vimeoVideoId,
+                thumbnailUrl: item["thumbnailUrl"] as? String ?? "",
                 isPublished: false,
                 isMembersOnly: true,
                 sortOrder: 0
@@ -2032,6 +2018,44 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
         guard community.isActive else { throw CommunityRepositoryError.inactive }
         guard community.joinEnabled else { throw CommunityRepositoryError.joiningDisabled }
         return community
+    }
+
+    internal func parseDistributedVideo(
+        document: [String: Any],
+        fields: [String: Any],
+        communityId: String
+    ) -> DistributedVideo {
+        let id = document["name"] as? String
+        let documentID = id?.split(separator: "/").last.map(String.init) ?? ""
+        let vimeoVideoId = string(fields, "providerVideoId")
+            ?? string(fields, "vimeoVideoId")
+            ?? ""
+        let resolvedID = documentID.isEmpty ? (vimeoVideoId.isEmpty ? UUID().uuidString : vimeoVideoId) : documentID
+        return DistributedVideo(
+            id: resolvedID,
+            communityId: communityId,
+            videoTitle: string(fields, "videoTitle") ?? string(fields, "title") ?? "Vimeo動画",
+            description: string(fields, "description") ?? "",
+            embedHtml: string(fields, "embedHtml") ?? "",
+            videoUrl: string(fields, "videoUrl") ?? "",
+            vimeoUrl: string(fields, "vimeoUrl")
+                ?? string(fields, "videoUrl")
+                ?? (vimeoVideoId.isEmpty ? "" : "https://vimeo.com/\(vimeoVideoId)"),
+            providerVideoId: vimeoVideoId,
+            videoType: string(fields, "videoType") ?? "distributed_vimeo",
+            thumbnailUrl: string(fields, "thumbnailUrl") ?? "",
+            primaryCategoryId: string(fields, "primaryCategoryId")
+                ?? string(fields, "category")
+                ?? string(fields, "categoryId")
+                ?? "",
+            secondaryCategoryId: string(fields, "secondaryCategoryId") ?? "",
+            isPremium: bool(fields, "isPremium") ?? false,
+            createdAt: timestamp(fields, "createdAt"),
+            updatedAt: timestamp(fields, "updatedAt"),
+            isPublished: bool(fields, "isPublished") ?? false,
+            isMembersOnly: bool(fields, "isMembersOnly") ?? false,
+            sortOrder: Int(number(fields, "sortOrder") ?? 0)
+        )
     }
 
     private func parseCommunity(_ document: [String: Any]) throws -> Community {
