@@ -479,6 +479,36 @@ public struct VideoQuestion: Identifiable, Equatable, Codable, Sendable {
     }
 }
 
+public struct VimeoVideoMemo: Identifiable, Equatable, Codable, Sendable {
+    public let id: String
+    public let text: String
+    public let playbackSeconds: Double
+    public let createdAtMillis: Int64
+    public let updatedAtMillis: Int64
+
+    public init(
+        id: String,
+        text: String,
+        playbackSeconds: Double,
+        createdAtMillis: Int64,
+        updatedAtMillis: Int64
+    ) {
+        self.id = id
+        self.text = text
+        self.playbackSeconds = playbackSeconds
+        self.createdAtMillis = createdAtMillis
+        self.updatedAtMillis = updatedAtMillis
+    }
+
+    public var createdAt: Date {
+        Date(timeIntervalSince1970: TimeInterval(createdAtMillis) / 1000)
+    }
+
+    public var updatedAt: Date {
+        Date(timeIntervalSince1970: TimeInterval(updatedAtMillis) / 1000)
+    }
+}
+
 public enum CommunityCodeParser {
     public static func parse(_ value: String) -> String? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)

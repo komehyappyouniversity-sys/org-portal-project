@@ -107,6 +107,7 @@ private struct AppBootstrapView: View {
                         $0.0.status == .approved && $0.1.id == communityId
                     }
                 },
+                memoStore: FeatureTools.VimeoMemoStore(),
             )
         )
         _announcementModel = StateObject(
