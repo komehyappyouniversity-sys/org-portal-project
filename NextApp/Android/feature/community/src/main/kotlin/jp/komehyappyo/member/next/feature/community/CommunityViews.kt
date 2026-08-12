@@ -753,7 +753,11 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                     Text("自分の予約")
                     state.myBookingReservations.forEach { reservation ->
                         val event = state.bookingEvents.firstOrNull { it.id == reservation.eventId }
-                        Text("${event?.title ?: "イベント"} / 予約枠: ${reservation.slotId}")
+                        val slot = state.myBookingSlots["${reservation.eventId}:${reservation.slotId}"]
+                        Text(
+                            "${event?.title ?: "イベント"} / " +
+                                (slot?.startAt ?: "予約枠: ${reservation.slotId}"),
+                        )
                     }
                 }
                 state.bookingEvents.forEach { event ->
