@@ -477,19 +477,6 @@ class CommunityFeatureModel(
         viewModelScope.launch {
             repository.memberships(current.userId, token)
                 .onSuccess { items ->
-                    val reservations = repository.myBookingReservations(
-                        communityId,
-                        current.userId,
-                        token,
-                    ).getOrDefault(emptyList())
-                    val slots = reservations
-                        .map { it.eventId }
-                        .distinct()
-                        .flatMap { eventId ->
-                            repository.bookingSlots(communityId, eventId, token)
-                                .getOrDefault(emptyList())
-                        }
-                        .associateBy { "${it.eventId}:${it.id}" }
                     mutableState.value = mutableState.value.copy(
                         memberships = items,
                         isLoading = false,
@@ -532,6 +519,7 @@ class CommunityFeatureModel(
                 bookingSlots = emptyList(),
                 bookedSlotIds = emptySet(),
                 myBookingReservations = emptyList(),
+                myBookingSlots = emptyMap(),
                 bookingProcessingSlotId = null,
             )
             return
@@ -541,6 +529,19 @@ class CommunityFeatureModel(
                 .onSuccess { events ->
                     val selectedEventId = mutableState.value.selectedBookingEventId
                         ?.takeIf { id -> events.any { it.id == id } }
+                    val reservations = repository.myBookingReservations(
+                        communityId,
+                        current.userId,
+                        token,
+                    ).getOrDefault(emptyList())
+                    val slots = reservations
+                        .map { it.eventId }
+                        .distinct()
+                        .flatMap { eventId ->
+                            repository.bookingSlots(communityId, eventId, token)
+                                .getOrDefault(emptyList())
+                        }
+                        .associateBy { "${it.eventId}:${it.id}" }
                     mutableState.value = mutableState.value.copy(
                         bookingEvents = events,
                         selectedBookingEventId = selectedEventId,
