@@ -377,7 +377,12 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                             Text("定員 ${slot.capacity}名 / 予約 ${slot.reservedCount}名 / 残席 ${slot.remainingCount}名")
                             Text(if (slot.isOpen) "受付中" else "受付停止中")
                             reservations.forEach { reservation ->
-                                Text("${reservation.userId} / ${reservation.status} / ${reservation.purchaseStatus}")
+                                val memberName = state.communityMembers
+                                    .firstOrNull { it.userId == reservation.userId }
+                                    ?.applicantName
+                                    ?.takeIf(String::isNotBlank)
+                                    ?: reservation.userId
+                                Text("$memberName / ${reservation.status} / ${reservation.purchaseStatus}")
                             }
                         }
                     }

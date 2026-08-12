@@ -2194,7 +2194,10 @@ private struct CommunityRootView: View {
                         Text(slot.isOpen ? "受付中" : "受付停止中")
                             .font(.subheadline)
                         ForEach(reservations, id: \.userId) { reservation in
-                            Text("\(reservation.userId) / \(reservation.status) / \(reservation.purchaseStatus)")
+                            let memberName = model.communityMembers.first {
+                                $0.userId == reservation.userId
+                            }?.applicantName ?? reservation.userId
+                            Text("\(memberName) / \(reservation.status) / \(reservation.purchaseStatus)")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
