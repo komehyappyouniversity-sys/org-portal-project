@@ -1883,6 +1883,7 @@ private struct VimeoVideoDetailView: View {
 private struct CommunityRootView: View {
     @ObservedObject var model: CommunityFeatureModel
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.openURL) private var openURL
     @State private var newAdminUserId = ""
     @State private var bookingEventID = ""
     @State private var bookingEventTitle = ""
@@ -2570,6 +2571,13 @@ private struct CommunityRootView: View {
                                 ? "料金: \(event.feeAmount)円（決済準備中のため予約できません）"
                                 : "無料イベント"
                         )
+                        if model.myBookingReservations.contains(where: { $0.eventId == event.id }),
+                           let zoomURL = event.zoomURL {
+                            Button("Zoom参加リンクを開く") {
+                                openURL(zoomURL)
+                            }
+                            .buttonStyle(.bordered)
+                        }
                         Button(
                             model.selectedBookingEventID == event.id ? "予約枠を表示中" : "予約枠を見る"
                         ) {

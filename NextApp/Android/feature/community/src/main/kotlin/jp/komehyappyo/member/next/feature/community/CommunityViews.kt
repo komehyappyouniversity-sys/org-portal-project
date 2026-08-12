@@ -796,6 +796,14 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                                 "無料イベント"
                             },
                         )
+                        if (
+                            state.myBookingReservations.any { it.eventId == event.id } &&
+                            !event.zoomUrl.isNullOrBlank()
+                        ) {
+                            TextButton(onClick = { uriHandler.openUri(event.zoomUrl) }) {
+                                Text("Zoom参加リンクを開く")
+                            }
+                        }
                         OutlinedButton(
                             onClick = { model.selectBookingEvent(event.id) },
                             enabled = state.selectedBookingEventId != event.id,
