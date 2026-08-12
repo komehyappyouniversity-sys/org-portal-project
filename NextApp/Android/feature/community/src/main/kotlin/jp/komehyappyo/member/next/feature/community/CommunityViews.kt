@@ -785,6 +785,9 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                             "${event?.title ?: "イベント"} / " +
                                 (slot?.startAt ?: "予約枠: ${reservation.slotId}"),
                         )
+                        TextButton(onClick = { model.selectBookingEvent(reservation.eventId) }) {
+                            Text("予約内容を確認")
+                        }
                     }
                 }
                 state.bookingEvents.forEach { event ->

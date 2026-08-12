@@ -2569,6 +2569,10 @@ private struct CommunityRootView: View {
                                 (slot?.startAt?.formatted(date: .abbreviated, time: .shortened) ?? "予約枠: \(reservation.slotId)")
                         )
                             .foregroundStyle(.secondary)
+                        Button("予約内容を確認") {
+                            Task { await model.selectBookingEvent(reservation.eventId) }
+                        }
+                        .buttonStyle(.bordered)
                     }
                 }
                 ForEach(model.bookingEvents) { event in
