@@ -2573,6 +2573,16 @@ private struct CommunityRootView: View {
                             Task { await model.selectBookingEvent(reservation.eventId) }
                         }
                         .buttonStyle(.bordered)
+                        if event != nil, slot != nil {
+                            Button("予約をキャンセル", role: .destructive) {
+                                Task {
+                                    await model.selectBookingEvent(reservation.eventId)
+                                    bookingCancellationSlotID = reservation.slotId
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(model.bookingProcessingSlotID != nil)
+                        }
                     }
                 }
                 ForEach(model.bookingEvents) { event in

@@ -788,6 +788,14 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                         TextButton(onClick = { model.selectBookingEvent(reservation.eventId) }) {
                             Text("予約内容を確認")
                         }
+                        if (event != null && slot != null) {
+                            OutlinedButton(
+                                onClick = { bookingCancellationTarget = event to slot },
+                                enabled = state.bookingProcessingSlotId == null,
+                            ) {
+                                Text("予約をキャンセル")
+                            }
+                        }
                     }
                 }
                 state.bookingEvents.forEach { event ->
