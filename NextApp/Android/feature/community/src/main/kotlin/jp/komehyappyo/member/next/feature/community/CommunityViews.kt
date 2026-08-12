@@ -796,12 +796,11 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                                 "無料イベント"
                             },
                         )
-                        if (
-                            state.myBookingReservations.any { it.eventId == event.id } &&
-                            !event.zoomUrl.isNullOrBlank()
-                        ) {
-                            TextButton(onClick = { uriHandler.openUri(event.zoomUrl) }) {
-                                Text("Zoom参加リンクを開く")
+                        event.zoomUrl?.takeIf(String::isNotBlank)?.let { zoomUrl ->
+                            if (state.myBookingReservations.any { it.eventId == event.id }) {
+                                TextButton(onClick = { uriHandler.openUri(zoomUrl) }) {
+                                    Text("Zoom参加リンクを開く")
+                                }
                             }
                         }
                         OutlinedButton(
