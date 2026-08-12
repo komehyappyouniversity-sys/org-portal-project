@@ -795,6 +795,9 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                         Text(event.title)
                         event.eventDate?.let { Text("開催日: $it") }
                         if (event.description.isNotBlank()) Text(event.description)
+                        if (state.myBookingReservations.any { it.eventId == event.id }) {
+                            Text("このイベントは予約済みです。")
+                        }
                         Text(
                             if (event.paymentRequired || event.feeAmount > 0) {
                                 "料金: ${event.feeAmount}円（決済準備中のため予約できません）"

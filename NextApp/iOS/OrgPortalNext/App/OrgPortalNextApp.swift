@@ -2583,6 +2583,10 @@ private struct CommunityRootView: View {
                         if !event.description.isEmpty {
                             Text(event.description)
                         }
+                        if model.myBookingReservations.contains(where: { $0.eventId == event.id }) {
+                            Text("このイベントは予約済みです。")
+                                .foregroundStyle(.secondary)
+                        }
                         Text(
                             event.paymentRequired || event.feeAmount > 0
                                 ? "料金: \(event.feeAmount)円（決済準備中のため予約できません）"
