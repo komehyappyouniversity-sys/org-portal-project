@@ -1,6 +1,7 @@
 import DesignSystem
 import Model
 import SwiftUI
+import Foundation
 import WebKit
 
 public struct ToolsHubView: View {
@@ -199,6 +200,7 @@ public struct ToolsHubView: View {
                     )
                 case let .distributedVideoPlayer(video):
                     DistributedVideoPlayerView(
+                        model: distributedVideoModel,
                         video: video,
                         onBackToList: {
                             self.destination = .distributedVideos
@@ -247,8 +249,22 @@ private struct DistributedVideoListRoot: View {
 }
 
 private struct DistributedVideoPlayerView: View {
+    @ObservedObject var model: DistributedVideoFeatureModel
     let video: DistributedVideo
     let onBackToList: () -> Void
+    @State private var memoText = ""
+    @State private var editingMemoId: String?
+    @State private var editingMemoText = ""
+    @State private var questionText = ""
+    @State private var playbackSeconds = 0.0
+    @State private var playbackCommand: VimeoPlaybackCommand?
+    @State private var playbackCommandId = 0
+    private let memoDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = "yyyy/MM/dd HH:mm"
+        return formatter
+    }()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -264,44 +280,365 @@ private struct DistributedVideoPlayerView: View {
             .padding(.horizontal)
             .padding(.vertical, 8)
 
-            switch distributedVideoSource(for: video) {
-            case .embedHtml(let value):
-                DistributedVideoWebView(html: value, url: nil)
-            case .url(let value):
-                DistributedVideoWebView(html: nil, url: value)
-            case .none:
+            if let videoId = distributedVimeoVideoId(for: video) {
+                DistributedVimeoVideoPlayerView(
+                    videoId: videoId,
+                    initialPlaybackSeconds: playbackSeconds,
+                    command: playbackCommand,
+                    onPlaybackTimeChanged: { playbackSeconds = $0 },
+                )
+                .frame(height: 220)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Button("現在の再生位置を取得") {
+                        sendPlaybackCommand(.reportCurrentTime)
+                    }
+                    .buttonStyle(.bordered)
+
+                    Text("再生位置: \(playbackTimeLabel(playbackSeconds))")
+                        .font(.headline)
+
+                    Divider()
+
+                    Text("メモ")
+                        .font(.headline)
+                    TextField("動画メモ", text: $memoText, axis: .vertical)
+                        .lineLimit(4...12)
+                        .textFieldStyle(.roundedBorder)
+
+                    HStack {
+                        Button("メモを追加") {
+                            model.addVideoMemo(video, memo: memoText, playbackSeconds: playbackSeconds)
+                            memoText = ""
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(memoText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                        if !memoText.isEmpty {
+                            Button("クリア") {
+                                memoText = ""
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+
+                    if model.videoMemosFor(video).isEmpty {
+                        Text("まだメモはありません。")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(model.videoMemosFor(video)) { item in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(
+                                    item.createdAtMillis == 0
+                                        ? "以前のメモ"
+                                        : "\(memoDateFormatter.string(from: Date(timeIntervalSince1970: TimeInterval(item.createdAtMillis) / 1000))) / 再生位置 \(playbackTimeLabel(item.playbackSeconds))"
+                                )
+                                if editingMemoId == item.id {
+                                    TextField("動画メモ", text: $editingMemoText, axis: .vertical)
+                                        .textFieldStyle(.roundedBorder)
+                                        .lineLimit(4...12)
+                                    HStack {
+                                        Button("更新") {
+                                            model.updateVideoMemo(video, memo: item, text: editingMemoText)
+                                            editingMemoId = nil
+                                        }
+                                        .buttonStyle(.bordered)
+                                        Button("取消") {
+                                            editingMemoId = nil
+                                        }
+                                        .buttonStyle(.bordered)
+                                    }
+                                } else {
+                                    Text(item.text)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                    HStack {
+                                        Button("この位置から再生") {
+                                            sendPlaybackCommand(.seekAndPlay(item.playbackSeconds))
+                                        }
+                                        .buttonStyle(.bordered)
+
+                                        Button("編集") {
+                                            editingMemoId = item.id
+                                            editingMemoText = item.text
+                                        }
+                                        .buttonStyle(.bordered)
+                                        Button("削除", role: .destructive) {
+                                            model.deleteVideoMemo(video, memo: item)
+                                        }
+                                        .buttonStyle(.bordered)
+                                    }
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 6)
+                            Divider()
+                        }
+                    }
+
+                    Divider()
+
+                    Text("質問")
+                        .font(.headline)
+                    TextField("動画について質問", text: $questionText, axis: .vertical)
+                        .lineLimit(4...12)
+                        .textFieldStyle(.roundedBorder)
+                    Button("質問を送信") {
+                        Task {
+                            await model.submitVideoQuestion(
+                                video,
+                                memo: memoText,
+                                question: questionText,
+                                playbackSeconds: playbackSeconds
+                            )
+                            questionText = ""
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(questionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                    if model.questionsFor(video).isEmpty {
+                        Text("まだ質問はありません。")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(model.questionsFor(video)) { question in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("質問: \(question.questionText)")
+                                if question.answerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    Text("回答待ち")
+                                        .foregroundStyle(.orange)
+                                } else {
+                                    Text("回答: \(question.answerText)")
+                                        .foregroundStyle(.green)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 6)
+                            Divider()
+                        }
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 12)
+            } else {
                 EmptyState("この動画に再生情報がありません。", systemImage: "video.slash")
             }
+        }
+        .onAppear {
+            Task { await model.load() }
         }
         .navigationTitle(video.title)
         .ignoresSafeArea()
     }
+
+    private func playbackTimeLabel(_ value: Double) -> String {
+        let seconds = max(0, Int(value))
+        return "\(seconds / 60):" + String(format: "%02d", seconds % 60)
+    }
+
+    private func sendPlaybackCommand(_ action: VimeoPlaybackAction) {
+        playbackCommandId += 1
+        playbackCommand = VimeoPlaybackCommand(action: action, requestId: playbackCommandId)
+    }
 }
 
-private struct DistributedVideoWebView: UIViewRepresentable {
-    let html: String?
-    let url: String?
+private struct DistributedVimeoVideoPlayerView: UIViewRepresentable {
+    let videoId: String
+    let initialPlaybackSeconds: Double
+    let command: VimeoPlaybackCommand?
+    let onPlaybackTimeChanged: (Double) -> Void
 
     func makeUIView(context: Context) -> WKWebView {
-        let configuration = WKWebViewConfiguration()
-        configuration.allowsInlineMediaPlayback = true
-        let webView = WKWebView(frame: .zero, configuration: configuration)
-        webView.isOpaque = false
+        let config = WKWebViewConfiguration()
+        config.allowsInlineMediaPlayback = true
+        config.userContentController.add(context.coordinator, name: "vimeoPlayerBridge")
+        let webView = WKWebView(frame: .zero, configuration: config)
         webView.backgroundColor = .black
+        webView.isOpaque = false
+        webView.scrollView.isScrollEnabled = false
+        context.coordinator.webView = webView
+        loadPlayerIfNeeded(webView: webView, in: context.coordinator)
         return webView
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
-        if let html {
-            webView.loadHTMLString(html, baseURL: URL(string: "https://player.vimeo.com"))
+        let coordinator = context.coordinator
+        if coordinator.videoId != videoId {
+            loadPlayerIfNeeded(webView: webView, in: coordinator)
+        }
+        guard let command,
+              command.requestId != coordinator.lastCommandId else {
             return
         }
-        guard let url, let link = URL(string: url) else {
-            webView.stopLoading()
-            return
-        }
-        webView.load(.init(url: link))
+        coordinator.lastCommandId = command.requestId
+        coordinator.execute(command)
     }
+
+    static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
+        uiView.configuration.userContentController.removeScriptMessageHandler(forName: "vimeoPlayerBridge")
+        coordinator.webView = nil
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            videoId: videoId,
+            initialPlaybackSeconds: initialPlaybackSeconds,
+            onPlaybackTimeChanged: onPlaybackTimeChanged
+        )
+    }
+
+    private func loadPlayerIfNeeded(webView: WKWebView, in coordinator: Coordinator) {
+        coordinator.videoId = videoId
+        coordinator.lastCommandId = nil
+        webView.loadHTMLString(
+            vimeoPlayerHTML(videoId: videoId, initialSeconds: initialPlaybackSeconds),
+            baseURL: URL(string: "https://player.vimeo.com")
+        )
+    }
+
+    private func vimeoPlayerHTML(videoId: String, initialSeconds: Double) -> String {
+        let sanitizedVideoId = videoId.replacingOccurrences(of: "\\D", with: "", options: .regularExpression)
+        return """
+            <!doctype html>
+            <html>
+            <head>
+            <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">
+            <style>
+            html,body,#player { margin:0; width:100%; height:100%; background:#000; }
+            </style>
+            <script src=\"https://player.vimeo.com/api/player.js\"></script>
+            </head>
+            <body>
+            <div id=\"player\"></div>
+            <script>
+            const initialSeconds = \(initialSeconds);
+            const targetId = \(sanitizedVideoId);
+            const bridge = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.vimeoPlayerBridge;
+            const sendMessage = function(payload) {
+                if (!bridge) return;
+                bridge.postMessage(payload);
+            };
+            const postError = function(message) {
+                sendMessage({ type: 'error', message: message || '' });
+            };
+            const postTime = function(seconds) {
+                sendMessage({ type: 'time', value: seconds || 0 });
+            };
+
+            const player = new Vimeo.Player('player', {
+                id: targetId,
+                autoplay: false,
+                controls: true,
+                dnt: true,
+                playsinline: true,
+                responsive: true
+            });
+
+            player.ready().then(function() {
+                if (initialSeconds > 0) {
+                    player.setCurrentTime(initialSeconds).catch(function() {});
+                }
+            }).catch(function(error) {
+                postError(error && error.message ? error.message : 'Vimeoプレーヤーを準備できませんでした。');
+            });
+
+            window.vimeoReportTime = function() {
+                player.getCurrentTime().then(function(value) {
+                    postTime(value || 0);
+                }).catch(function(error) {
+                    postError(error && error.message ? error.message : '再生位置を取得できませんでした。');
+                    postTime(0);
+                });
+            };
+            window.vimeoSeekAndPlay = function(seconds) {
+                player.setCurrentTime(seconds).then(function() {
+                    return player.play();
+                }).catch(function(error) {
+                    postError(error && error.message ? error.message : '再生に失敗しました。');
+                });
+            };
+            window.vimeoSeek = function(seconds) {
+                player.setCurrentTime(seconds).catch(function(error) {
+                    postError(error && error.message ? error.message : 'シークに失敗しました。');
+                });
+            };
+            </script>
+            </body>
+            </html>
+        """
+    }
+
+    final class Coordinator: NSObject, WKScriptMessageHandler {
+        var webView: WKWebView?
+        var lastCommandId: Int?
+        var videoId: String
+        var initialPlaybackSeconds: Double
+        let onPlaybackTimeChanged: (Double) -> Void
+        var lastError: String?
+
+        init(
+            videoId: String,
+            initialPlaybackSeconds: Double,
+            onPlaybackTimeChanged: @escaping (Double) -> Void
+        ) {
+            self.videoId = videoId
+            self.initialPlaybackSeconds = initialPlaybackSeconds
+            self.onPlaybackTimeChanged = onPlaybackTimeChanged
+            super.init()
+        }
+
+        func userContentController(
+            _ userContentController: WKUserContentController,
+            didReceive message: WKScriptMessage
+        ) {
+            guard let body = message.body as? [String: Any] else { return }
+            let type = body["type"] as? String
+            switch type {
+            case "time":
+                let value = body["value"] as? Double
+                onPlaybackTimeChanged(value ?? 0)
+            case "error":
+                if let message = body["message"] as? String {
+                    lastError = message
+                }
+            default:
+                break
+            }
+        }
+
+        func execute(_ command: VimeoPlaybackCommand) {
+            guard let webView else { return }
+            switch command.action {
+            case .reportCurrentTime:
+                webView.evaluateJavaScript("window.vimeoReportTime();", completionHandler: nil)
+            case .seek(let seconds):
+                webView.evaluateJavaScript("window.vimeoSeek(\(seconds));", completionHandler: nil)
+            case .seekAndPlay(let seconds):
+                webView.evaluateJavaScript("window.vimeoSeekAndPlay(\(seconds));", completionHandler: nil)
+            }
+        }
+    }
+}
+
+private enum VimeoPlaybackAction: Equatable {
+    case reportCurrentTime
+    case seek(Double)
+    case seekAndPlay(Double)
+}
+
+private struct VimeoPlaybackCommand: Equatable {
+    let action: VimeoPlaybackAction
+    let requestId: Int
+}
+
+private func distributedVimeoVideoId(for video: DistributedVideo) -> String? {
+    let candidates = [video.vimeoVideoId, video.vimeoUrl, video.videoUrl]
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+    for value in candidates {
+        let numeric = value.replacingOccurrences(of: "\\D", with: "", options: .regularExpression)
+        if !numeric.isEmpty { return numeric }
+    }
+    return nil
 }
 
 internal enum DistributedVideoPlayerSource: Equatable {

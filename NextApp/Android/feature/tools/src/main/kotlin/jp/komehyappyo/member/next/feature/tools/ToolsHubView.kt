@@ -1,6 +1,8 @@
 package jp.komehyappyo.member.next.feature.tools
 
+import android.annotation.SuppressLint
 import android.view.ViewGroup
+import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -13,12 +15,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Bookmark
@@ -30,8 +35,10 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -52,6 +60,10 @@ import jp.komehyappyo.member.next.core.designsystem.ErrorState
 import jp.komehyappyo.member.next.core.designsystem.FeatureCard
 import jp.komehyappyo.member.next.core.designsystem.LoadingState
 import jp.komehyappyo.member.next.core.model.DistributedVideo
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private sealed class ToolsDestination {
     data object Schedule : ToolsDestination()
@@ -146,7 +158,10 @@ fun ToolsHubRoot(
         is ToolsDestination.DistributedVideoPlayer -> ToolDestinationContainer(
             onBack = { destination = ToolsDestination.DistributedVideos },
         ) {
-            DistributedVideoPlayer(video = current.video)
+            DistributedVideoPlayer(
+                model = distributedVideoModel,
+                video = current.video,
+            )
         }
         null -> Column(
             modifier = Modifier
@@ -335,15 +350,194 @@ internal fun videoPlayerSource(video: DistributedVideo): VideoPlayerSource {
 }
 
 @Composable
-private fun DistributedVideoPlayer(video: DistributedVideo) {
-    when (val source = videoPlayerSource(video)) {
-        is VideoPlayerSource.Html -> DistributedVideoHtmlPlayer(source.html)
-        is VideoPlayerSource.Url -> DistributedVideoUrlPlayer(source.url)
-        VideoPlayerSource.Empty -> {
-            EmptyState(
-                title = "再生できません",
-                message = "この動画に再生情報がありません。",
+private fun DistributedVideoPlayer(
+    model: DistributedVideoFeatureModel,
+    video: DistributedVideo,
+) {
+    val state by model.state.collectAsStateWithLifecycle()
+    val source = videoPlayerSource(video)
+    val videoId = distributedVimeoVideoId(video)
+    val memoDateFormatter = remember { SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.JAPAN) }
+
+    var memoText by remember { mutableStateOf("") }
+    var editingMemoId by remember { mutableStateOf<String?>(null) }
+    var editingMemoText by remember { mutableStateOf("") }
+    var questionText by remember { mutableStateOf("") }
+    var playbackSeconds by remember { mutableStateOf(0.0) }
+    var playbackCommand by remember { mutableStateOf<VimeoPlaybackCommand?>(null) }
+    var playbackCommandId by remember { mutableStateOf(0) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(video.id) {
+        model.load()
+    }
+
+    fun sendPlaybackCommand(action: VimeoPlaybackAction) {
+        playbackCommandId += 1
+        playbackCommand = VimeoPlaybackCommand(action, playbackCommandId)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp)
+            .padding(bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        state.errorMessage?.let { message ->
+            Text(
+                message,
+                color = MaterialTheme.colorScheme.error,
             )
+        }
+
+        if (videoId == null) {
+            when (source) {
+                is VideoPlayerSource.Html -> DistributedVideoHtmlPlayer(source.html)
+                is VideoPlayerSource.Url -> DistributedVideoUrlPlayer(source.url)
+                VideoPlayerSource.Empty -> {
+                    EmptyState(
+                        title = "再生できません",
+                        message = "この動画に再生情報がありません。",
+                    )
+                }
+            }
+        } else {
+            DistributedVimeoVideoPlayerView(
+                videoId = videoId,
+                initialPlaybackSeconds = playbackSeconds,
+                command = playbackCommand,
+                onPlaybackTimeChanged = { playbackSeconds = it },
+            )
+
+            Button(onClick = { sendPlaybackCommand(VimeoPlaybackAction.ReportCurrentTime) }) {
+                Text("現在の再生位置を取得")
+            }
+
+            Text("再生位置: ${playbackTimeLabel(playbackSeconds)}")
+
+            Divider()
+
+            Text("メモ")
+            TextField(
+                value = memoText,
+                onValueChange = { memoText = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("動画メモ") },
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(onClick = {
+                    model.addVideoMemo(
+                        video = video,
+                        memo = memoText,
+                        playbackSeconds = playbackSeconds,
+                    )
+                    memoText = ""
+                }) {
+                    Text("メモを追加")
+                }
+                Button(onClick = { memoText = "" }) {
+                    Text("クリア")
+                }
+            }
+
+            val memos = model.videoMemosFor(video)
+            if (memos.isEmpty()) {
+                Text("まだメモはありません。", color = Color.Gray)
+            } else {
+                memos.forEach { item ->
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            memoDateText(item = item, formatter = memoDateFormatter),
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                        if (editingMemoId == item.id) {
+                            TextField(
+                                value = editingMemoText,
+                                onValueChange = { editingMemoText = it },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = {
+                                    model.updateVideoMemo(video, item, editingMemoText)
+                                    editingMemoId = null
+                                }) {
+                                    Text("更新")
+                                }
+                                Button(onClick = { editingMemoId = null }) {
+                                    Text("取消")
+                                }
+                            }
+                        } else {
+                            Text(item.text)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = {
+                                    sendPlaybackCommand(VimeoPlaybackAction.SeekAndPlay(item.playbackSeconds))
+                                }) {
+                                    Text("この位置から再生")
+                                }
+                                Button(onClick = {
+                                    editingMemoId = item.id
+                                    editingMemoText = item.text
+                                }) {
+                                    Text("編集")
+                                }
+                                Button(
+                                    onClick = {
+                                        model.deleteVideoMemo(video, item)
+                                    },
+                                ) {
+                                    Text("削除")
+                                }
+                            }
+                        }
+                    }
+                    Divider()
+                }
+            }
+
+            Divider()
+
+            Text("質問")
+            TextField(
+                value = questionText,
+                onValueChange = { questionText = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("動画について質問") },
+            )
+            Button(onClick = {
+                scope.launch {
+                    model.submitVideoQuestion(
+                        video = video,
+                        memo = memoText,
+                        question = questionText,
+                        playbackSeconds = playbackSeconds,
+                    )
+                    questionText = ""
+                }
+            }) {
+                Text("質問を送信")
+            }
+
+            val questions = model.questionsFor(video)
+            if (questions.isEmpty()) {
+                Text("まだ質問はありません。", color = Color.Gray)
+            } else {
+                questions.forEach { question ->
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text("質問: ${question.questionText}")
+                        if (question.answerText.trim().isBlank()) {
+                            Text("回答待ち", color = Color(0xFFFF9800))
+                        } else {
+                            Text("回答: ${question.answerText}", color = Color(0xFF4CAF50))
+                        }
+                    }
+                    Divider()
+                }
+            }
         }
     }
 }
@@ -411,6 +605,159 @@ internal sealed interface VideoPlayerSource {
 }
 
 @Composable
+private fun DistributedVimeoVideoPlayerView(
+    videoId: String,
+    initialPlaybackSeconds: Double,
+    command: VimeoPlaybackCommand?,
+    onPlaybackTimeChanged: (Double) -> Unit,
+) {
+    val state = remember {
+        DistributedVimeoPlayerState()
+    }
+    val bridge: DistributedVimeoPlayerBridge = remember {
+        DistributedVimeoPlayerBridge(onPlaybackTimeChanged)
+    }
+
+    @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
+    AndroidView(
+        modifier = Modifier
+            .fillMaxWidth()
+            .fillMaxHeight(0.4f),
+        factory = { context ->
+            WebView(context).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                )
+                webViewClient = WebViewClient()
+                webChromeClient = WebChromeClient()
+                addJavascriptInterface(bridge, "VimeoPlayerBridge")
+                settings.apply {
+                    javaScriptEnabled = true
+                    domStorageEnabled = true
+                    mediaPlaybackRequiresUserGesture = false
+                    loadWithOverviewMode = true
+                    useWideViewPort = true
+                    setSupportZoom(false)
+                }
+            }
+        },
+        update = { webView ->
+            if (state.videoId != videoId) {
+                state.videoId = videoId
+                state.lastCommandId = null
+                webView.loadDataWithBaseURL(
+                    "https://player.vimeo.com",
+                    distributedVimeoPlayerHTML(videoId, initialPlaybackSeconds),
+                    "text/html",
+                    "UTF-8",
+                    null,
+                )
+                return@AndroidView
+            }
+
+            val commandToExecute = command ?: return@AndroidView
+            if (commandToExecute.requestId == state.lastCommandId) return@AndroidView
+
+            state.lastCommandId = commandToExecute.requestId
+            when (commandToExecute.action) {
+                VimeoPlaybackAction.ReportCurrentTime -> {
+                    webView.evaluateJavascript("window.vimeoReportTime();", null)
+                }
+                is VimeoPlaybackAction.Seek -> {
+                    webView.evaluateJavascript(
+                        "window.vimeoSeek(${commandToExecute.action.seconds});",
+                        null,
+                    )
+                }
+                is VimeoPlaybackAction.SeekAndPlay -> {
+                    webView.evaluateJavascript(
+                        "window.vimeoSeekAndPlay(${commandToExecute.action.seconds});",
+                        null,
+                    )
+                }
+            }
+        },
+    )
+}
+
+private fun distributedVimeoPlayerHTML(
+    videoId: String,
+    initialSeconds: Double,
+): String {
+    return """
+        <!doctype html>
+        <html>
+        <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <style>
+        html, body, #player { margin: 0; width: 100%; height: 100%; background: #000; }
+        </style>
+        <script src=\"https://player.vimeo.com/api/player.js\"></script>
+        </head>
+        <body>
+        <div id="player"></div>
+        <script>
+        const initialSeconds = $initialSeconds;
+        const targetId = $videoId;
+        const bridge = window.VimeoPlayerBridge;
+
+        const postError = function(message) {
+            if (!bridge || !bridge.onError) return;
+            bridge.onError(message || '');
+        };
+
+        const postTime = function(seconds) {
+            if (!bridge || !bridge.onCurrentTime) return;
+            bridge.onCurrentTime(seconds || 0);
+        };
+
+        const player = new Vimeo.Player('player', {
+            id: targetId,
+            autoplay: false,
+            controls: true,
+            dnt: true,
+            playsinline: true,
+            responsive: true,
+        });
+
+        player.ready().then(function() {
+            if (initialSeconds > 0) {
+                player.setCurrentTime(initialSeconds).catch(function() {});
+            }
+        }).catch(function(error) {
+            postError(error && error.message ? error.message : 'Vimeoプレーヤーを準備できませんでした。');
+        });
+
+        window.vimeoReportTime = function() {
+            player.getCurrentTime().then(function(value) {
+                postTime(value || 0);
+            }).catch(function(error) {
+                postError(error && error.message ? error.message : '再生位置を取得できませんでした。');
+                postTime(0);
+            });
+        };
+
+        window.vimeoSeekAndPlay = function(seconds) {
+            player.setCurrentTime(seconds).then(function() {
+                return player.play();
+            }).catch(function(error) {
+                postError(error && error.message ? error.message : '再生に失敗しました。');
+            });
+        };
+
+        window.vimeoSeek = function(seconds) {
+            player.setCurrentTime(seconds).catch(function(error) {
+                postError(error && error.message ? error.message : 'シークに失敗しました。');
+            });
+        };
+        </script>
+        </body>
+        </html>
+    """
+}
+
+@Composable
 private fun ToolDestinationContainer(
     onBack: () -> Unit,
     content: @Composable () -> Unit,
@@ -424,3 +771,59 @@ private fun ToolDestinationContainer(
         }
     }
 }
+
+private class DistributedVimeoPlayerState {
+    var videoId: String? = null
+    var lastCommandId: Int? = null
+}
+
+private class DistributedVimeoPlayerBridge(
+    private var onPlaybackTimeChanged: (Double) -> Unit,
+) {
+    @JavascriptInterface
+    fun onCurrentTime(value: Double) {
+        onPlaybackTimeChanged(value)
+    }
+
+    @JavascriptInterface
+    fun onError(value: String?) {
+        // Keep callback behavior close to iOS by avoiding UI side effects directly from WebView bridge.
+    }
+}
+
+private fun distributedVimeoVideoId(video: DistributedVideo): String? {
+    val candidates = listOf(video.vimeoVideoId, video.vimeoUrl, video.videoUrl)
+        .map(String::trim)
+        .filter(String::isNotBlank)
+
+    candidates.forEach { value ->
+        val numeric = value.replace(Regex("\\D"), "")
+        if (numeric.isNotBlank()) {
+            return numeric
+        }
+    }
+    return null
+}
+
+private fun playbackTimeLabel(value: Double): String {
+    val seconds = kotlin.math.max(0, value.toInt())
+    val minutes = seconds / 60
+    return "$minutes:" + String.format(Locale.JAPAN, "%02d", seconds % 60)
+}
+
+private fun memoDateText(item: VimeoVideoMemo, formatter: SimpleDateFormat): String {
+    if (item.createdAtMillis == 0L) return "以前のメモ"
+    val date = Date(item.createdAtMillis)
+    return "${formatter.format(date)} / 再生位置 ${playbackTimeLabel(item.playbackSeconds)}"
+}
+
+private sealed interface VimeoPlaybackAction {
+    data object ReportCurrentTime : VimeoPlaybackAction
+    data class Seek(val seconds: Double) : VimeoPlaybackAction
+    data class SeekAndPlay(val seconds: Double) : VimeoPlaybackAction
+}
+
+private data class VimeoPlaybackCommand(
+    val action: VimeoPlaybackAction,
+    val requestId: Int,
+)

@@ -61,6 +61,7 @@ import jp.komehyappyo.member.next.feature.account.BiometricCredentialStore
 import jp.komehyappyo.member.next.feature.community.CommunityFeatureModel
 import jp.komehyappyo.member.next.feature.community.CommunityRoot
 import jp.komehyappyo.member.next.feature.community.VimeoMemoStore
+import jp.komehyappyo.member.next.feature.tools.VimeoMemoStore as ToolsVimeoMemoStore
 import jp.komehyappyo.member.next.feature.messages.AnnouncementFeatureModel
 import jp.komehyappyo.member.next.feature.messages.AnnouncementRoot
 import jp.komehyappyo.member.next.feature.messages.PostFeatureModel
@@ -121,6 +122,7 @@ class MainActivity : FragmentActivity() {
                         it.first.status == CommunityMembershipStatus.Approved && it.second.id == communityId
                     }
                 },
+                memoStore = ToolsVimeoMemoStore(applicationContext),
             )
         }
         val distributedVideoModel: DistributedVideoFeatureModel = viewModel(

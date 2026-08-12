@@ -62,6 +62,7 @@
 		6F9B387A5EC0A9F655AC0A4B /* SnsCustomLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6748629D55D8EFE17834058 /* SnsCustomLink.swift */; };
 		7012211C3527E2FB0F49A8CA /* MeetingMinutesFeatureModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C2B368F440BE0FA558B0DF9 /* MeetingMinutesFeatureModel.swift */; };
 		70371BACEF39700440642CB7 /* SwiftDataFavoriteBookmarkRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3949377FB955946A6BF44760 /* SwiftDataFavoriteBookmarkRepositoryTests.swift */; };
+		710588E0C6B8E3847C71B205 /* VimeoMemoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DABCAA2798549313C745BC67 /* VimeoMemoStore.swift */; };
 		72EEA8BC8D28B7847C8D9145 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 4FE5E59F4926034270EFEDC1 /* Localizable.xcstrings */; };
 		73554EC6AC44B8202F736A6E /* Notifications.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3FDD79EF8D3D216ED509E2CF /* Notifications.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		760AB71A6C58F33A62AF3163 /* ScheduleViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0641F19A5686098BD2DEF48 /* ScheduleViews.swift */; };
@@ -391,6 +392,7 @@
 		CD145AB1B36BD794463E2720 /* ScheduleRepository.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScheduleRepository.swift; sourceTree = "<group>"; };
 		D23D4C4DA4AAFBCC9A568BA2 /* NotificationService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		D7C3031C7938A2DAEB6123A8 /* OrgPortalNextApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OrgPortalNextApp.swift; sourceTree = "<group>"; };
+		DABCAA2798549313C745BC67 /* VimeoMemoStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VimeoMemoStore.swift; sourceTree = "<group>"; };
 		DCA734C72B2D1BC29C7E4C09 /* SwiftDataSnsCustomLinkRepository.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SwiftDataSnsCustomLinkRepository.swift; sourceTree = "<group>"; };
 		E55734BC4B4544DB1A3FF8CF /* FriendExchange.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FriendExchange.swift; sourceTree = "<group>"; };
 		E6F496DCB295790A6CAC910F /* MeetingMinutesTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeetingMinutesTests.swift; sourceTree = "<group>"; };
@@ -629,6 +631,7 @@
 				A1B2C3D4E5F60718293A4B5C /* ManualViews.swift */,
 				B6E34BA5A4ED5E551F05DC08 /* ToolsHubView.swift */,
 				246A98C4791462887FD2EF80 /* DistributedVideoFeatureModel.swift */,
+				DABCAA2798549313C745BC67 /* VimeoMemoStore.swift */,
 			);
 			name = "Feature Tools";
 			path = Feature/Tools;
@@ -1299,6 +1302,7 @@
 				4C6F0C9D1A4B5C7D8E9F1234 /* ManualViews.swift in Sources */,
 				53D2F2F77331AE33D45ABE39 /* ToolsHubView.swift in Sources */,
 				8F325C875CCABFD8C3800BA9 /* DistributedVideoFeatureModel.swift in Sources */,
+				710588E0C6B8E3847C71B205 /* VimeoMemoStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
