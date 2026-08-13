@@ -174,6 +174,17 @@ final class FavoriteBookmarkTests: XCTestCase {
         )
     }
 
+    func testCommunityAdminAccessRejectsManagerWithoutReviewPermission() {
+        XCTAssertFalse(
+            CommunityAdminAccess(
+                communityId: "k100u",
+                userId: "member",
+                role: "manager",
+                permissions: ["announcementRead"]
+            ).canReviewMembers
+        )
+    }
+
     func testValidationTrimsValuesAndDefaultsCategory() throws {
         let favorite = try FavoriteBookmark(
             title: " 公式サイト ",

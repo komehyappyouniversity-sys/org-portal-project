@@ -53,6 +53,7 @@ data class CommunityUiState(
     val vimeoFolders: List<VimeoFolder> = emptyList(),
     val vimeoConfiguration: VimeoConfiguration = VimeoConfiguration(),
     val videoQuestions: List<VideoQuestion> = emptyList(),
+    val adminVideoQuestions: List<VideoQuestion> = emptyList(),
     val bookingEvents: List<BookingEvent> = emptyList(),
     val selectedBookingEventId: String? = null,
     val bookingSlots: List<BookingSlot> = emptyList(),
@@ -242,6 +243,24 @@ class CommunityFeatureModel(
             ).onSuccess {
                 mutableState.value = mutableState.value.copy(message = "質問を送信しました。")
                 refreshVideos()
+            }.onFailure { showError(it, clearCandidate = false) }
+        }
+    }
+
+    fun answerVideoQuestion(questionId: String, answerText: String) {
+        val current = session.state.value
+        val communityId = current.selectedCommunityId ?: return
+        val token = current.authenticationToken ?: return
+        if (state.value.adminAccess?.canReviewMembers != true) return
+        viewModelScope.launch {
+            repository.answerVideoQuestion(
+                communityId = communityId,
+                questionId = questionId,
+                answerText = answerText.trim(),
+                idToken = token,
+            ).onSuccess {
+                mutableState.value = mutableState.value.copy(message = "回答を保存しました。")
+                refreshManagement()
             }.onFailure { showError(it, clearCandidate = false) }
         }
     }
@@ -695,6 +714,7 @@ class CommunityFeatureModel(
         if (communityId == null || token == null) {
             mutableState.value = mutableState.value.copy(
                 adminAccess = null,
+                adminVideoQuestions = emptyList(),
                 pendingApplications = emptyList(),
                 auditLogs = emptyList(),
                 managedVideos = emptyList(),
@@ -727,6 +747,9 @@ class CommunityFeatureModel(
                         repository.adminBookingEvents(communityId, token).onSuccess { events ->
                             mutableState.value = mutableState.value.copy(managedBookingEvents = events)
                         }.onFailure(::showError)
+                        repository.adminVideoQuestions(communityId, token).onSuccess { questions ->
+                            mutableState.value = mutableState.value.copy(adminVideoQuestions = questions)
+                        }.onFailure(::showError)
                         repository.auditLogs(communityId, token).onSuccess { logs ->
                             mutableState.value = mutableState.value.copy(auditLogs = logs)
                         }.onFailure(::showError)
@@ -747,6 +770,7 @@ class CommunityFeatureModel(
                             managedBookingReservations = emptyList(),
                             vimeoLibraryVideos = emptyList(),
                             vimeoConfiguration = VimeoConfiguration(),
+                            adminVideoQuestions = emptyList(),
                         )
                     }
                 }

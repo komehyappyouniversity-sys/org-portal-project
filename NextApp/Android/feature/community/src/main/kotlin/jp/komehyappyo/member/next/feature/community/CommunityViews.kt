@@ -26,6 +26,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -70,6 +71,7 @@ fun CommunityRoot(model: CommunityFeatureModel) {
     var bookingSlotCapacity by rememberSaveable { mutableStateOf("1") }
     var bookingSlotOpen by rememberSaveable { mutableStateOf(true) }
     var bookingCancellationTarget by remember { mutableStateOf<Pair<BookingEvent, BookingSlot>?>(null) }
+    val adminVideoQuestionAnswers = remember { mutableStateMapOf<String, String>() }
 
     LaunchedEffect(sessionState.authenticationToken) {
         model.refreshPublicCommunities()
@@ -512,6 +514,65 @@ fun CommunityRoot(model: CommunityFeatureModel) {
                                 CommunityMembershipStatus.Approved -> "参加中"
                             })
                         }
+                    }
+                }
+                HorizontalDivider()
+
+                Text("動画質問対応")
+                if (state.adminVideoQuestions.isEmpty()) {
+                    Text("対応する質問はありません。")
+                }
+                val unansweredQuestions = state.adminVideoQuestions.filter { it.answerText.isBlank() }
+                if (unansweredQuestions.isNotEmpty()) {
+                    Text("未回答")
+                    unansweredQuestions.forEach { question ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text("動画: ${question.videoTitle}")
+                            Text("質問: ${question.questionText}")
+                            if (question.memoText.isNotBlank()) {
+                                Text("メモ: ${question.memoText}")
+                            }
+                            OutlinedTextField(
+                                value = adminVideoQuestionAnswers[question.id] ?: "",
+                                onValueChange = {
+                                    adminVideoQuestionAnswers[question.id] = it
+                                },
+                                label = { Text("回答を入力") },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Button(
+                                onClick = {
+                                    model.answerVideoQuestion(
+                                        question.id,
+                                        adminVideoQuestionAnswers[question.id] ?: "",
+                                    )
+                                    adminVideoQuestionAnswers.remove(question.id)
+                                },
+                            ) { Text("回答を保存") }
+                        }
+                        HorizontalDivider()
+                    }
+                }
+                val answeredQuestions = state.adminVideoQuestions.filter { it.answerText.isNotBlank() }
+                if (answeredQuestions.isNotEmpty()) {
+                    Text("回答済み")
+                    answeredQuestions.forEach { question ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text("動画: ${question.videoTitle}")
+                            Text("質問: ${question.questionText}")
+                            Text("回答: ${question.answerText}")
+                        }
+                        HorizontalDivider()
                     }
                 }
 

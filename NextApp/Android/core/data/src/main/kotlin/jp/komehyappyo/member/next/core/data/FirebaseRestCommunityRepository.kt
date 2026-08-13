@@ -147,6 +147,10 @@ interface CommunityRepository {
         memberUid: String,
         idToken: String,
     ): Result<List<VideoQuestion>>
+    suspend fun adminVideoQuestions(
+        communityId: String,
+        idToken: String,
+    ): Result<List<VideoQuestion>>
     suspend fun saveVideoQuestion(
         communityId: String,
         memberUid: String,
@@ -154,6 +158,12 @@ interface CommunityRepository {
         memoText: String,
         questionText: String,
         playbackSeconds: Double,
+        idToken: String,
+    ): Result<Unit>
+    suspend fun answerVideoQuestion(
+        communityId: String,
+        questionId: String,
+        answerText: String,
         idToken: String,
     ): Result<Unit>
     suspend fun adminCommunityVideos(
@@ -1081,6 +1091,40 @@ class FirebaseRestCommunityRepository(
         }.sortedByDescending { it.createdAt.orEmpty() }
     }
 
+    override suspend fun adminVideoQuestions(
+        communityId: String,
+        idToken: String,
+    ): Result<List<VideoQuestion>> = runCatching {
+        val response = request(
+            "documents/organizations/$communityId/videoQuestions?pageSize=1000",
+            "GET",
+            idToken,
+            null,
+        ) as JSONObject
+        val documents = response.optJSONArray("documents") ?: JSONArray()
+        buildList {
+            for (index in 0 until documents.length()) {
+                val document = documents.optJSONObject(index) ?: continue
+                val fields = document.optJSONObject("fields") ?: continue
+                val question = string(fields, "questionText") ?: continue
+                add(
+                    VideoQuestion(
+                        id = document.optString("name").substringAfterLast("/"),
+                        communityId = communityId,
+                        memberUid = string(fields, "memberUid").orEmpty(),
+                        videoId = string(fields, "videoId").orEmpty(),
+                        videoTitle = string(fields, "videoTitle").orEmpty(),
+                        playbackSeconds = number(fields, "playbackSeconds") ?: 0.0,
+                        memoText = string(fields, "memoText").orEmpty(),
+                        questionText = question,
+                        answerText = string(fields, "answerText").orEmpty(),
+                        createdAt = timestamp(fields, "createdAt"),
+                    ),
+                )
+            }
+        }.sortedByDescending { it.createdAt.orEmpty() }
+    }
+
     override suspend fun saveVideoQuestion(
         communityId: String,
         memberUid: String,
@@ -1104,6 +1148,25 @@ class FirebaseRestCommunityRepository(
             .put("createdAt", timestampValue(Instant.now().toString()))
         request(
             "documents/organizations/$communityId/videoQuestions/${java.util.UUID.randomUUID()}",
+            "PATCH",
+            idToken,
+            JSONObject().put("fields", fields),
+        )
+        Unit
+    }
+
+    override suspend fun answerVideoQuestion(
+        communityId: String,
+        questionId: String,
+        answerText: String,
+        idToken: String,
+    ): Result<Unit> = runCatching {
+        val normalized = answerText.trim()
+        val fields = JSONObject()
+            .put("answerText", stringValue(normalized))
+            .put("updatedAt", timestampValue(Instant.now().toString()))
+        request(
+            "documents/organizations/$communityId/videoQuestions/$questionId",
             "PATCH",
             idToken,
             JSONObject().put("fields", fields),

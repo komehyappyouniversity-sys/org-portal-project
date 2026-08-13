@@ -827,6 +827,10 @@ public protocol CommunityRepository: Sendable {
         memberUid: String,
         idToken: String
     ) async throws -> [VideoQuestion]
+    func adminVideoQuestions(
+        communityId: String,
+        idToken: String
+    ) async throws -> [VideoQuestion]
     func saveVideoQuestion(
         communityId: String,
         memberUid: String,
@@ -834,6 +838,12 @@ public protocol CommunityRepository: Sendable {
         memoText: String,
         questionText: String,
         playbackSeconds: Double,
+        idToken: String
+    ) async throws
+    func answerVideoQuestion(
+        communityId: String,
+        questionId: String,
+        answerText: String,
         idToken: String
     ) async throws
     func adminCommunityVideos(
@@ -1755,6 +1765,54 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
         ]
         _ = try await requestJSON(
             path: "documents/organizations/\(communityId)/videoQuestions/\(UUID().uuidString.lowercased())",
+            method: "PATCH",
+            idToken: idToken,
+            body: ["fields": fields]
+        )
+    }
+
+    public func adminVideoQuestions(
+        communityId: String,
+        idToken: String
+    ) async throws -> [VideoQuestion] {
+        let response = try await requestJSON(
+            path: "documents/organizations/\(communityId)/videoQuestions?pageSize=1000",
+            method: "GET",
+            idToken: idToken
+        ) as? [String: Any]
+        let documents = response?["documents"] as? [[String: Any]] ?? []
+        return documents.compactMap { document in
+            guard let fields = document["fields"] as? [String: Any],
+                  let questionText = string(fields, "questionText") else { return nil }
+            let id = (document["name"] as? String)?.split(separator: "/").last.map(String.init) ?? ""
+            return VideoQuestion(
+                id: id,
+                communityId: communityId,
+                memberUid: string(fields, "memberUid") ?? "",
+                videoId: string(fields, "videoId") ?? "",
+                videoTitle: string(fields, "videoTitle") ?? "",
+                playbackSeconds: number(fields, "playbackSeconds") ?? 0,
+                memoText: string(fields, "memoText") ?? "",
+                questionText: questionText,
+                answerText: string(fields, "answerText") ?? "",
+                createdAt: timestamp(fields, "createdAt")
+            )
+        }.sorted { ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast) }
+    }
+
+    public func answerVideoQuestion(
+        communityId: String,
+        questionId: String,
+        answerText: String,
+        idToken: String
+    ) async throws {
+        let normalized = answerText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fields: [String: Any] = [
+            "answerText": stringValue(normalized),
+            "updatedAt": ["timestampValue": ISO8601DateFormatter().string(from: Date())],
+        ]
+        _ = try await requestJSON(
+            path: "documents/organizations/\(communityId)/videoQuestions/\(questionId)",
             method: "PATCH",
             idToken: idToken,
             body: ["fields": fields]
