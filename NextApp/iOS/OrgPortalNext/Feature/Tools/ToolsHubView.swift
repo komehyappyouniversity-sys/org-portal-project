@@ -42,7 +42,6 @@ public struct ToolsHubView: View {
     @ObservedObject private var friendExchangeModel: FriendExchangeFeatureModel
     @ObservedObject private var distributedVideoModel: DistributedVideoFeatureModel
     @State private var destination: Destination?
-
     public init(
         scheduleModel: ScheduleFeatureModel,
         diaryModel: DiaryFeatureModel,
@@ -256,6 +255,10 @@ private struct DistributedVideoPlayerView: View {
     @State private var editingMemoId: String?
     @State private var editingMemoText = ""
     @State private var questionText = ""
+    @State private var memoCsvURL: URL?
+    @State private var questionCsvURL: URL?
+    @State private var showMemoCsvEmptyState = false
+    @State private var showQuestionCsvEmptyState = false
     @State private var playbackSeconds = 0.0
     @State private var playbackCommand: VimeoPlaybackCommand?
     @State private var playbackCommandId = 0
@@ -302,6 +305,18 @@ private struct DistributedVideoPlayerView: View {
 
                     Text("メモ")
                         .font(.headline)
+                    HStack {
+                        Button("CSV共有") {
+                            let memos = model.videoMemosFor(video)
+                            if memos.isEmpty {
+                                showMemoCsvEmptyState = true
+                                return
+                            }
+                            showMemoCsvEmptyState = false
+                            memoCsvURL = makeMemoCsvURL(video: video, memos: memos)
+                        }
+                        Spacer()
+                    }
                     TextField("動画メモ", text: $memoText, axis: .vertical)
                         .lineLimit(4...12)
                         .textFieldStyle(.roundedBorder)
@@ -323,8 +338,12 @@ private struct DistributedVideoPlayerView: View {
                     }
 
                     if model.videoMemosFor(video).isEmpty {
-                        Text("まだメモはありません。")
-                            .foregroundStyle(.secondary)
+                        if showMemoCsvEmptyState {
+                            EmptyState("CSV共有対象のメモがありません")
+                        } else {
+                            Text("まだメモはありません。")
+                                .foregroundStyle(.secondary)
+                        }
                     } else {
                         ForEach(model.videoMemosFor(video)) { item in
                             VStack(alignment: .leading, spacing: 6) {
@@ -379,6 +398,21 @@ private struct DistributedVideoPlayerView: View {
 
                     Text("質問")
                         .font(.headline)
+                    HStack {
+                        Button("CSV共有") {
+                            let questions = model.questionsFor(video)
+                            if questions.isEmpty {
+                                showQuestionCsvEmptyState = true
+                                return
+                            }
+                            showQuestionCsvEmptyState = false
+                            questionCsvURL = makeQuestionCsvURL(
+                                video: video,
+                                questions: questions,
+                            )
+                        }
+                        Spacer()
+                    }
                     TextField("動画について質問", text: $questionText, axis: .vertical)
                         .lineLimit(4...12)
                         .textFieldStyle(.roundedBorder)
@@ -397,8 +431,12 @@ private struct DistributedVideoPlayerView: View {
                     .disabled(questionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
                     if model.questionsFor(video).isEmpty {
-                        Text("まだ質問はありません。")
-                            .foregroundStyle(.secondary)
+                        if showQuestionCsvEmptyState {
+                            EmptyState("CSV共有対象の質問がありません")
+                        } else {
+                            Text("まだ質問はありません。")
+                                .foregroundStyle(.secondary)
+                        }
                     } else {
                         ForEach(model.questionsFor(video)) { question in
                             VStack(alignment: .leading, spacing: 4) {
@@ -427,6 +465,26 @@ private struct DistributedVideoPlayerView: View {
             Task { await model.load() }
         }
         .navigationTitle(video.title)
+        .sheet(
+            isPresented: Binding(
+                get: { memoCsvURL != nil },
+                set: { if !$0 { memoCsvURL = nil } },
+            ),
+        ) {
+            if let memoCsvURL {
+                ActivityShareSheet(activityItems: [memoCsvURL])
+            }
+        }
+        .sheet(
+            isPresented: Binding(
+                get: { questionCsvURL != nil },
+                set: { if !$0 { questionCsvURL = nil } },
+            ),
+        ) {
+            if let questionCsvURL {
+                ActivityShareSheet(activityItems: [questionCsvURL])
+            }
+        }
         .ignoresSafeArea()
     }
 
@@ -438,6 +496,28 @@ private struct DistributedVideoPlayerView: View {
     private func sendPlaybackCommand(_ action: VimeoPlaybackAction) {
         playbackCommandId += 1
         playbackCommand = VimeoPlaybackCommand(action: action, requestId: playbackCommandId)
+    }
+
+    private func makeMemoCsvURL(video: DistributedVideo, memos: [VimeoVideoMemo]) -> URL? {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("video-memos-\(video.id).csv")
+        do {
+            try VideoMemoCsvExporter.data(for: memos, video: video).write(to: url)
+            return url
+        } catch {
+            return nil
+        }
+    }
+
+    private func makeQuestionCsvURL(video: DistributedVideo, questions: [VideoQuestion]) -> URL? {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("video-questions-\(video.id).csv")
+        do {
+            try VideoQuestionCsvExporter.data(for: questions, video: video).write(to: url)
+            return url
+        } catch {
+            return nil
+        }
     }
 }
 

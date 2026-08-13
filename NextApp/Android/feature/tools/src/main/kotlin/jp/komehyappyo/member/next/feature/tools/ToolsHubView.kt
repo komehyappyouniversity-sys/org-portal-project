@@ -1,6 +1,8 @@
 package jp.komehyappyo.member.next.feature.tools
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
@@ -47,6 +49,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -366,6 +369,9 @@ private fun DistributedVideoPlayer(
     var playbackSeconds by remember { mutableStateOf(0.0) }
     var playbackCommand by remember { mutableStateOf<VimeoPlaybackCommand?>(null) }
     var playbackCommandId by remember { mutableStateOf(0) }
+    var showMemoCsvEmptyState by remember { mutableStateOf(false) }
+    var showQuestionCsvEmptyState by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(video.id) {
@@ -419,7 +425,31 @@ private fun DistributedVideoPlayer(
 
             Divider()
 
-            Text("メモ")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("メモ")
+                Button(onClick = {
+                    val memos = model.videoMemosFor(video)
+                    if (memos.isEmpty()) {
+                        showMemoCsvEmptyState = true
+                        showQuestionCsvEmptyState = false
+                    } else {
+                        showMemoCsvEmptyState = false
+                        shareCsv(
+                            context,
+                            subject = "video-memos-${video.id}.csv",
+                            csv = VideoMemoCsvExporter.export(
+                                memos = memos,
+                                video = video,
+                            ),
+                        )
+                    }
+                }) {
+                    Text("CSV共有")
+                }
+            }
             TextField(
                 value = memoText,
                 onValueChange = { memoText = it },
@@ -446,8 +476,18 @@ private fun DistributedVideoPlayer(
 
             val memos = model.videoMemosFor(video)
             if (memos.isEmpty()) {
-                Text("まだメモはありません。", color = Color.Gray)
+                if (showMemoCsvEmptyState) {
+                    EmptyState(
+                        title = "CSV共有対象のメモがありません",
+                        message = "CSV共有するにはメモが必要です。",
+                    )
+                } else {
+                    Text("まだメモはありません。", color = Color.Gray)
+                }
             } else {
+                if (showMemoCsvEmptyState) {
+                    showMemoCsvEmptyState = false
+                }
                 memos.forEach { item ->
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Text(
@@ -501,7 +541,31 @@ private fun DistributedVideoPlayer(
 
             Divider()
 
-            Text("質問")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("質問")
+                Button(onClick = {
+                    val questions = model.questionsFor(video)
+                    if (questions.isEmpty()) {
+                        showQuestionCsvEmptyState = true
+                        showMemoCsvEmptyState = false
+                    } else {
+                        showQuestionCsvEmptyState = false
+                        shareCsv(
+                            context,
+                            subject = "video-questions-${video.id}.csv",
+                            csv = VideoQuestionCsvExporter.export(
+                                questions = questions,
+                                video = video,
+                            ),
+                        )
+                    }
+                }) {
+                    Text("CSV共有")
+                }
+            }
             TextField(
                 value = questionText,
                 onValueChange = { questionText = it },
@@ -524,8 +588,18 @@ private fun DistributedVideoPlayer(
 
             val questions = model.questionsFor(video)
             if (questions.isEmpty()) {
-                Text("まだ質問はありません。", color = Color.Gray)
+                if (showQuestionCsvEmptyState) {
+                    EmptyState(
+                        title = "CSV共有対象の質問がありません",
+                        message = "CSV共有するには質問が必要です。",
+                    )
+                } else {
+                    Text("まだ質問はありません。", color = Color.Gray)
+                }
             } else {
+                if (showQuestionCsvEmptyState) {
+                    showQuestionCsvEmptyState = false
+                }
                 questions.forEach { question ->
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Text("質問: ${question.questionText}")
@@ -789,6 +863,15 @@ private class DistributedVimeoPlayerBridge(
     fun onError(value: String?) {
         // Keep callback behavior close to iOS by avoiding UI side effects directly from WebView bridge.
     }
+}
+
+private fun shareCsv(context: Context, subject: String, csv: String) {
+    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/csv"
+        putExtra(Intent.EXTRA_SUBJECT, subject)
+        putExtra(Intent.EXTRA_TEXT, "\uFEFF$csv")
+    }
+    context.startActivity(Intent.createChooser(sendIntent, "CSVを共有"))
 }
 
 private fun distributedVimeoVideoId(video: DistributedVideo): String? {
