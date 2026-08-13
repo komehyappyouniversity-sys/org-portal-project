@@ -134,4 +134,16 @@ class AccountCredentialsTest {
             ).canReviewMembers,
         )
     }
+
+    @Test
+    fun communityAdminAccessRejectsExpiredManagerPermission() {
+        assertFalse(
+            CommunityAdminAccess(
+                communityId = "k100u",
+                userId = "member",
+                role = "manager",
+                permissions = setOf("announcementRead"),
+            ).canReviewMembers,
+        )
+    }
 }

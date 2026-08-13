@@ -108,6 +108,7 @@
 		CB2935CC45C246E9AADAC882 /* CommonViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EA1A7C2B46C1C7CB4D04955 /* CommonViews.swift */; };
 		CB456CA7B9CE8723A3D14333 /* DataLayer.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 99C5997017C6EB672666414D /* DataLayer.framework */; };
 		CD4B632A8944E586069BE1D8 /* DataLayer.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 99C5997017C6EB672666414D /* DataLayer.framework */; };
+		CDDBA6FB93B6CE94208CF9B7 /* FirebaseRESTCommunityRepositoryVideoQuestionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DA6BD277CFCFC917E4342D6 /* FirebaseRESTCommunityRepositoryVideoQuestionTests.swift */; };
 		D01B52234B3ED62C4E2D83B4 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 37235240B370E0427B02A868 /* Foundation.framework */; };
 		D11B480E0D6F38B6985D6361 /* FeatureTools.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = BE1DDE2F07CB45AA8F8C435A /* FeatureTools.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		D47720887FFDD07007A45A44 /* DiaryFeatureModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 702BB3DC120F9BC325845785 /* DiaryFeatureModel.swift */; };
@@ -316,6 +317,7 @@
 		15F743A2FA3C28D400F8AC9E /* SwiftDataFriendExchangeRepository.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SwiftDataFriendExchangeRepository.swift; sourceTree = "<group>"; };
 		18B8B8EDA4CB25D0E5107A79 /* SnsCustomLinkRepository.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SnsCustomLinkRepository.swift; sourceTree = "<group>"; };
 		1938F6C16312E9DB13253670 /* DesignSystem.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = DesignSystem.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		1DA6BD277CFCFC917E4342D6 /* FirebaseRESTCommunityRepositoryVideoQuestionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FirebaseRESTCommunityRepositoryVideoQuestionTests.swift; sourceTree = "<group>"; };
 		1F9A94F5FF9C7E292BB84F4A /* SwiftDataDiaryRepositoryTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SwiftDataDiaryRepositoryTests.swift; sourceTree = "<group>"; };
 		234963ECD4AA03964F2B19FB /* Session.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Session.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		246A98C4791462887FD2EF80 /* DistributedVideoFeatureModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DistributedVideoFeatureModel.swift; sourceTree = "<group>"; };
@@ -582,6 +584,7 @@
 				EDE9DBC69ABA7292671F1BB7 /* SwiftDataScheduleRepositoryTests.swift */,
 				C7F123A434BF4B5093F02714 /* SwiftDataSnsCustomLinkRepositoryTests.swift */,
 				8B0701AD3E35722C937ACBAF /* FirebaseEnvironmentGuardDistributedVideoParserTests.swift */,
+				1DA6BD277CFCFC917E4342D6 /* FirebaseRESTCommunityRepositoryVideoQuestionTests.swift */,
 			);
 			name = "Tests DataLayerTests";
 			path = Tests/DataLayerTests;
@@ -1271,6 +1274,7 @@
 				6DED05849A96DF7D60299980 /* SwiftDataScheduleRepositoryTests.swift in Sources */,
 				BB5A016E781745C1D141BA79 /* SwiftDataSnsCustomLinkRepositoryTests.swift in Sources */,
 				1080B365140497F8EEACBD7A /* FirebaseEnvironmentGuardDistributedVideoParserTests.swift in Sources */,
+				CDDBA6FB93B6CE94208CF9B7 /* FirebaseRESTCommunityRepositoryVideoQuestionTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

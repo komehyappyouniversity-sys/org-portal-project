@@ -597,6 +597,7 @@ private final class CommunityFeatureModel: ObservableObject {
     @Published private(set) var vimeoFolders: [VimeoFolder] = []
     @Published private(set) var vimeoConfiguration = VimeoConfiguration()
     @Published private(set) var videoQuestions: [VideoQuestion] = []
+    @Published private(set) var adminVideoQuestions: [VideoQuestion] = []
     @Published private(set) var auditLogs: [CommunityAuditLog] = []
     private let memoStore: VimeoMemoStore
     @Published private(set) var reviewingUserId: String?
@@ -713,6 +714,26 @@ private final class CommunityFeatureModel: ObservableObject {
                     idToken: token
                 )
                 message = "質問を送信しました。"
+                await refreshManagement()
+            } catch {
+                message = error.localizedDescription
+            }
+        }
+    }
+
+    func answerVideoQuestion(_ questionID: String, answer: String) {
+        guard canReviewMembers,
+              let communityId = session.selectedCommunityId,
+              let token = session.authenticationToken else { return }
+        Task {
+            do {
+                try await repository.answerVideoQuestion(
+                    communityId: communityId,
+                    questionId: questionID,
+                    answerText: answer,
+                    idToken: token
+                )
+                message = "回答を保存しました。"
                 await refreshManagement()
             } catch {
                 message = error.localizedDescription
@@ -929,6 +950,7 @@ private final class CommunityFeatureModel: ObservableObject {
             managedBookingReservations = []
             vimeoLibraryVideos = []
             vimeoConfiguration = VimeoConfiguration()
+            adminVideoQuestions = []
             auditLogs = []
             return
         }
@@ -980,6 +1002,12 @@ private final class CommunityFeatureModel: ObservableObject {
                 communityId: communityId,
                 idToken: token
             )
+            adminVideoQuestions = access?.canReviewMembers == true
+                ? (try? await repository.adminVideoQuestions(
+                    communityId: communityId,
+                    idToken: token
+                )) ?? []
+                : []
             auditLogs = access?.canReviewMembers == true
                 ? (try? await repository.auditLogs(communityId: communityId, idToken: token)) ?? []
                 : []
@@ -1007,6 +1035,7 @@ private final class CommunityFeatureModel: ObservableObject {
             managedBookingReservations = []
             vimeoLibraryVideos = []
             vimeoConfiguration = VimeoConfiguration()
+            adminVideoQuestions = []
             auditLogs = []
             message = error.localizedDescription
         }
@@ -1932,6 +1961,7 @@ private struct CommunityRootView: View {
     @State private var videoMemoEditDrafts: [String: String] = [:]
     @State private var editingVideoMemoIDs: Set<String> = []
     @State private var videoQuestionDrafts: [String: String] = [:]
+    @State private var adminVideoQuestionDrafts: [String: String] = [:]
     @State private var videoPlaybackPositions: [String: Double] = [:]
     @State private var videoPlaybackDurations: [String: Double] = [:]
     @State private var videoPlayerCommands: [String: VimeoPlayerCommand] = [:]
@@ -2358,6 +2388,70 @@ private struct CommunityRootView: View {
                             .buttonStyle(.bordered)
                     }
                 }
+            }
+            Text("動画質問対応").font(.title3.bold())
+            let unansweredQuestions = model.adminVideoQuestions.filter {
+                $0.answerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+            if unansweredQuestions.isEmpty {
+                Text("対応する質問はありません。")
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("未回答").font(.headline)
+                ForEach(unansweredQuestions) { question in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("動画: \(question.videoTitle)")
+                            .font(.headline)
+                        Text("質問: \(question.questionText)")
+                        if !question.memoText.isEmpty {
+                            Text("メモ: \(question.memoText)")
+                                .foregroundStyle(.secondary)
+                        }
+                        TextField("回答を入力", text: Binding(
+                            get: { adminVideoQuestionDrafts[question.id] ?? "" },
+                            set: { adminVideoQuestionDrafts[question.id] = $0 }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+                        HStack {
+                            Button("回答を保存") {
+                                model.answerVideoQuestion(
+                                    question.id,
+                                    answer: adminVideoQuestionDrafts[question.id] ?? ""
+                                )
+                                adminVideoQuestionDrafts[question.id] = nil
+                            }
+                            .buttonStyle(.borderedProminent)
+                            Button("クリア") {
+                                adminVideoQuestionDrafts[question.id] = ""
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                    .padding()
+                    .background(.background)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
+            }
+            let answeredQuestions = model.adminVideoQuestions.filter {
+                !$0.answerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+            if !answeredQuestions.isEmpty {
+                Text("回答済み").font(.headline)
+            }
+            ForEach(answeredQuestions) { question in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("動画: \(question.videoTitle)")
+                        .font(.headline)
+                    Text("質問: \(question.questionText)")
+                    if !question.memoText.isEmpty {
+                        Text("メモ: \(question.memoText)")
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("回答: \(question.answerText)")
+                }
+                .padding()
+                .background(.secondary.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             Text("監査ログ").font(.title3.bold())
             if model.auditLogs.isEmpty {
