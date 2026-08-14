@@ -108,4 +108,32 @@ final class VideoCsvExporterTests: XCTestCase {
             "",
         ])
     }
+
+    func testQuestionCsvExporterSharesAllVideosAndAnsweredAt() throws {
+        let answeredAt = Date(timeIntervalSince1970: 1_700_000_100)
+        let video = DistributedVideo(
+            id: "video-answered",
+            communityId: "community-1",
+            videoTitle: "回答動画",
+            vimeoUrl: "https://vimeo.com/answered"
+        )
+        let question = VideoQuestion(
+            id: "question-answered",
+            communityId: "community-1",
+            memberUid: "member-1",
+            videoId: video.id,
+            videoTitle: video.title,
+            questionText: "回答済み質問",
+            answerText: "回答",
+            answeredAt: answeredAt
+        )
+
+        let data = VideoQuestionCsvExporter.data(for: [question], videos: [video])
+        let text = try XCTUnwrap(String(data: data.dropFirst(3), encoding: .utf8))
+        let formattedAnsweredAt = ISO8601DateFormatter().string(from: answeredAt)
+
+        XCTAssertTrue(text.contains("\"https://vimeo.com/answered\""))
+        XCTAssertTrue(text.contains("\"answered\""))
+        XCTAssertTrue(text.contains("\"\(formattedAnsweredAt)\""))
+    }
 }

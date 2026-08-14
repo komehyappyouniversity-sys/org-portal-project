@@ -1,5 +1,6 @@
 package jp.komehyappyo.member.next.core.data
 
+import jp.komehyappyo.member.next.core.model.DistributedVideo
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
@@ -11,6 +12,65 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class FirebaseRestCommunityRepositoryVideoQuestionTests {
+    @Test
+    fun saveVideoQuestionUsesClientRequestIdAsIdempotentDocumentId() = runBlocking {
+        installMockFirestoreStreamHandler()
+        FakeFirestoreRequestHandler.reset()
+        val path = "/v1/projects/test-project/databases/(default)/documents/organizations/org-1/videoQuestions"
+        val request = PathMethodKey(
+            path = path,
+            query = "documentId=request-123",
+            method = "POST",
+        )
+        val video = DistributedVideo(
+            id = "video-1",
+            communityId = "org-1",
+            videoTitle = "動画",
+            description = "",
+            embedHtml = "",
+            videoUrl = "",
+            vimeoUrl = "",
+            providerVideoId = "",
+            videoType = "distributed_vimeo",
+            thumbnailUrl = "",
+            isPremium = false,
+            createdAt = null,
+            updatedAt = null,
+            isPublished = true,
+            isMembersOnly = false,
+            sortOrder = 0,
+        )
+
+        listOf(200, 409).forEach { statusCode ->
+            FakeFirestoreRequestHandler.responses = mapOf(
+                request to FakeResponse(
+                    statusCode = statusCode,
+                    body = JSONObject().put("writeTime", JSONObject()).toString(),
+                ),
+            )
+            repository().saveVideoQuestion(
+                communityId = "org-1",
+                memberUid = "member",
+                video = video,
+                memoText = "メモ",
+                questionText = "質問",
+                playbackSeconds = 10.0,
+                clientRequestId = "request-123",
+                idToken = "id-token",
+            ).getOrThrow()
+        }
+
+        assertEquals(listOf(path, path), FakeFirestoreRequestHandler.requests.map { it.path })
+        assertEquals(listOf("POST", "POST"), FakeFirestoreRequestHandler.requests.map { it.method })
+        assertEquals(
+            listOf("documentId=request-123", "documentId=request-123"),
+            FakeFirestoreRequestHandler.requests.map { it.query },
+        )
+        val fields = JSONObject(FakeFirestoreRequestHandler.requests.first().body).getJSONObject("fields")
+        assertEquals("request-123", fields.getJSONObject("clientRequestId").getString("stringValue"))
+        assertEquals("synced", fields.getJSONObject("syncStatus").getString("stringValue"))
+    }
+
     @Test
     fun adminVideoQuestionsLoadsAllQuestionsSortedByCreatedAt() = runBlocking {
         installMockFirestoreStreamHandler()
@@ -58,6 +118,7 @@ class FirebaseRestCommunityRepositoryVideoQuestionTests {
                                             put("videoId", JSONObject().put("stringValue", "video-b"))
                                             put("playbackSeconds", JSONObject().put("doubleValue", 20.0))
                                             put("createdAt", JSONObject().put("timestampValue", "2026-08-12T09:00:00Z"))
+                                            put("answeredAt", JSONObject().put("timestampValue", "2026-08-12T10:00:00Z"))
                                         },
                                     )
                                 },
@@ -77,6 +138,8 @@ class FirebaseRestCommunityRepositoryVideoQuestionTests {
         assertEquals("member-a", result.first().memberUid)
         assertEquals("メモ", result.first().memoText)
         assertEquals("", result.first().answerText)
+        assertEquals(null, result.first().answeredAt)
+        assertEquals("2026-08-12T10:00:00Z", result.last().answeredAt)
     }
 
     @Test
@@ -113,6 +176,11 @@ class FirebaseRestCommunityRepositoryVideoQuestionTests {
         val fields = payload.getJSONObject("fields")
         assertEquals("回答します", fields.getJSONObject("answerText").getString("stringValue"))
         assertTrue(fields.getJSONObject("updatedAt").has("timestampValue"))
+        assertTrue(fields.getJSONObject("answeredAt").has("timestampValue"))
+        assertEquals(
+            fields.getJSONObject("updatedAt").getString("timestampValue"),
+            fields.getJSONObject("answeredAt").getString("timestampValue"),
+        )
     }
 
     private fun repository(): FirebaseRestCommunityRepository {

@@ -262,6 +262,105 @@ class DistributedVideoFeatureModelTest {
         }
     }
 
+    @Test
+    fun questionsAreClassifiedIntoUnansweredAndAnsweredSections() = runTest {
+        val dispatcher = UnconfinedTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+
+        try {
+            val session = AppSession().apply {
+                selectCommunity("org-1")
+                updateAuthenticatedUser(userId = "member", idToken = "token")
+            }
+            val repository = FakeCommunityRepository(
+                questions = listOf(
+                    videoQuestion(id = "waiting", answerText = " \n "),
+                    videoQuestion(id = "answered", answerText = "回答"),
+                ),
+            )
+            val model = DistributedVideoFeatureModel(
+                repository = repository,
+                session = session,
+                canViewMembersOnlyVideo = { false },
+                memoStore = InMemoryVimeoMemoStore(),
+            )
+
+            model.load()
+            advanceUntilIdle()
+
+            assertEquals(listOf("waiting"), model.unansweredQuestions().map { it.id })
+            assertEquals(listOf("answered"), model.answeredQuestions().map { it.id })
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun videoQuestionFailureKeepsDraftAndRetriesWithSameClientRequestIdOnLoad() = runTest {
+        val dispatcher = UnconfinedTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+
+        try {
+            val session = AppSession().apply {
+                selectCommunity("org-1")
+                updateAuthenticatedUser(userId = "member", idToken = "token")
+            }
+            val repository = FakeCommunityRepository(
+                videos = listOf(distributedVideo(id = "video-1", title = "配信動画", sortOrder = 1)),
+                shouldFailVideoQuestionSave = true,
+            )
+            val questionStore = InMemoryVideoQuestionStore()
+            val model = DistributedVideoFeatureModel(
+                repository = repository,
+                session = session,
+                canViewMembersOnlyVideo = { true },
+                memoStore = InMemoryVimeoMemoStore(),
+                questionStore = questionStore,
+            )
+            var submittedCount = 0
+            val video = distributedVideo(id = "video-1", title = "配信動画", sortOrder = 1)
+
+            model.submitVideoQuestion(
+                video = video,
+                memo = "メモ",
+                question = "オフライン質問",
+                playbackSeconds = 12.0,
+                onSubmitted = { submittedCount += 1 },
+            )
+            advanceUntilIdle()
+
+            assertEquals(1, submittedCount)
+            assertEquals(1, model.state.value.videoQuestions.size)
+            assertEquals(VideoQuestionSyncStatus.Failed, model.state.value.videoQuestions[0].syncStatus)
+            assertTrue(model.state.value.hasPendingVideoQuestionSync)
+            assertEquals(1, repository.saveVideoQuestionCallCount)
+            val clientRequestId = model.state.value.videoQuestions[0].clientRequestId
+
+            repository.shouldFailVideoQuestionSave = false
+            model.load()
+            advanceUntilIdle()
+
+            assertEquals(2, repository.saveVideoQuestionCallCount)
+            assertEquals(listOf(clientRequestId, clientRequestId), repository.savedClientRequestIds)
+            assertEquals(1, model.state.value.videoQuestions.size)
+            assertEquals(VideoQuestionSyncStatus.Synced, model.state.value.videoQuestions[0].syncStatus)
+            assertFalse(model.state.value.hasPendingVideoQuestionSync)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    private fun videoQuestion(id: String, answerText: String): VideoQuestion = VideoQuestion(
+        id = id,
+        communityId = "org-1",
+        memberUid = "member",
+        videoId = "video-1",
+        videoTitle = "動画",
+        questionText = "質問",
+        answerText = answerText,
+        createdAt = "2026-08-14T10:00:00Z",
+    )
+
     private fun distributedVideo(
         id: String,
         title: String,
@@ -307,8 +406,11 @@ private class FakeCommunityRepository(
     private val questions: List<VideoQuestion> = emptyList(),
     private val memoValues: Map<String, String> = emptyMap(),
     var shouldFailVideoMemoSave: Boolean = false,
+    var shouldFailVideoQuestionSave: Boolean = false,
 ) : CommunityRepository {
     var saveVideoMemoCallCount = 0
+    var saveVideoQuestionCallCount = 0
+    val savedClientRequestIds = mutableListOf<String>()
 
     override suspend fun publicCommunities(query: String): Result<List<Community>> = Result.success(emptyList())
 
@@ -478,8 +580,17 @@ private class FakeCommunityRepository(
         memoText: String,
         questionText: String,
         playbackSeconds: Double,
+        clientRequestId: String,
         idToken: String,
-    ): Result<Unit> = Result.success(Unit)
+    ): Result<Unit> {
+        saveVideoQuestionCallCount += 1
+        savedClientRequestIds += clientRequestId
+        return if (shouldFailVideoQuestionSave) {
+            Result.failure(RuntimeException("offline"))
+        } else {
+            Result.success(Unit)
+        }
+    }
 
     override suspend fun answerVideoQuestion(
         communityId: String,

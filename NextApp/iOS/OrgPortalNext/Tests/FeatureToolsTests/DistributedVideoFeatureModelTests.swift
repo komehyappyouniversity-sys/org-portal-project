@@ -7,6 +7,17 @@ import XCTest
 
 @MainActor
 final class DistributedVideoFeatureModelTests: XCTestCase {
+    func testVideoQuestionOfflineSyncStatesUseSharedSerializedValues() {
+        XCTAssertEqual("draft", VideoQuestionSyncStatus.draft.rawValue)
+        XCTAssertEqual("sending", VideoQuestionSyncStatus.sending.rawValue)
+        XCTAssertEqual("synced", VideoQuestionSyncStatus.synced.rawValue)
+        XCTAssertEqual("failed", VideoQuestionSyncStatus.failed.rawValue)
+        XCTAssertTrue(VideoQuestionSyncStatus.draft.requiresSync)
+        XCTAssertTrue(VideoQuestionSyncStatus.sending.requiresSync)
+        XCTAssertTrue(VideoQuestionSyncStatus.failed.requiresSync)
+        XCTAssertFalse(VideoQuestionSyncStatus.synced.requiresSync)
+    }
+
     func testLoadsSavedFullVideoRepeatSettingWhenVideoOpens() async {
         let (memoStore, defaults, suiteName) = makeMemoStore()
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -21,6 +32,7 @@ final class DistributedVideoFeatureModelTests: XCTestCase {
             session: AppSession(),
             canViewMembersOnlyVideo: { _ in false },
             memoStore: memoStore,
+            questionStore: VideoQuestionDraftStore(userDefaults: defaults),
             repeatSettingRepository: repeatRepository,
             guestUserIdProvider: FakeGuestUserIdProvider(value: "unused")
         )
@@ -39,6 +51,7 @@ final class DistributedVideoFeatureModelTests: XCTestCase {
             session: AppSession(),
             canViewMembersOnlyVideo: { _ in false },
             memoStore: memoStore,
+            questionStore: VideoQuestionDraftStore(userDefaults: defaults),
             repeatSettingRepository: repeatRepository,
             guestUserIdProvider: FakeGuestUserIdProvider(value: "813AF24E-55FC-4D75-A61C-A8B453532BA6")
         )
@@ -182,6 +195,7 @@ final class DistributedVideoFeatureModelTests: XCTestCase {
             session: session,
             canViewMembersOnlyVideo: { _ in false },
             memoStore: memoStore,
+            questionStore: VideoQuestionDraftStore(userDefaults: defaults),
         )
 
         await model.load()
@@ -189,6 +203,45 @@ final class DistributedVideoFeatureModelTests: XCTestCase {
         XCTAssertEqual(["public"], model.videos.map(\.id))
         let questions = model.questionsFor(distributedVideo(id: "public", title: "公開動画", sortOrder: 1))
         XCTAssertEqual(["new", "old"], questions.map(\.id))
+    }
+
+    func testQuestionsAreClassifiedIntoUnansweredAndAnsweredSections() async {
+        let (memoStore, defaults, suiteName) = makeMemoStore()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let session = AppSession()
+        session.selectCommunity("org-1")
+        session.updateAuthenticatedUser(userId: "member", idToken: "token")
+        let repository = FakeDistributedVideoRepository(
+            videos: [],
+            questions: [
+                sampleVideoQuestion(
+                    id: "waiting",
+                    videoId: "video-1",
+                    questionText: "未回答",
+                    createdAt: Date(timeIntervalSince1970: 20),
+                    answerText: " \n "
+                ),
+                sampleVideoQuestion(
+                    id: "answered",
+                    videoId: "video-1",
+                    questionText: "回答済み",
+                    createdAt: Date(timeIntervalSince1970: 10),
+                    answerText: "回答"
+                ),
+            ]
+        )
+        let model = DistributedVideoFeatureModel(
+            repository: repository,
+            session: session,
+            canViewMembersOnlyVideo: { _ in false },
+            memoStore: memoStore,
+            questionStore: VideoQuestionDraftStore(userDefaults: defaults)
+        )
+
+        await model.load()
+
+        XCTAssertEqual(["waiting"], model.unansweredQuestions.map(\.id))
+        XCTAssertEqual(["answered"], model.answeredQuestions.map(\.id))
     }
 
     func testLoadMergesRemoteMemosAndPreservesPendingLocalMemos() async {
@@ -238,6 +291,7 @@ final class DistributedVideoFeatureModelTests: XCTestCase {
             session: session,
             canViewMembersOnlyVideo: { _ in false },
             memoStore: memoStore,
+            questionStore: VideoQuestionDraftStore(userDefaults: defaults),
         )
 
         await model.load()
@@ -275,6 +329,7 @@ final class DistributedVideoFeatureModelTests: XCTestCase {
             session: session,
             canViewMembersOnlyVideo: { _ in false },
             memoStore: memoStore,
+            questionStore: VideoQuestionDraftStore(userDefaults: defaults),
         )
         let video = distributedVideo(id: "video-1", title: "配信動画", sortOrder: 1)
         let memoText = "保存されるべきメモ"
@@ -315,6 +370,7 @@ final class DistributedVideoFeatureModelTests: XCTestCase {
             session: session,
             canViewMembersOnlyVideo: { _ in true },
             memoStore: memoStore,
+            questionStore: VideoQuestionDraftStore(userDefaults: defaults),
         )
         let video = distributedVideo(id: "video-1", title: "動画", sortOrder: 0)
 
@@ -356,6 +412,7 @@ final class DistributedVideoFeatureModelTests: XCTestCase {
             session: session,
             canViewMembersOnlyVideo: { _ in true },
             memoStore: memoStore,
+            questionStore: VideoQuestionDraftStore(userDefaults: defaults),
         )
         let video = distributedVideo(id: "video-1", title: "動画", sortOrder: 0)
 
@@ -372,6 +429,52 @@ final class DistributedVideoFeatureModelTests: XCTestCase {
         XCTAssertEqual("質問を送信しました。", model.errorMessage)
         XCTAssertEqual(1, repository.saveVideoQuestionCallCount)
         XCTAssertEqual("質問内容", repository.savedQuestion?.questionText)
+        XCTAssertFalse(repository.savedClientRequestIds[0].isEmpty)
+    }
+
+    func testVideoQuestionFailureKeepsDraftAndRetriesWithSameClientRequestIdOnLoad() async {
+        let (memoStore, defaults, suiteName) = makeMemoStore()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let questionStore = VideoQuestionDraftStore(userDefaults: defaults)
+        let repository = FakeDistributedVideoRepository(
+            videos: [distributedVideo(id: "video-1", title: "配信動画", sortOrder: 1)],
+            questions: [],
+            shouldFailVideoQuestionSave: true
+        )
+        let session = AppSession()
+        session.selectCommunity("org-1")
+        session.updateAuthenticatedUser(userId: "member", idToken: "token")
+        let model = DistributedVideoFeatureModel(
+            repository: repository,
+            session: session,
+            canViewMembersOnlyVideo: { _ in true },
+            memoStore: memoStore,
+            questionStore: questionStore
+        )
+        let video = distributedVideo(id: "video-1", title: "配信動画", sortOrder: 1)
+
+        let accepted = await model.submitVideoQuestion(
+            video,
+            memo: "メモ",
+            question: "オフライン質問",
+            playbackSeconds: 12
+        )
+
+        XCTAssertTrue(accepted)
+        XCTAssertEqual(1, model.videoQuestions.count)
+        XCTAssertEqual(.failed, model.videoQuestions[0].syncStatus)
+        XCTAssertTrue(model.hasPendingVideoQuestionSync)
+        XCTAssertEqual(1, repository.saveVideoQuestionCallCount)
+        let clientRequestId = model.videoQuestions[0].clientRequestId
+
+        repository.shouldFailVideoQuestionSave = false
+        await model.load()
+
+        XCTAssertEqual(2, repository.saveVideoQuestionCallCount)
+        XCTAssertEqual([clientRequestId, clientRequestId], repository.savedClientRequestIds)
+        XCTAssertEqual(1, model.videoQuestions.count)
+        XCTAssertEqual(.synced, model.videoQuestions[0].syncStatus)
+        XCTAssertFalse(model.hasPendingVideoQuestionSync)
     }
 }
 
@@ -450,20 +553,24 @@ private final class FakeDistributedVideoRepository: DistributedVideoRepository, 
     let questions: [VideoQuestion]
     private(set) var saveVideoQuestionCallCount = 0
     private(set) var savedQuestion: VideoQuestion?
+    private(set) var savedClientRequestIds: [String] = []
     private(set) var saveVideoMemoCallCount = 0
     var shouldFailVideoMemoSave = false
+    var shouldFailVideoQuestionSave = false
     var memoValues: [String: String] = [:]
 
     init(
         videos: [DistributedVideo],
         questions: [VideoQuestion],
         memoValues: [String: String] = [:],
-        shouldFailVideoMemoSave: Bool = false
+        shouldFailVideoMemoSave: Bool = false,
+        shouldFailVideoQuestionSave: Bool = false
     ) {
         self.videos = videos
         self.questions = questions
         self.memoValues = memoValues
         self.shouldFailVideoMemoSave = shouldFailVideoMemoSave
+        self.shouldFailVideoQuestionSave = shouldFailVideoQuestionSave
     }
 
     func communityVideos(
@@ -488,11 +595,16 @@ private final class FakeDistributedVideoRepository: DistributedVideoRepository, 
         memoText: String,
         questionText: String,
         playbackSeconds: Double,
+        clientRequestId: String,
         idToken: String
     ) async throws {
         saveVideoQuestionCallCount += 1
+        savedClientRequestIds.append(clientRequestId)
+        if shouldFailVideoQuestionSave {
+            throw NSError(domain: "video.question.test", code: 0)
+        }
         savedQuestion = VideoQuestion(
-            id: UUID().uuidString,
+            id: clientRequestId,
             communityId: communityId,
             memberUid: memberUid,
             videoId: video.id,
@@ -502,6 +614,8 @@ private final class FakeDistributedVideoRepository: DistributedVideoRepository, 
             questionText: questionText,
             answerText: "",
             createdAt: Date(),
+            syncStatus: .synced,
+            clientRequestId: clientRequestId
         )
     }
 
@@ -561,7 +675,8 @@ private func sampleVideoQuestion(
     id: String,
     videoId: String,
     questionText: String,
-    createdAt: Date
+    createdAt: Date,
+    answerText: String = ""
 ) -> VideoQuestion {
     VideoQuestion(
         id: id,
@@ -572,7 +687,7 @@ private func sampleVideoQuestion(
         playbackSeconds: 0,
         memoText: "",
         questionText: questionText,
-        answerText: "",
+        answerText: answerText,
         createdAt: createdAt,
     )
 }
