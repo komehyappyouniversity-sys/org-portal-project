@@ -262,6 +262,7 @@ private struct DistributedVideoPlayerView: View {
     @State private var questionCsvURL: URL?
     @State private var showMemoCsvEmptyState = false
     @State private var showQuestionCsvEmptyState = false
+    @State private var showsRepeatSettingPanel = false
     @State private var playbackSeconds = 0.0
     @State private var playbackCommand: VimeoPlaybackCommand?
     @State private var playbackCommandId = 0
@@ -294,11 +295,25 @@ private struct DistributedVideoPlayerView: View {
                     videoId: videoId,
                     initialPlaybackSeconds: playbackSeconds,
                     command: playbackCommand,
+                    isRepeatEnabled: model.isRepeatEnabled(videoId: video.id),
                     onPlaybackTimeChanged: { playbackSeconds = $0 },
                 )
                 .frame(height: 220)
 
                 VStack(alignment: .leading, spacing: 12) {
+                    Button {
+                        showsRepeatSettingPanel = true
+                    } label: {
+                        Label("リピート再生設定", systemImage: "repeat")
+                    }
+                    .buttonStyle(.bordered)
+
+                    if model.isRepeatEnabled(videoId: video.id) {
+                        Text("動画全体のリピート再生: ON")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
                     Button("現在の再生位置を取得") {
                         sendPlaybackCommand(.reportCurrentTime)
                     }
@@ -467,8 +482,9 @@ private struct DistributedVideoPlayerView: View {
                 EmptyState("この動画に再生情報がありません。", systemImage: "video.slash")
             }
         }
-        .onAppear {
-            Task { await model.load() }
+        .task(id: video.id) {
+            await model.loadRepeatSetting(videoId: video.id)
+            await model.load()
         }
         .navigationTitle(video.title)
         .sheet(
@@ -490,6 +506,12 @@ private struct DistributedVideoPlayerView: View {
             if let questionCsvURL {
                 ActivityShareSheet(activityItems: [questionCsvURL])
             }
+        }
+        .sheet(isPresented: $showsRepeatSettingPanel) {
+            VideoRepeatSettingPanel(
+                model: model,
+                videoId: video.id
+            )
         }
         .ignoresSafeArea()
     }
@@ -531,6 +553,7 @@ private struct DistributedVimeoVideoPlayerView: UIViewRepresentable {
     let videoId: String
     let initialPlaybackSeconds: Double
     let command: VimeoPlaybackCommand?
+    let isRepeatEnabled: Bool
     let onPlaybackTimeChanged: (Double) -> Void
 
     func makeUIView(context: Context) -> WKWebView {
@@ -541,6 +564,7 @@ private struct DistributedVimeoVideoPlayerView: UIViewRepresentable {
         webView.backgroundColor = .black
         webView.isOpaque = false
         webView.scrollView.isScrollEnabled = false
+        webView.navigationDelegate = context.coordinator
         context.coordinator.webView = webView
         loadPlayerIfNeeded(webView: webView, in: context.coordinator)
         return webView
@@ -550,6 +574,10 @@ private struct DistributedVimeoVideoPlayerView: UIViewRepresentable {
         let coordinator = context.coordinator
         if coordinator.videoId != videoId {
             loadPlayerIfNeeded(webView: webView, in: coordinator)
+        }
+        if coordinator.isRepeatEnabled != isRepeatEnabled {
+            coordinator.isRepeatEnabled = isRepeatEnabled
+            coordinator.setRepeatEnabled(isRepeatEnabled)
         }
         guard let command,
               command.requestId != coordinator.lastCommandId else {
@@ -561,6 +589,7 @@ private struct DistributedVimeoVideoPlayerView: UIViewRepresentable {
 
     static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
         uiView.configuration.userContentController.removeScriptMessageHandler(forName: "vimeoPlayerBridge")
+        uiView.navigationDelegate = nil
         coordinator.webView = nil
     }
 
@@ -568,20 +597,30 @@ private struct DistributedVimeoVideoPlayerView: UIViewRepresentable {
         Coordinator(
             videoId: videoId,
             initialPlaybackSeconds: initialPlaybackSeconds,
+            isRepeatEnabled: isRepeatEnabled,
             onPlaybackTimeChanged: onPlaybackTimeChanged
         )
     }
 
     private func loadPlayerIfNeeded(webView: WKWebView, in coordinator: Coordinator) {
         coordinator.videoId = videoId
+        coordinator.isRepeatEnabled = isRepeatEnabled
         coordinator.lastCommandId = nil
         webView.loadHTMLString(
-            vimeoPlayerHTML(videoId: videoId, initialSeconds: initialPlaybackSeconds),
+            vimeoPlayerHTML(
+                videoId: videoId,
+                initialSeconds: initialPlaybackSeconds,
+                isRepeatEnabled: isRepeatEnabled
+            ),
             baseURL: URL(string: "https://player.vimeo.com")
         )
     }
 
-    private func vimeoPlayerHTML(videoId: String, initialSeconds: Double) -> String {
+    private func vimeoPlayerHTML(
+        videoId: String,
+        initialSeconds: Double,
+        isRepeatEnabled: Bool
+    ) -> String {
         let sanitizedVideoId = videoId.replacingOccurrences(of: "\\D", with: "", options: .regularExpression)
         return """
             <!doctype html>
@@ -597,6 +636,7 @@ private struct DistributedVimeoVideoPlayerView: UIViewRepresentable {
             <div id=\"player\"></div>
             <script>
             const initialSeconds = \(initialSeconds);
+            let repeatEnabled = \(isRepeatEnabled ? "true" : "false");
             const targetId = \(sanitizedVideoId);
             const bridge = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.vimeoPlayerBridge;
             const sendMessage = function(payload) {
@@ -627,6 +667,19 @@ private struct DistributedVimeoVideoPlayerView: UIViewRepresentable {
                 postError(error && error.message ? error.message : 'Vimeoプレーヤーを準備できませんでした。');
             });
 
+            player.on('ended', function() {
+                if (!repeatEnabled) return;
+                player.setCurrentTime(0).then(function() {
+                    return player.play();
+                }).catch(function(error) {
+                    postError(error && error.message ? error.message : 'リピート再生に失敗しました。');
+                });
+            });
+
+            window.vimeoSetRepeatEnabled = function(isEnabled) {
+                repeatEnabled = !!isEnabled;
+            };
+
             window.vimeoReportTime = function() {
                 player.getCurrentTime().then(function(value) {
                     postTime(value || 0);
@@ -653,21 +706,24 @@ private struct DistributedVimeoVideoPlayerView: UIViewRepresentable {
         """
     }
 
-    final class Coordinator: NSObject, WKScriptMessageHandler {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var webView: WKWebView?
         var lastCommandId: Int?
         var videoId: String
         var initialPlaybackSeconds: Double
+        var isRepeatEnabled: Bool
         let onPlaybackTimeChanged: (Double) -> Void
         var lastError: String?
 
         init(
             videoId: String,
             initialPlaybackSeconds: Double,
+            isRepeatEnabled: Bool,
             onPlaybackTimeChanged: @escaping (Double) -> Void
         ) {
             self.videoId = videoId
             self.initialPlaybackSeconds = initialPlaybackSeconds
+            self.isRepeatEnabled = isRepeatEnabled
             self.onPlaybackTimeChanged = onPlaybackTimeChanged
             super.init()
         }
@@ -691,6 +747,10 @@ private struct DistributedVimeoVideoPlayerView: UIViewRepresentable {
             }
         }
 
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation?) {
+            setRepeatEnabled(isRepeatEnabled)
+        }
+
         func execute(_ command: VimeoPlaybackCommand) {
             guard let webView else { return }
             switch command.action {
@@ -702,6 +762,49 @@ private struct DistributedVimeoVideoPlayerView: UIViewRepresentable {
                 webView.evaluateJavaScript("window.vimeoSeekAndPlay(\(seconds));", completionHandler: nil)
             }
         }
+
+        func setRepeatEnabled(_ isEnabled: Bool) {
+            guard let webView else { return }
+            webView.evaluateJavaScript(
+                "window.vimeoSetRepeatEnabled(\(isEnabled ? "true" : "false"));",
+                completionHandler: nil
+            )
+        }
+    }
+}
+
+private struct VideoRepeatSettingPanel: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var model: DistributedVideoFeatureModel
+    let videoId: String
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Toggle("動画全体をリピート再生", isOn: Binding(
+                        get: { model.isRepeatEnabled(videoId: videoId) },
+                        set: { newValue in
+                            Task {
+                                await model.setRepeatEnabled(
+                                    videoId: videoId,
+                                    isEnabled: newValue
+                                )
+                            }
+                        }
+                    ))
+                } footer: {
+                    Text("ONにすると、動画の再生終了後に最初から再生を再開します。")
+                }
+            }
+            .navigationTitle("リピート再生設定")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完了") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }
 

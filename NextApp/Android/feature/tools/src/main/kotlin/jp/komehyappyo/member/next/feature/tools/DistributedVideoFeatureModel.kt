@@ -4,7 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import jp.komehyappyo.member.next.core.data.CommunityRepository
+import jp.komehyappyo.member.next.core.data.GuestUserIdProvider
+import jp.komehyappyo.member.next.core.data.VideoRepeatSettingRepository
 import jp.komehyappyo.member.next.core.model.DistributedVideo
+import jp.komehyappyo.member.next.core.model.VideoRepeatMode
+import jp.komehyappyo.member.next.core.model.VideoRepeatSetting
 import jp.komehyappyo.member.next.core.model.VideoQuestion
 import jp.komehyappyo.member.next.core.model.VimeoVideoMemoSyncStatus
 import jp.komehyappyo.member.next.core.session.AppSession
@@ -25,6 +29,7 @@ data class DistributedVideosUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val hasPendingVideoMemoSync: Boolean = false,
+    val videoRepeatSettings: Map<String, VideoRepeatSetting> = emptyMap(),
 )
 
 class DistributedVideoFeatureModel(
@@ -32,9 +37,72 @@ class DistributedVideoFeatureModel(
     private val session: AppSession,
     private val canViewMembersOnlyVideo: (String) -> Boolean,
     private val memoStore: VimeoMemoStoreProtocol,
+    private val repeatSettingRepository: VideoRepeatSettingRepository? = null,
+    private val guestUserIdProvider: GuestUserIdProvider? = null,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(DistributedVideosUiState())
     val state: StateFlow<DistributedVideosUiState> = mutableState.asStateFlow()
+
+    fun loadRepeatSetting(videoId: String) {
+        val localRepository = repeatSettingRepository ?: return
+        viewModelScope.launch {
+            runCatching {
+                localRepository.setting(videoId) ?: VideoRepeatSetting(
+                    userId = localVideoSettingUserId(),
+                    videoId = videoId,
+                    isEnabled = false,
+                )
+            }
+                .onSuccess { setting ->
+                    mutableState.update {
+                        it.copy(videoRepeatSettings = it.videoRepeatSettings + (videoId to setting))
+                    }
+                }
+                .onFailure {
+                    mutableState.update {
+                        it.copy(errorMessage = "リピート再生設定を読み込めませんでした。")
+                    }
+                }
+        }
+    }
+
+    fun isRepeatEnabled(videoId: String): Boolean =
+        state.value.videoRepeatSettings[videoId]?.isEnabled ?: false
+
+    fun setRepeatEnabled(videoId: String, isEnabled: Boolean) {
+        val localRepository = repeatSettingRepository ?: return
+        viewModelScope.launch {
+            runCatching {
+                VideoRepeatSetting(
+                    userId = localVideoSettingUserId(),
+                    videoId = videoId,
+                    isEnabled = isEnabled,
+                    mode = VideoRepeatMode.Full,
+                    repeatStartSeconds = null,
+                    repeatEndSeconds = null,
+                ).also { localRepository.save(it) }
+            }
+                .onSuccess { setting ->
+                    mutableState.update {
+                        it.copy(videoRepeatSettings = it.videoRepeatSettings + (videoId to setting))
+                    }
+                }
+                .onFailure {
+                    mutableState.update {
+                        it.copy(errorMessage = "リピート再生設定を保存できませんでした。")
+                    }
+                }
+        }
+    }
+
+    private fun localVideoSettingUserId(): String {
+        val current = session.state.value
+        return if (current.authenticationToken == null) {
+            guestUserIdProvider?.guestUserId() ?: "guest-local"
+        } else {
+            current.userId
+        }
+    }
 
     fun load() {
         val current = session.state.value
@@ -357,6 +425,8 @@ class DistributedVideoFeatureModel(
         private val session: AppSession,
         private val canViewMembersOnlyVideo: (String) -> Boolean,
         private val memoStore: VimeoMemoStoreProtocol,
+        private val repeatSettingRepository: VideoRepeatSettingRepository,
+        private val guestUserIdProvider: GuestUserIdProvider,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
@@ -365,6 +435,8 @@ class DistributedVideoFeatureModel(
                 session,
                 canViewMembersOnlyVideo,
                 memoStore,
+                repeatSettingRepository,
+                guestUserIdProvider,
             ) as T
         }
     }

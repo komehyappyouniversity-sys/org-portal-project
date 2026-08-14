@@ -104,7 +104,7 @@ end
 {
   "ModelTests" => ["Tests/ModelTests", ["Model"]],
   "DataLayerTests" => ["Tests/DataLayerTests", ["DataLayer", "Model"]],
-  "FeatureToolsTests" => ["Tests/FeatureToolsTests", ["FeatureTools", "Model"]]
+  "FeatureToolsTests" => ["Tests/FeatureToolsTests", ["FeatureTools", "Model", "DataLayer"]]
 }.each do |name, (relative_path, dependencies)|
   test_target = project.new_target(:unit_test_bundle, name, platform, deployment_target)
   configure_target(test_target, product_bundle_identifier: "org.nagaoka.blog.k100.member.next.tests.#{name.downcase}")
