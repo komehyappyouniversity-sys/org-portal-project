@@ -24,6 +24,7 @@ import jp.komehyappyo.member.next.core.model.VimeoVideoMemoSyncStatus
 import jp.komehyappyo.member.next.core.model.UserStage
 import jp.komehyappyo.member.next.core.model.RadioPlaybackRecord
 import jp.komehyappyo.member.next.core.model.RadioProgram
+import jp.komehyappyo.member.next.core.model.RadioPlaybackPolicy
 import jp.komehyappyo.member.next.core.session.AppSession
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -69,6 +70,7 @@ data class CommunityUiState(
     val radioPrograms: List<RadioProgram> = emptyList(),
     val radioPlaybackRecords: List<RadioPlaybackRecord> = emptyList(),
     val radioPlayingProgramId: String? = null,
+    val radioIsLoading: Boolean = false,
     val hasPendingVideoMemoSync: Boolean = false,
 )
 
@@ -80,6 +82,7 @@ class CommunityFeatureModel(
     private val mutableState = MutableStateFlow(CommunityUiState())
     val state: StateFlow<CommunityUiState> = mutableState.asStateFlow()
     private var mediaPlayer: MediaPlayer? = null
+    private var membershipsUserId: String? = null
     private val currentUserId: String
         get() = session.state.value.userId
 
@@ -134,24 +137,62 @@ class CommunityFeatureModel(
     }
 
     fun refreshRadioPrograms() {
-        val communityId = session.state.value.selectedCommunityId ?: run {
+        val current = session.state.value
+        val communityId = current.selectedCommunityId
+        val token = current.authenticationToken
+        val hasApprovedMembership = membershipsUserId == current.userId &&
+            communityId != null && state.value.memberships.any {
+            it.second.id == communityId && it.first.status == CommunityMembershipStatus.Approved
+        }
+        if (communityId == null || token == null || !hasApprovedMembership) {
+            stopRadioPlayback()
             mutableState.value = mutableState.value.copy(
                 radioPrograms = emptyList(),
                 radioPlaybackRecords = emptyList(),
                 radioPlayingProgramId = null,
+                radioIsLoading = false,
             )
             return
         }
         mutableState.value = mutableState.value.copy(
-            radioPrograms = seededRadioPrograms(communityId),
+            radioIsLoading = true,
         )
-        if (state.value.radioPlayingProgramId != null) {
-            val isCurrentProgramInCommunity = mutableState.value.radioPrograms.any {
-                it.id == state.value.radioPlayingProgramId
-            }
-            if (!isCurrentProgramInCommunity) {
-                stopRadioPlayback()
-            }
+        viewModelScope.launch {
+            repository.radioPrograms(communityId, token)
+                .onSuccess { programs ->
+                    val stillAuthorized = session.state.value.selectedCommunityId == communityId &&
+                        canAccessRadio()
+                    if (!stillAuthorized) return@onSuccess
+                    if (state.value.radioPlayingProgramId != null && programs.none {
+                            it.id == state.value.radioPlayingProgramId
+                        }
+                    ) {
+                        stopRadioPlayback()
+                    }
+                    mutableState.value = mutableState.value.copy(
+                        radioPrograms = programs,
+                        radioIsLoading = false,
+                    )
+                }
+                .onFailure {
+                    if (session.state.value.selectedCommunityId != communityId || !canAccessRadio()) {
+                        return@onFailure
+                    }
+                    mutableState.value = mutableState.value.copy(
+                        radioPrograms = emptyList(),
+                        radioIsLoading = false,
+                    )
+                    showError(it, clearCandidate = false)
+                }
+        }
+    }
+
+    fun canAccessRadio(): Boolean {
+        val communityId = session.state.value.selectedCommunityId ?: return false
+        if (session.state.value.authenticationToken == null) return false
+        if (membershipsUserId != session.state.value.userId) return false
+        return state.value.memberships.any {
+            it.second.id == communityId && it.first.status == CommunityMembershipStatus.Approved
         }
     }
 
@@ -410,7 +451,7 @@ class CommunityFeatureModel(
     }
 
     fun isRadioPlayable(program: RadioProgram): Boolean =
-        Instant.now() >= program.broadcastStartAt
+        RadioPlaybackPolicy.isPlayable(program, Instant.now())
 
     fun playbackRecord(forProgramId: String): RadioPlaybackRecord? =
         state.value.radioPlaybackRecords.firstOrNull {
@@ -487,42 +528,6 @@ class CommunityFeatureModel(
             )
         }
         mutableState.value = mutableState.value.copy(radioPlaybackRecords = records)
-    }
-
-    private fun seededRadioPrograms(communityId: String): List<RadioProgram> {
-        val now = Instant.now()
-        return listOf(
-            RadioProgram(
-                id = "radio-$communityId-1",
-                communityId = communityId,
-                title = "コミュニティラジオ いそぎわ",
-                description = "最新のお知らせと短いトピックをお届け。",
-                imageUrl = "https://picsum.photos/seed/radio1/400/200",
-                audioUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-                broadcastStartAt = now.minusSeconds(24 * 60 * 60),
-                broadcastEndAt = now.plusSeconds(10 * 24 * 60 * 60),
-            ),
-            RadioProgram(
-                id = "radio-$communityId-2",
-                communityId = communityId,
-                title = "夜のニュースラジオ",
-                description = "コミュニティイベント情報を中心に配信。",
-                imageUrl = "https://picsum.photos/seed/radio2/400/200",
-                audioUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
-                broadcastStartAt = now.plusSeconds(12 * 60 * 60),
-                broadcastEndAt = now.plusSeconds(13 * 60 * 60),
-            ),
-            RadioProgram(
-                id = "radio-$communityId-3",
-                communityId = communityId,
-                title = "まちニュース定期放送",
-                description = "週1回の告知番組。",
-                imageUrl = "https://picsum.photos/seed/radio3/400/200",
-                audioUrl = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
-                broadcastStartAt = now.minusSeconds(7 * 24 * 60 * 60),
-                broadcastEndAt = now.minusSeconds(6 * 24 * 60 * 60),
-            ),
-        )
     }
 
     fun prepareApplication(community: Community) {
@@ -616,6 +621,7 @@ class CommunityFeatureModel(
     fun refresh() {
         val current = session.state.value
         val token = current.authenticationToken ?: run {
+            membershipsUserId = null
             mutableState.value = mutableState.value.copy(
                 candidate = null,
                 memberships = emptyList(),
@@ -637,10 +643,16 @@ class CommunityFeatureModel(
             )
             return
         }
+        if (membershipsUserId != current.userId) {
+            membershipsUserId = null
+            mutableState.value = mutableState.value.copy(memberships = emptyList())
+            refreshRadioPrograms()
+        }
         mutableState.value = mutableState.value.copy(isLoading = true)
         viewModelScope.launch {
             repository.memberships(current.userId, token)
                 .onSuccess { items ->
+                    membershipsUserId = current.userId
                     mutableState.value = mutableState.value.copy(
                         memberships = items,
                         isLoading = false,

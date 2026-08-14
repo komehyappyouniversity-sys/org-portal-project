@@ -444,6 +444,11 @@ private class FakeCommunityRepository(
         idToken: String,
     ): Result<List<DistributedVideo>> = Result.success(videos)
 
+    override suspend fun radioPrograms(
+        communityId: String,
+        idToken: String,
+    ): Result<List<jp.komehyappyo.member.next.core.model.RadioProgram>> = Result.success(emptyList())
+
     override suspend fun videoMemos(userId: String, idToken: String): Result<Map<String, String>> =
         Result.success(memoValues)
 

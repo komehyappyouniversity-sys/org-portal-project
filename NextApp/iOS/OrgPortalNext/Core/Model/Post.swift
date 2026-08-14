@@ -150,6 +150,12 @@ public struct RadioProgram: Identifiable, Equatable, Codable, Sendable {
     }
 }
 
+public enum RadioPlaybackPolicy {
+    public static func isPlayable(_ program: RadioProgram, at date: Date) -> Bool {
+        date >= program.broadcastStartAt
+    }
+}
+
 public struct RadioPlaybackRecord: Identifiable, Equatable, Codable, Sendable {
     public let id: String
     public let userId: String

@@ -608,6 +608,10 @@ private final class CommunityFeatureModel: ObservableObject {
     @Published private(set) var videoQuestions: [VideoQuestion] = []
     @Published private(set) var adminVideoQuestions: [VideoQuestion] = []
     @Published private(set) var auditLogs: [CommunityAuditLog] = []
+    @Published private(set) var radioPrograms: [RadioProgram] = []
+    @Published private(set) var radioPlaybackRecords: [RadioPlaybackRecord] = []
+    @Published private(set) var radioPlayingProgramID: String?
+    @Published private(set) var radioIsLoading = false
     private let memoStore: VimeoMemoStore
     @Published private(set) var reviewingUserId: String?
     @Published private(set) var isLoading = false
@@ -616,6 +620,9 @@ private final class CommunityFeatureModel: ObservableObject {
 
     private let repository: any CommunityRepository
     let session: AppSession
+    private var radioPlayer: AVPlayer?
+    private var radioPlaybackEndObserver: NSObjectProtocol?
+    private var membershipsUserID: String?
 
     init(
         repository: any CommunityRepository,
@@ -762,6 +769,15 @@ private final class CommunityFeatureModel: ObservableObject {
         adminAccess?.role == "owner"
     }
 
+    var canAccessRadio: Bool {
+        guard isLoggedIn,
+              membershipsUserID == session.authenticatedUserId,
+              let communityId = session.selectedCommunityId else { return false }
+        return items.contains {
+            $0.0.status == .approved && $0.1.id == communityId
+        }
+    }
+
     var administratorCandidates: [CommunityMembership] {
         let activeAdminIDs = Set(
             administrators.filter(\.isActive).map(\.userId)
@@ -886,12 +902,20 @@ private final class CommunityFeatureModel: ObservableObject {
     func refresh() async {
         guard let userId = session.authenticatedUserId,
               let token = session.authenticationToken else {
+            membershipsUserID = nil
             items = []
+            clearRadioState()
             return
+        }
+        if membershipsUserID != userId {
+            membershipsUserID = nil
+            items = []
+            clearRadioState()
         }
         isLoading = true
         do {
             items = try await repository.memberships(userId: userId, idToken: token)
+            membershipsUserID = userId
             let approved = items.filter { $0.0.status == .approved }
             if session.selectedCommunityId == nil, let first = approved.first {
                 session.selectCommunity(first.1.id)
@@ -899,6 +923,7 @@ private final class CommunityFeatureModel: ObservableObject {
             session.updateUserStage(approved.isEmpty ? .guest : .member)
             await refreshManagement()
             await refreshBookingEvents()
+            await refreshRadioPrograms()
             isLoading = false
         } catch {
             isLoading = false
@@ -908,7 +933,125 @@ private final class CommunityFeatureModel: ObservableObject {
 
     func selectCommunity(_ communityId: String) {
         session.selectCommunity(communityId)
-        Task { await refreshManagement() }
+        Task {
+            await refreshManagement()
+            await refreshRadioPrograms()
+        }
+    }
+
+    func refreshRadioPrograms() async {
+        guard canAccessRadio,
+              let communityId = session.selectedCommunityId,
+              let token = session.authenticationToken else {
+            clearRadioState()
+            return
+        }
+        radioIsLoading = true
+        do {
+            let programs = try await repository.radioPrograms(
+                communityId: communityId,
+                idToken: token
+            )
+            guard session.selectedCommunityId == communityId, canAccessRadio else { return }
+            if let playingID = radioPlayingProgramID,
+               !programs.contains(where: { $0.id == playingID }) {
+                stopRadioPlayback()
+            }
+            radioPrograms = programs
+            radioIsLoading = false
+        } catch {
+            guard session.selectedCommunityId == communityId else { return }
+            radioPrograms = []
+            radioIsLoading = false
+            message = error.localizedDescription
+        }
+    }
+
+    func isRadioPlayable(_ program: RadioProgram) -> Bool {
+        RadioPlaybackPolicy.isPlayable(program, at: Date())
+    }
+
+    func toggleRadioPlayback(_ program: RadioProgram) {
+        guard isRadioPlayable(program) else {
+            message = "この番組は配信開始前です。"
+            return
+        }
+        if radioPlayingProgramID == program.id {
+            stopRadioPlayback()
+            return
+        }
+
+        stopRadioPlayback()
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .default)
+            try audioSession.setActive(true)
+            let player = AVPlayer(url: program.audioUrl)
+            radioPlayer = player
+            radioPlayingProgramID = program.id
+            message = nil
+            radioPlaybackEndObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: player.currentItem,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in self?.stopRadioPlayback() }
+            }
+            player.play()
+            recordRadioPlayback(program.id)
+        } catch {
+            stopRadioPlayback()
+            message = "再生できませんでした。ネットワーク接続と音声URLをご確認ください。"
+        }
+    }
+
+    func playbackRecord(for programID: String) -> RadioPlaybackRecord? {
+        guard let userID = session.authenticatedUserId else { return nil }
+        return radioPlaybackRecords.first {
+            $0.userId == userID && $0.programId == programID
+        }
+    }
+
+    private func recordRadioPlayback(_ programID: String) {
+        guard let userID = session.authenticatedUserId else { return }
+        let now = Date()
+        if let index = radioPlaybackRecords.firstIndex(where: {
+            $0.userId == userID && $0.programId == programID
+        }) {
+            let old = radioPlaybackRecords[index]
+            radioPlaybackRecords[index] = RadioPlaybackRecord(
+                id: old.id,
+                userId: old.userId,
+                programId: old.programId,
+                lastPositionSeconds: old.lastPositionSeconds,
+                playCount: old.playCount + 1,
+                lastPlayedAt: now
+            )
+        } else {
+            radioPlaybackRecords.append(RadioPlaybackRecord(
+                userId: userID,
+                programId: programID,
+                playCount: 1,
+                lastPlayedAt: now
+            ))
+        }
+    }
+
+    private func stopRadioPlayback() {
+        radioPlayer?.pause()
+        radioPlayer = nil
+        radioPlayingProgramID = nil
+        if let observer = radioPlaybackEndObserver {
+            NotificationCenter.default.removeObserver(observer)
+            radioPlaybackEndObserver = nil
+        }
+    }
+
+    private func clearRadioState() {
+        stopRadioPlayback()
+        radioPrograms = []
+        radioPlaybackRecords = []
+        radioIsLoading = false
     }
 
     func review(
@@ -1942,6 +2085,64 @@ private struct VimeoVideoDetailView: View {
     }
 }
 
+private struct RadioSectionView: View {
+    @ObservedObject var model: CommunityFeatureModel
+
+    private let formatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = "M月d日 HH:mm"
+        return formatter
+    }()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("インターネットラジオ").font(.title2.bold())
+            if model.radioIsLoading {
+                ProgressView()
+            } else if model.radioPrograms.isEmpty {
+                Text("ラジオ番組はありません。")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(model.radioPrograms) { program in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(program.title)
+                            .font(.headline)
+                            .lineLimit(2)
+                        Text(program.description)
+                        Text("配信開始: \(formatter.string(from: program.broadcastStartAt))")
+                        if let record = model.playbackRecord(for: program.id) {
+                            Text(
+                                "再生回数: \(record.playCount) 回 / 最終再生: "
+                                    + (record.lastPlayedAt.map { formatter.string(from: $0) } ?? "未再生")
+                            )
+                        }
+                        HStack(spacing: 8) {
+                            Button(buttonTitle(for: program)) {
+                                model.toggleRadioPlayback(program)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(model.radioIsLoading)
+                            if model.radioPlayingProgramID == program.id {
+                                Text("再生中")
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+                    Divider()
+                }
+            }
+        }
+    }
+
+    private func buttonTitle(for program: RadioProgram) -> String {
+        if !model.isRadioPlayable(program) { return "配信前" }
+        if model.radioPlayingProgramID == program.id { return "停止" }
+        return "再生"
+    }
+}
+
 private struct CommunityRootView: View {
     @ObservedObject var model: CommunityFeatureModel
     @ObservedObject var postModel: PostFeatureModel
@@ -2015,16 +2216,19 @@ private struct CommunityRootView: View {
                             )
                         }
                     } else {
+                        if model.isLoading { ProgressView() }
+                        if let message = model.message {
+                            Text(message)
+                                .foregroundStyle(.secondary)
+                                .padding()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.secondary.opacity(0.08))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        if model.canAccessRadio {
+                            RadioSectionView(model: model)
+                        }
                         if verticalSizeClass != .compact {
-                            if model.isLoading { ProgressView() }
-                            if let message = model.message {
-                                Text(message)
-                                    .foregroundStyle(.secondary)
-                                    .padding()
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(Color.secondary.opacity(0.08))
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                            }
                             publicCommunitySection
                             if !model.isLoggedIn {
                                 ContentUnavailableView(
@@ -2095,6 +2299,12 @@ private struct CommunityRootView: View {
                 .onChange(of: model.session.selectedCommunityId) { _, _ in
                     if isManagementMode {
                         postModel.refreshManagementMemberPosts()
+                    }
+                    Task { await model.refreshRadioPrograms() }
+                }
+                .onChange(of: model.session.authenticationToken) { _, token in
+                    if token == nil {
+                        Task { await model.refreshRadioPrograms() }
                     }
                 }
                 }

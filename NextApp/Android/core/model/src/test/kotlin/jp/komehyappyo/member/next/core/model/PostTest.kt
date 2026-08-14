@@ -3,8 +3,28 @@ package jp.komehyappyo.member.next.core.model
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import java.time.Instant
 
 class PostTest {
+    @Test
+    fun radioProgramIsPlayableFromBroadcastStartAndAfterBroadcastEnd() {
+        val start = Instant.parse("2026-08-14T10:00:00Z")
+        val program = RadioProgram(
+            id = "radio-1",
+            communityId = "org-1",
+            title = "番組",
+            description = "",
+            imageUrl = "",
+            audioUrl = "https://example.com/radio.mp3",
+            broadcastStartAt = start,
+            broadcastEndAt = start.plusSeconds(3_600),
+        )
+
+        assertFalse(RadioPlaybackPolicy.isPlayable(program, start.minusMillis(1)))
+        assertTrue(RadioPlaybackPolicy.isPlayable(program, start))
+        assertTrue(RadioPlaybackPolicy.isPlayable(program, start.plusSeconds(7_200)))
+    }
+
     @Test
     fun unreadReplyRequiresReplyAndUnreadFlag() {
         val post = samplePost(adminReply = "回答です", memberHasReadReply = false)
