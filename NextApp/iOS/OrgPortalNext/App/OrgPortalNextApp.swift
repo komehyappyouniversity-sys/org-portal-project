@@ -112,6 +112,7 @@ private struct AppBootstrapView: View {
                     }
                 },
                 memoStore: FeatureTools.VimeoMemoStore(),
+                questionStore: FeatureTools.VideoQuestionDraftStore(),
                 repeatSettingRepository: SwiftDataVideoRepeatSettingRepository(
                     modelContainer: modelContainer
                 ),
@@ -268,6 +269,9 @@ private struct AppBootstrapView: View {
                 postModel: postModel
             )
         )
+        .task(id: "\(appSession.authenticatedUserId ?? ""):\(appSession.selectedCommunityId ?? "")") {
+            await distributedVideoModel.load()
+        }
     }
 }
 
@@ -748,6 +752,7 @@ private final class CommunityFeatureModel: ObservableObject {
                     memoText: memo,
                     questionText: question,
                     playbackSeconds: playbackSeconds,
+                    clientRequestId: UUID().uuidString.lowercased(),
                     idToken: token
                 )
                 message = "質問を送信しました。"

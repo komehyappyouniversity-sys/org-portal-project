@@ -12,6 +12,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -70,6 +71,7 @@ import jp.komehyappyo.member.next.feature.community.CommunityFeatureModel
 import jp.komehyappyo.member.next.feature.community.CommunityRoot
 import jp.komehyappyo.member.next.feature.community.VimeoMemoStore
 import jp.komehyappyo.member.next.feature.tools.VimeoMemoStore as ToolsVimeoMemoStore
+import jp.komehyappyo.member.next.feature.tools.VideoQuestionDraftStore
 import jp.komehyappyo.member.next.feature.messages.AnnouncementFeatureModel
 import jp.komehyappyo.member.next.feature.messages.AnnouncementRoot
 import jp.komehyappyo.member.next.feature.messages.MemberPostReplySection
@@ -133,6 +135,7 @@ class MainActivity : FragmentActivity() {
                     }
                 },
                 memoStore = ToolsVimeoMemoStore(applicationContext),
+                questionStore = VideoQuestionDraftStore(applicationContext),
                 repeatSettingRepository = RoomVideoRepeatSettingRepository(
                     database.videoRepeatSettingDao(),
                 ),
@@ -142,6 +145,14 @@ class MainActivity : FragmentActivity() {
         val distributedVideoModel: DistributedVideoFeatureModel = viewModel(
             factory = distributedVideoFactory,
         )
+        val sessionState by appSession.state.collectAsStateWithLifecycle()
+        LaunchedEffect(
+            sessionState.userId,
+            sessionState.selectedCommunityId,
+            sessionState.authenticationToken,
+        ) {
+            distributedVideoModel.load()
+        }
         val announcementFactory = remember {
             AnnouncementFeatureModel.Factory(
                 FirebaseRestAnnouncementRepository(BuildConfig.FIREBASE_PROJECT_ID),

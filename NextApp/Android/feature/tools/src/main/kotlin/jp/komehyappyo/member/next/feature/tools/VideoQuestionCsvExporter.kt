@@ -13,25 +13,53 @@ object VideoQuestionCsvExporter {
         questions: List<VideoQuestion>,
         video: DistributedVideo,
         zoneId: ZoneId = ZoneId.systemDefault(),
+    ): String = exportRows(
+        questions = questions,
+        videosById = mapOf(video.id to video),
+        fallbackVideo = video,
+        zoneId = zoneId,
+    )
+
+    fun export(
+        questions: List<VideoQuestion>,
+        videos: List<DistributedVideo>,
+        zoneId: ZoneId = ZoneId.systemDefault(),
+    ): String = exportRows(
+        questions = questions,
+        videosById = videos.associateBy { it.id },
+        fallbackVideo = null,
+        zoneId = zoneId,
+    )
+
+    private fun exportRows(
+        questions: List<VideoQuestion>,
+        videosById: Map<String, DistributedVideo>,
+        fallbackVideo: DistributedVideo?,
+        zoneId: ZoneId,
     ): String {
         val headerLines = listOf(
             "schema_version=1",
             "video_title,video_url,playback_seconds,question,answer,status,created_at,answered_at,memo",
         )
         val dataLines = questions.map { question ->
+            val video = videosById[question.videoId] ?: fallbackVideo
             listOf(
-                question.videoTitle,
-                exportedVideoUrl(video),
+                question.videoTitle.ifEmpty { video?.videoTitle.orEmpty() },
+                video?.let(::exportedVideoUrl).orEmpty(),
                 question.playbackSeconds.toString(),
                 question.questionText,
                 question.answerText,
-                if (question.answerText.isBlank()) "unanswered" else "answered",
+                if (question.isAnswered) "answered" else "unanswered",
                 question.createdAt?.let { timestamp ->
                     formatter.format(
                         Instant.parse(timestamp).atZone(zoneId),
                     )
                 } ?: "",
-                "",
+                question.answeredAt?.let { timestamp ->
+                    formatter.format(
+                        Instant.parse(timestamp).atZone(zoneId),
+                    )
+                } ?: "",
                 question.memoText,
             ).joinToString(",") { value -> '"' + value.replace("\"", "\"\"") + '"' }
         }

@@ -17,6 +17,8 @@ public struct ToolsHubView: View {
         case distributedVideos
         case budgetSettlement
         case distributedVideoPlayer(DistributedVideo)
+        case videoQuestions
+        case videoQuestionDetail(VideoQuestion)
 
         var id: String {
             switch self {
@@ -31,6 +33,8 @@ public struct ToolsHubView: View {
             case .distributedVideos: "distributedVideos"
             case .budgetSettlement: "budgetSettlement"
             case let .distributedVideoPlayer(video): "distributedVideoPlayer:\(video.id)"
+            case .videoQuestions: "videoQuestions"
+            case let .videoQuestionDetail(question): "videoQuestionDetail:\(question.id)"
             }
         }
     }
@@ -151,6 +155,16 @@ public struct ToolsHubView: View {
                 }
                 .buttonStyle(.plain)
                 Button {
+                    destination = .videoQuestions
+                } label: {
+                    FeatureCard(
+                        "動画の質問・回答",
+                        subtitle: "送信した質問と管理者からの回答を確認できます。",
+                        systemImage: "questionmark.bubble"
+                    )
+                }
+                .buttonStyle(.plain)
+                Button {
                     destination = .friends
                 } label: {
                     FeatureCard(
@@ -211,6 +225,7 @@ public struct ToolsHubView: View {
                     DistributedVideoListRoot(
                         model: distributedVideoModel,
                         onSelect: { self.destination = .distributedVideoPlayer($0) },
+                        onOpenQuestions: { self.destination = .videoQuestions },
                     )
                 case .budgetSettlement:
                     BudgetSettlementRootView(model: budgetSettlementModel)
@@ -220,7 +235,19 @@ public struct ToolsHubView: View {
                         video: video,
                         onBackToList: {
                             self.destination = .distributedVideos
-                        }
+                        },
+                        onOpenQuestions: { self.destination = .videoQuestions }
+                    )
+                case .videoQuestions:
+                    VideoQuestionListView(
+                        model: distributedVideoModel,
+                        onBack: { self.destination = .distributedVideos },
+                        onSelect: { self.destination = .videoQuestionDetail($0) }
+                    )
+                case let .videoQuestionDetail(question):
+                    VideoQuestionDetailView(
+                        question: question,
+                        onBack: { self.destination = .videoQuestions }
                     )
                 }
             }
@@ -231,10 +258,23 @@ public struct ToolsHubView: View {
 private struct DistributedVideoListRoot: View {
     @ObservedObject var model: DistributedVideoFeatureModel
     let onSelect: (DistributedVideo) -> Void
+    let onOpenQuestions: () -> Void
 
     var body: some View {
-        Group {
-            if model.hasPendingVideoMemoSync {
+        VStack(spacing: 0) {
+            HStack {
+                Button {
+                    onOpenQuestions()
+                } label: {
+                    Label("自分の質問・回答", systemImage: "questionmark.bubble")
+                }
+                .buttonStyle(.bordered)
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+
+            if model.hasPendingVideoMemoSync || model.hasPendingVideoQuestionSync {
                 OfflineBanner()
             }
             if model.isLoading && model.videos.isEmpty {
@@ -271,14 +311,13 @@ private struct DistributedVideoPlayerView: View {
     @ObservedObject var model: DistributedVideoFeatureModel
     let video: DistributedVideo
     let onBackToList: () -> Void
+    let onOpenQuestions: () -> Void
     @State private var memoText = ""
     @State private var editingMemoId: String?
     @State private var editingMemoText = ""
     @State private var questionText = ""
     @State private var memoCsvURL: URL?
-    @State private var questionCsvURL: URL?
     @State private var showMemoCsvEmptyState = false
-    @State private var showQuestionCsvEmptyState = false
     @State private var showsRepeatSettingPanel = false
     @State private var playbackSeconds = 0.0
     @State private var playbackCommand: VimeoPlaybackCommand?
@@ -303,7 +342,7 @@ private struct DistributedVideoPlayerView: View {
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
-            if model.hasPendingVideoMemoSync {
+            if model.hasPendingVideoMemoSync || model.hasPendingVideoQuestionSync {
                 OfflineBanner()
             }
 
@@ -437,17 +476,10 @@ private struct DistributedVideoPlayerView: View {
                     Text("質問")
                         .font(.headline)
                     HStack {
-                        Button("CSV共有") {
-                            let questions = model.questionsFor(video)
-                            if questions.isEmpty {
-                                showQuestionCsvEmptyState = true
-                                return
-                            }
-                            showQuestionCsvEmptyState = false
-                            questionCsvURL = makeQuestionCsvURL(
-                                video: video,
-                                questions: questions,
-                            )
+                        Button {
+                            onOpenQuestions()
+                        } label: {
+                            Label("自分の質問・回答一覧", systemImage: "list.bullet")
                         }
                         Spacer()
                     }
@@ -456,42 +488,20 @@ private struct DistributedVideoPlayerView: View {
                         .textFieldStyle(.roundedBorder)
                     Button("質問を送信") {
                         Task {
-                            await model.submitVideoQuestion(
+                            let didSubmit = await model.submitVideoQuestion(
                                 video,
                                 memo: memoText,
                                 question: questionText,
                                 playbackSeconds: playbackSeconds
                             )
-                            questionText = ""
+                            if didSubmit {
+                                questionText = ""
+                                onOpenQuestions()
+                            }
                         }
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(questionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                    if model.questionsFor(video).isEmpty {
-                        if showQuestionCsvEmptyState {
-                            EmptyState("CSV共有対象の質問がありません")
-                        } else {
-                            Text("まだ質問はありません。")
-                                .foregroundStyle(.secondary)
-                        }
-                    } else {
-                        ForEach(model.questionsFor(video)) { question in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("質問: \(question.questionText)")
-                                if question.answerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                    Text("回答待ち")
-                                        .foregroundStyle(.orange)
-                                } else {
-                                    Text("回答: \(question.answerText)")
-                                        .foregroundStyle(.green)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 6)
-                            Divider()
-                        }
-                    }
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 12)
@@ -512,16 +522,6 @@ private struct DistributedVideoPlayerView: View {
         ) {
             if let memoCsvURL {
                 ActivityShareSheet(activityItems: [memoCsvURL])
-            }
-        }
-        .sheet(
-            isPresented: Binding(
-                get: { questionCsvURL != nil },
-                set: { if !$0 { questionCsvURL = nil } },
-            ),
-        ) {
-            if let questionCsvURL {
-                ActivityShareSheet(activityItems: [questionCsvURL])
             }
         }
         .sheet(isPresented: $showsRepeatSettingPanel) {
@@ -554,15 +554,222 @@ private struct DistributedVideoPlayerView: View {
         }
     }
 
-    private func makeQuestionCsvURL(video: DistributedVideo, questions: [VideoQuestion]) -> URL? {
+}
+
+private struct VideoQuestionListView: View {
+    @ObservedObject var model: DistributedVideoFeatureModel
+    let onBack: () -> Void
+    let onSelect: (VideoQuestion) -> Void
+    @State private var csvURL: URL?
+    @State private var showsCsvEmptyState = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button {
+                    onBack()
+                } label: {
+                    Label("配信動画へ", systemImage: "chevron.left")
+                }
+                .buttonStyle(.bordered)
+
+                Spacer()
+
+                Button {
+                    guard !model.videoQuestions.isEmpty else {
+                        showsCsvEmptyState = true
+                        return
+                    }
+                    showsCsvEmptyState = false
+                    csvURL = makeCsvURL()
+                } label: {
+                    Label("CSV共有", systemImage: "square.and.arrow.up")
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+
+            if model.hasPendingVideoQuestionSync {
+                OfflineBanner()
+            }
+
+            if model.isLoading && model.videoQuestions.isEmpty {
+                LoadingState()
+            } else if let message = model.errorMessage, model.videoQuestions.isEmpty {
+                ErrorState(message: message) {
+                    Task { await model.load() }
+                }
+            } else if model.videoQuestions.isEmpty {
+                EmptyState(
+                    showsCsvEmptyState ? "CSV共有対象の質問がありません" : "送信済みの質問はありません",
+                    systemImage: "questionmark.bubble"
+                )
+            } else {
+                List {
+                    Section("未回答（\(model.unansweredQuestions.count)件）") {
+                        if model.unansweredQuestions.isEmpty {
+                            Text("未回答の質問はありません。")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(model.unansweredQuestions) { question in
+                                VideoQuestionRow(question: question) {
+                                    onSelect(question)
+                                }
+                            }
+                        }
+                    }
+
+                    Section("回答済み（\(model.answeredQuestions.count)件）") {
+                        if model.answeredQuestions.isEmpty {
+                            Text("回答済みの質問はありません。")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(model.answeredQuestions) { question in
+                                VideoQuestionRow(question: question) {
+                                    onSelect(question)
+                                }
+                            }
+                        }
+                    }
+                }
+                .listStyle(.insetGrouped)
+            }
+        }
+        .navigationTitle("動画質問・回答一覧")
+        .task { await model.load() }
+        .sheet(
+            isPresented: Binding(
+                get: { csvURL != nil },
+                set: { if !$0 { csvURL = nil } }
+            )
+        ) {
+            if let csvURL {
+                ActivityShareSheet(activityItems: [csvURL])
+            }
+        }
+    }
+
+    private func makeCsvURL() -> URL? {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("video-questions-\(video.id).csv")
+            .appendingPathComponent("video-questions.csv")
         do {
-            try VideoQuestionCsvExporter.data(for: questions, video: video).write(to: url)
+            try VideoQuestionCsvExporter.data(
+                for: model.videoQuestions,
+                videos: model.videos
+            ).write(to: url)
             return url
         } catch {
             return nil
         }
+    }
+}
+
+private struct VideoQuestionRow: View {
+    let question: VideoQuestion
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(question.videoTitle.isEmpty ? "配信動画" : question.videoTitle)
+                    .font(.headline)
+                Text(question.questionText)
+                    .lineLimit(2)
+                Label(
+                    statusLabel,
+                    systemImage: statusSystemImage
+                )
+                .font(.subheadline)
+                .foregroundStyle(statusColor)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var statusLabel: String {
+        switch question.syncStatus {
+        case .draft: "下書き"
+        case .sending: "送信中"
+        case .failed: "送信失敗（オフライン保持中）"
+        case .synced: question.isAnswered ? "回答済み" : "送信済み・回答待ち"
+        }
+    }
+
+    private var statusSystemImage: String {
+        switch question.syncStatus {
+        case .draft: "doc"
+        case .sending: "arrow.triangle.2.circlepath"
+        case .failed: "wifi.slash"
+        case .synced: question.isAnswered ? "checkmark.circle.fill" : "clock"
+        }
+    }
+
+    private var statusColor: Color {
+        switch question.syncStatus {
+        case .synced where question.isAnswered: .green
+        case .failed: .red
+        default: .orange
+        }
+    }
+}
+
+private struct VideoQuestionDetailView: View {
+    let question: VideoQuestion
+    let onBack: () -> Void
+
+    private let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = "yyyy/MM/dd HH:mm"
+        return formatter
+    }()
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Button {
+                    onBack()
+                } label: {
+                    Label("質問一覧へ", systemImage: "chevron.left")
+                }
+                .buttonStyle(.bordered)
+
+                GroupBox("対象動画") {
+                    Text(question.videoTitle.isEmpty ? "配信動画" : question.videoTitle)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                GroupBox("質問本文") {
+                    Text(question.questionText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                GroupBox("管理者回答") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if question.isAnswered {
+                            Text(question.answerText)
+                            LabeledContent("回答日時") {
+                                Text(
+                                    question.answeredAt.map { dateFormatter.string(from: $0) }
+                                        ?? "日時情報なし"
+                                )
+                            }
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        } else {
+                            Label("回答待ち", systemImage: "clock")
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding()
+        }
+        .navigationTitle("質問詳細")
     }
 }
 

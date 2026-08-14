@@ -117,7 +117,35 @@ data class VideoQuestion(
     val questionText: String,
     val answerText: String = "",
     val createdAt: String? = null,
-)
+    val answeredAt: String? = null,
+    val syncStatus: VideoQuestionSyncStatus = VideoQuestionSyncStatus.Synced,
+    val clientRequestId: String = "",
+) {
+    val isAnswered: Boolean
+        get() = answerText.isNotBlank()
+}
+
+enum class VideoQuestionSyncStatus {
+    Draft,
+    Sending,
+    Synced,
+    Failed,
+    ;
+
+    val requiresSync: Boolean
+        get() = this != Synced
+
+    fun rawValue(): String = name.lowercase()
+
+    companion object {
+        fun fromValue(value: String?): VideoQuestionSyncStatus = when (value) {
+            "draft" -> Draft
+            "sending" -> Sending
+            "failed" -> Failed
+            else -> Synced
+        }
+    }
+}
 
 enum class VimeoVideoMemoSyncStatus {
     Synced,
