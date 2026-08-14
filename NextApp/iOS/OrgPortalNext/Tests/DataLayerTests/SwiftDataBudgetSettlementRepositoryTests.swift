@@ -47,7 +47,8 @@ final class SwiftDataBudgetSettlementRepositoryTests: XCTestCase {
         XCTAssertEqual(saved?.incomeTotal, 1_000.50)
         XCTAssertEqual(saved?.expenseTotal, 200.25)
         XCTAssertEqual(saved?.balance, 800.25)
-        XCTAssertEqual(try await repository.fetchEntries(reportId: report.id).count, 2)
+        let entriesAfterSave = try await repository.fetchEntries(reportId: report.id)
+        XCTAssertEqual(entriesAfterSave.count, 2)
 
         try await repository.deleteEntry(id: expense.id)
 
@@ -88,8 +89,10 @@ final class SwiftDataBudgetSettlementRepositoryTests: XCTestCase {
 
         try await repository.deleteReport(id: report.id)
 
-        XCTAssertTrue(try await repository.fetchReports().isEmpty)
-        XCTAssertTrue(try await repository.fetchEntries(reportId: report.id).isEmpty)
+        let reportsAfterDelete = try await repository.fetchReports()
+        XCTAssertTrue(reportsAfterDelete.isEmpty)
+        let entriesAfterDelete = try await repository.fetchEntries(reportId: report.id)
+        XCTAssertTrue(entriesAfterDelete.isEmpty)
         XCTAssertEqual(deletedReceipts, ["receipts/train.jpg"])
     }
 }

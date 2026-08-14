@@ -86,5 +86,10 @@ data class BudgetSettlementReport(
     }
 }
 
-private fun BigDecimal.normalized(): BigDecimal =
-    if (compareTo(BigDecimal.ZERO) == 0) BigDecimal.ZERO else stripTrailingZeros()
+private fun BigDecimal.normalized(): BigDecimal {
+    if (compareTo(BigDecimal.ZERO) == 0) return BigDecimal.ZERO
+    // stripTrailingZeros() can push round numbers (e.g. 1300) into a negative
+    // scale, which renders in scientific notation (1.3E+3) instead of 1300.
+    val stripped = stripTrailingZeros()
+    return if (stripped.scale() < 0) stripped.setScale(0) else stripped
+}

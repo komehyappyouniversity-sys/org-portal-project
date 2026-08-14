@@ -15,8 +15,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.math.BigDecimal
 import java.time.LocalDate
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
 class RoomBudgetSettlementRepositoryTest {

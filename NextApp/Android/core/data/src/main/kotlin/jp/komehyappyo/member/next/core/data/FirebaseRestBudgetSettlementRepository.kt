@@ -128,7 +128,7 @@ class FirebaseRestBudgetSettlementRepository(
     ): String = withContext(Dispatchers.IO) {
         require(jpegData.isNotEmpty()) { "領収書画像が空です。" }
         val objectPath = storageObjectPath(auth.userId, reportId, entryId)
-        val encodedName = URLEncoder.encode(objectPath, StandardCharsets.UTF_8).replace("+", "%20")
+        val encodedName = URLEncoder.encode(objectPath, StandardCharsets.UTF_8.name()).replace("+", "%20")
         val url = URI(
             "https://firebasestorage.googleapis.com/v0/b/$storageBucket/o" +
                 "?uploadType=media&name=$encodedName",
@@ -151,7 +151,7 @@ class FirebaseRestBudgetSettlementRepository(
     ) = withContext(Dispatchers.IO) {
         val encodedName = URLEncoder.encode(
             storageObjectPath(auth.userId, reportId, entryId),
-            StandardCharsets.UTF_8,
+            StandardCharsets.UTF_8.name(),
         ).replace("+", "%20")
         val connection = (
             URI("https://firebasestorage.googleapis.com/v0/b/$storageBucket/o/$encodedName")
@@ -193,7 +193,7 @@ class FirebaseRestBudgetSettlementRepository(
         var pageToken: String? = null
         do {
             val encodedToken = pageToken?.let {
-                "&pageToken=${URLEncoder.encode(it, StandardCharsets.UTF_8)}"
+                "&pageToken=${URLEncoder.encode(it, StandardCharsets.UTF_8.name())}"
             }.orEmpty()
             val page = requestJson("GET", "$path?pageSize=100$encodedToken", token)
             documents += page.optJSONArray("documents").objects()
@@ -222,10 +222,10 @@ class BudgetSettlementMigrationService(
         if (stateStore.isCompleted(auth.userId)) 0 else localRepository.observeReports().first().size
 
     suspend fun migrate(auth: BudgetRemoteAuth): BudgetMigrationResult {
-        val reports = kotlinx.coroutines.flow.first(localRepository.observeReports())
+        val reports = localRepository.observeReports().first()
         var migratedEntries = 0
         for (report in reports) {
-            val entries = kotlinx.coroutines.flow.first(localRepository.observeEntries(report.id))
+            val entries = localRepository.observeEntries(report.id).first()
             remoteRepository.saveReport(auth, report.copy(userId = auth.userId))
             for (entry in entries) {
                 val remoteReceipt = entry.receiptImageUrl?.let { localReference ->
