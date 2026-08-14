@@ -229,7 +229,11 @@ private struct AppBootstrapView: View {
                 postModel: postModel,
                 announcementModel: announcementModel
             ),
-            profile: AccountRootView(model: accountModel, communityModel: communityModel)
+            profile: AccountRootView(
+                model: accountModel,
+                communityModel: communityModel,
+                postModel: postModel
+            )
         )
     }
 }
@@ -1572,7 +1576,7 @@ private struct ConnectedRootView: View {
                 .padding(.top, 12)
             }
             if selection == 0 {
-                CommunityRootView(model: communityModel)
+                CommunityRootView(model: communityModel, postModel: postModel)
             } else if selection == 1 {
                 PostRootView(model: postModel)
             } else if selection == 2 {
@@ -1935,10 +1939,16 @@ private struct VimeoVideoDetailView: View {
 
 private struct CommunityRootView: View {
     @ObservedObject var model: CommunityFeatureModel
+    @ObservedObject var postModel: PostFeatureModel
     let isManagementMode: Bool
 
-    init(model: CommunityFeatureModel, isManagementMode: Bool = false) {
+    init(
+        model: CommunityFeatureModel,
+        postModel: PostFeatureModel,
+        isManagementMode: Bool = false
+    ) {
         self.model = model
+        self.postModel = postModel
         self.isManagementMode = isManagementMode
     }
 
@@ -1990,6 +2000,7 @@ private struct CommunityRootView: View {
                         }
                         if model.canReviewMembers {
                             Text("運営モード").font(.title2.bold())
+                            managementPostSection
                             applicationReviewSection
                         } else {
                             ContentUnavailableView(
@@ -2050,6 +2061,9 @@ private struct CommunityRootView: View {
                 .task {
                     model.refreshPublicCommunities()
                     await model.refresh()
+                    if isManagementMode {
+                        postModel.refreshManagementMemberPosts()
+                    }
                 }
                 .sheet(isPresented: $model.showsScanner) {
                     CommunityQRScanner { model.receivedScan($0) }
@@ -2071,6 +2085,11 @@ private struct CommunityRootView: View {
                         guard pendingVideoScrollID == videoID else { return }
                         scrollProxy.scrollTo(videoID, anchor: .top)
                         pendingVideoScrollID = nil
+                    }
+                }
+                .onChange(of: model.session.selectedCommunityId) { _, _ in
+                    if isManagementMode {
+                        postModel.refreshManagementMemberPosts()
                     }
                 }
                 }
@@ -2185,6 +2204,92 @@ private struct CommunityRootView: View {
             if model.session.previousCommunityId != nil {
                 Button("前のコミュニティへ戻る") {
                     model.session.returnToPreviousCommunity()
+                }
+            }
+        }
+    }
+
+    private var managementPostSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("会員投稿への返信").font(.title3.bold())
+            if let selectedPost = postModel.selectedManagementMemberPost {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("対象投稿: \(selectedPost.title)")
+                        .font(.headline)
+                    Text("投稿者: \(selectedPost.authorName)")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Text(selectedPost.body)
+                        .lineLimit(3)
+                        .foregroundStyle(.secondary)
+                    Text("管理者返信")
+                    TextField("返信を入力", text: $postModel.managementReplyDraft, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                    HStack {
+                        Button("返信を保存") { postModel.saveManagementReply() }
+                            .buttonStyle(.borderedProminent)
+                        Button("編集をやめる") { postModel.closeManagementReply() }
+                            .buttonStyle(.bordered)
+                    }
+                }
+                .padding()
+                .background(.background)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+            } else {
+                let unanswered = postModel.managementMemberPosts.filter {
+                    ($0.legacyAdminReply ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                }
+                if unanswered.isEmpty {
+                    Text("未返信の投稿はありません。").foregroundStyle(.secondary)
+                } else {
+                    Text("未返信").font(.headline)
+                    ForEach(unanswered) { post in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("投稿者: \(post.authorName)")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            Text(post.title)
+                                .font(.headline)
+                            Text(post.body)
+                                .lineLimit(3)
+                                .foregroundStyle(.secondary)
+                            Button("返信を入力") { postModel.startManagementReply(for: post) }
+                                .buttonStyle(.borderedProminent)
+                        }
+                        .padding()
+                        .background(.secondary.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                    }
+                }
+                let answered = postModel.managementMemberPosts.filter {
+                    !($0.legacyAdminReply ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                }
+                if !answered.isEmpty {
+                    Text("回答済み").font(.headline)
+                    ForEach(answered) { post in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .top, spacing: 8) {
+                                Text("投稿者: \(post.authorName)")
+                                Spacer()
+                                if post.hasUnreadReply {
+                                    Text("新着")
+                                        .font(.caption)
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.green)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                                }
+                            }
+                            Text(post.title)
+                                .font(.headline)
+                            Text("返信: \((post.legacyAdminReply ?? "").isEmpty ? "（未入力）" : post.legacyAdminReply ?? "")")
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding()
+                        .background(.background)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                    }
                 }
             }
         }
@@ -3168,6 +3273,7 @@ private final class AccountFeatureModel: ObservableObject {
 private struct AccountRootView: View {
     @ObservedObject var model: AccountFeatureModel
     @ObservedObject var communityModel: CommunityFeatureModel
+    @ObservedObject var postModel: PostFeatureModel
 
     var body: some View {
         NavigationStack {
@@ -3177,7 +3283,11 @@ private struct AccountRootView: View {
                     case .overview:
                         overview
                     case .adminMode:
-                        ManagementModeRoot(model: model, communityModel: communityModel)
+                        ManagementModeRoot(
+                            model: model,
+                            communityModel: communityModel,
+                            postModel: postModel,
+                        )
                     case .register:
                         AccountFormView(model: model, isRegistration: true)
                     case .login:
@@ -3253,6 +3363,7 @@ private struct AccountRootView: View {
 private struct ManagementModeRoot: View {
     @ObservedObject var model: AccountFeatureModel
     @ObservedObject var communityModel: CommunityFeatureModel
+    @ObservedObject var postModel: PostFeatureModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -3264,6 +3375,7 @@ private struct ManagementModeRoot: View {
             Divider()
             CommunityRootView(
                 model: communityModel,
+                postModel: postModel,
                 isManagementMode: true
             )
         }

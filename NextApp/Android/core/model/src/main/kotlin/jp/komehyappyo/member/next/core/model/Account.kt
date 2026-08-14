@@ -119,6 +119,33 @@ data class VideoQuestion(
     val createdAt: String? = null,
 )
 
+enum class VimeoVideoMemoSyncStatus {
+    Synced,
+    PendingSync,
+    ;
+
+    fun rawValue(): String = when (this) {
+        Synced -> "synced"
+        PendingSync -> "pendingSync"
+    }
+
+    companion object {
+        fun fromValue(value: String?): VimeoVideoMemoSyncStatus = when (value) {
+            "pendingSync" -> PendingSync
+            else -> Synced
+        }
+    }
+}
+
+data class VimeoVideoMemo(
+    val id: String,
+    val text: String,
+    val playbackSeconds: Double,
+    val createdAtMillis: Long,
+    val updatedAtMillis: Long,
+    val syncStatus: VimeoVideoMemoSyncStatus = VimeoVideoMemoSyncStatus.Synced,
+)
+
 data class CommunityMembership(
     val id: String,
     val communityId: String,

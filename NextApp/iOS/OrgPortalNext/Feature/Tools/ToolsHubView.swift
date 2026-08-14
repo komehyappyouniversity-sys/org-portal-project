@@ -217,6 +217,9 @@ private struct DistributedVideoListRoot: View {
 
     var body: some View {
         Group {
+            if model.hasPendingVideoMemoSync {
+                OfflineBanner()
+            }
             if model.isLoading && model.videos.isEmpty {
                 LoadingState()
             } else if let message = model.errorMessage, model.videos.isEmpty {
@@ -282,6 +285,9 @@ private struct DistributedVideoPlayerView: View {
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
+            if model.hasPendingVideoMemoSync {
+                OfflineBanner()
+            }
 
             if let videoId = distributedVimeoVideoId(for: video) {
                 DistributedVimeoVideoPlayerView(
