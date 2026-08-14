@@ -5,7 +5,10 @@ import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+@RunWith(RobolectricTestRunner::class)
 class FirebaseRestCommunityRepositoryRadioProgramParserTest {
     @Test
     fun parseRadioProgramMapsFirestoreFields() {
