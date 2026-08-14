@@ -1,8 +1,10 @@
 package jp.komehyappyo.member.next.feature.tools
 
 import jp.komehyappyo.member.next.core.data.CommunityRepository
+import jp.komehyappyo.member.next.core.data.GuestUserIdProvider
 import jp.komehyappyo.member.next.core.data.VimeoConfiguration
 import jp.komehyappyo.member.next.core.data.VimeoFolder
+import jp.komehyappyo.member.next.core.data.VideoRepeatSettingRepository
 import jp.komehyappyo.member.next.core.model.*
 import jp.komehyappyo.member.next.core.session.AppSession
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +26,79 @@ import kotlin.test.assertTrue
 @RunWith(RobolectricTestRunner::class)
 @OptIn(ExperimentalCoroutinesApi::class)
 class DistributedVideoFeatureModelTest {
+    @Test
+    fun loadsSavedFullVideoRepeatSettingWhenVideoOpens() = runTest {
+        val dispatcher = UnconfinedTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+
+        try {
+            val repeatRepository = InMemoryVideoRepeatSettingRepository()
+            repeatRepository.save(
+                VideoRepeatSetting(
+                    userId = "guest-local",
+                    videoId = "video-1",
+                    isEnabled = true,
+                ),
+            )
+            val model = DistributedVideoFeatureModel(
+                repository = FakeCommunityRepository(),
+                session = AppSession(),
+                canViewMembersOnlyVideo = { false },
+                memoStore = InMemoryVimeoMemoStore(),
+                repeatSettingRepository = repeatRepository,
+                guestUserIdProvider = GuestUserIdProvider { "unused" },
+            )
+
+            model.loadRepeatSetting("video-1")
+            advanceUntilIdle()
+
+            assertTrue(model.isRepeatEnabled("video-1"))
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun guestCanEnableAndDisableFullVideoRepeatSetting() = runTest {
+        val dispatcher = UnconfinedTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+
+        try {
+            val repeatRepository = InMemoryVideoRepeatSettingRepository()
+            val model = DistributedVideoFeatureModel(
+                repository = FakeCommunityRepository(),
+                session = AppSession(),
+                canViewMembersOnlyVideo = { false },
+                memoStore = InMemoryVimeoMemoStore(),
+                repeatSettingRepository = repeatRepository,
+                guestUserIdProvider = GuestUserIdProvider {
+                    "813af24e-55fc-4d75-a61c-a8b453532ba6"
+                },
+            )
+
+            model.loadRepeatSetting("video-1")
+            advanceUntilIdle()
+            assertFalse(model.isRepeatEnabled("video-1"))
+
+            model.setRepeatEnabled("video-1", true)
+            advanceUntilIdle()
+            assertTrue(model.isRepeatEnabled("video-1"))
+            assertEquals(
+                "813af24e-55fc-4d75-a61c-a8b453532ba6",
+                repeatRepository.savedSetting?.userId,
+            )
+            assertEquals(VideoRepeatMode.Full, repeatRepository.savedSetting?.mode)
+            assertEquals(null, repeatRepository.savedSetting?.repeatStartSeconds)
+            assertEquals(null, repeatRepository.savedSetting?.repeatEndSeconds)
+
+            model.setRepeatEnabled("video-1", false)
+            advanceUntilIdle()
+            assertFalse(model.isRepeatEnabled("video-1"))
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
     @Test
     fun filtersOutMembersOnlyVideoWhenCommunityIsNotAllowed() {
         val sourceVideos = listOf(
@@ -214,6 +289,17 @@ class DistributedVideoFeatureModelTest {
         isMembersOnly = isMembersOnly,
         sortOrder = sortOrder,
     )
+}
+
+private class InMemoryVideoRepeatSettingRepository : VideoRepeatSettingRepository {
+    var savedSetting: VideoRepeatSetting? = null
+
+    override suspend fun setting(videoId: String): VideoRepeatSetting? =
+        savedSetting?.takeIf { it.videoId == videoId }
+
+    override suspend fun save(setting: VideoRepeatSetting) {
+        savedSetting = setting
+    }
 }
 
 private class FakeCommunityRepository(

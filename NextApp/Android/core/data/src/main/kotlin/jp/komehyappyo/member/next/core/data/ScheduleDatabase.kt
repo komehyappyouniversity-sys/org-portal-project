@@ -274,8 +274,9 @@ interface FriendInteractionHistoryDao {
         FavoriteBookmarkEntity::class,
         FriendContactEntity::class,
         FriendInteractionHistoryEntity::class,
+        VideoRepeatSettingEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 abstract class OrgPortalDatabase : RoomDatabase() {
@@ -287,6 +288,7 @@ abstract class OrgPortalDatabase : RoomDatabase() {
     abstract fun favoriteBookmarkDao(): FavoriteBookmarkDao
     abstract fun friendContactDao(): FriendContactDao
     abstract fun friendInteractionHistoryDao(): FriendInteractionHistoryDao
+    abstract fun videoRepeatSettingDao(): VideoRepeatSettingDao
 
     companion object {
         val migration1To2 = object : Migration(1, 2) {
@@ -453,6 +455,24 @@ abstract class OrgPortalDatabase : RoomDatabase() {
             }
         }
 
+        val migration9To10 = object : Migration(9, 10) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `video_repeat_settings` (
+                        `videoId` TEXT NOT NULL,
+                        `userId` TEXT NOT NULL,
+                        `isEnabled` INTEGER NOT NULL,
+                        `mode` TEXT NOT NULL,
+                        `repeatStartSeconds` REAL,
+                        `repeatEndSeconds` REAL,
+                        PRIMARY KEY(`videoId`)
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         fun create(context: Context): OrgPortalDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
@@ -467,6 +487,7 @@ abstract class OrgPortalDatabase : RoomDatabase() {
                 migration6To7,
                 migration7To8,
                 migration8To9,
+                migration9To10,
             ).build()
     }
 }

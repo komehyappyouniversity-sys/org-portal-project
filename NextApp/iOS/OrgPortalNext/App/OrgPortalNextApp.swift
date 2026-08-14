@@ -40,7 +40,8 @@ struct OrgPortalNextApp: App {
                 SnsCustomLinkRecord.self,
                 FavoriteBookmarkRecord.self,
                 FriendContactRecord.self,
-                FriendInteractionHistoryRecord.self
+                FriendInteractionHistoryRecord.self,
+                VideoRepeatSettingRecord.self
             )
         } catch {
             fatalError("Unable to initialize local storage: \(error)")
@@ -108,6 +109,10 @@ private struct AppBootstrapView: View {
                     }
                 },
                 memoStore: FeatureTools.VimeoMemoStore(),
+                repeatSettingRepository: SwiftDataVideoRepeatSettingRepository(
+                    modelContainer: modelContainer
+                ),
+                guestUserIdProvider: KeychainGuestUserIdProvider()
             )
         )
         _announcementModel = StateObject(

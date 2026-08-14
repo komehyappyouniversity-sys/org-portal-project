@@ -37,23 +37,78 @@ public final class DistributedVideoFeatureModel: ObservableObject {
     @Published public private(set) var videoQuestions: [VideoQuestion] = []
     @Published public private(set) var isLoading = false
     @Published public private(set) var hasPendingVideoMemoSync = false
+    @Published public private(set) var videoRepeatSettings: [String: VideoRepeatSetting] = [:]
     @Published public var errorMessage: String?
 
     private let repository: any DistributedVideoRepository
     private let session: AppSession
     private let canViewMembersOnlyVideo: (String) -> Bool
     private let memoStore: VimeoMemoStore
+    private let repeatSettingRepository: (any VideoRepeatSettingRepository)?
+    private let guestUserIdProvider: (any GuestUserIdProvider)?
 
     public init(
         repository: any DistributedVideoRepository,
         session: AppSession,
         canViewMembersOnlyVideo: @escaping (String) -> Bool,
-        memoStore: VimeoMemoStore = VimeoMemoStore()
+        memoStore: VimeoMemoStore = VimeoMemoStore(),
+        repeatSettingRepository: (any VideoRepeatSettingRepository)? = nil,
+        guestUserIdProvider: (any GuestUserIdProvider)? = nil
     ) {
         self.repository = repository
         self.session = session
         self.canViewMembersOnlyVideo = canViewMembersOnlyVideo
         self.memoStore = memoStore
+        self.repeatSettingRepository = repeatSettingRepository
+        self.guestUserIdProvider = guestUserIdProvider
+    }
+
+    public func loadRepeatSetting(videoId: String) async {
+        guard let repeatSettingRepository else { return }
+        do {
+            let setting = try await repeatSettingRepository.setting(videoId: videoId)
+            if let setting {
+                videoRepeatSettings[videoId] = setting
+            } else {
+                let userId = try localVideoSettingUserId()
+                videoRepeatSettings[videoId] = VideoRepeatSetting(
+                    userId: userId,
+                    videoId: videoId,
+                    isEnabled: false
+                )
+            }
+        } catch {
+            errorMessage = "リピート再生設定を読み込めませんでした。"
+        }
+    }
+
+    public func isRepeatEnabled(videoId: String) -> Bool {
+        videoRepeatSettings[videoId]?.isEnabled ?? false
+    }
+
+    public func setRepeatEnabled(videoId: String, isEnabled: Bool) async {
+        guard let repeatSettingRepository else { return }
+        do {
+            let setting = VideoRepeatSetting(
+                userId: try localVideoSettingUserId(),
+                videoId: videoId,
+                isEnabled: isEnabled,
+                mode: .full,
+                repeatStartSeconds: nil,
+                repeatEndSeconds: nil
+            )
+            try await repeatSettingRepository.save(setting)
+            videoRepeatSettings[videoId] = setting
+        } catch {
+            errorMessage = "リピート再生設定を保存できませんでした。"
+        }
+    }
+
+    private func localVideoSettingUserId() throws -> String {
+        if let authenticatedUserId = session.authenticatedUserId {
+            return authenticatedUserId
+        }
+        return try guestUserIdProvider?.guestUserId() ?? "guest-local"
     }
 
     public func load() async {

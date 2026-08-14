@@ -38,6 +38,8 @@ import jp.komehyappyo.member.next.core.data.RoomMeetingMinutesRepository
 import jp.komehyappyo.member.next.core.data.RoomSnsCustomLinkRepository
 import jp.komehyappyo.member.next.core.data.RoomFavoriteBookmarkRepository
 import jp.komehyappyo.member.next.core.data.RoomFriendExchangeRepository
+import jp.komehyappyo.member.next.core.data.RoomVideoRepeatSettingRepository
+import jp.komehyappyo.member.next.core.data.AndroidKeystoreGuestUserIdProvider
 import jp.komehyappyo.member.next.core.model.CommunityMembershipStatus
 import jp.komehyappyo.member.next.core.designsystem.OrgPortalTheme
 import jp.komehyappyo.member.next.core.navigation.AppShell
@@ -114,6 +116,7 @@ class MainActivity : FragmentActivity() {
             )
         }
         val communityModel: CommunityFeatureModel = viewModel(factory = communityFactory)
+        val database = remember { OrgPortalDatabase.create(applicationContext) }
         val distributedVideoFactory = remember {
             DistributedVideoFeatureModel.Factory(
                 communityRepository,
@@ -124,6 +127,10 @@ class MainActivity : FragmentActivity() {
                     }
                 },
                 memoStore = ToolsVimeoMemoStore(applicationContext),
+                repeatSettingRepository = RoomVideoRepeatSettingRepository(
+                    database.videoRepeatSettingDao(),
+                ),
+                guestUserIdProvider = AndroidKeystoreGuestUserIdProvider(applicationContext),
             )
         }
         val distributedVideoModel: DistributedVideoFeatureModel = viewModel(
@@ -149,7 +156,6 @@ class MainActivity : FragmentActivity() {
             )
         }
         val postModel: PostFeatureModel = viewModel(factory = postFactory)
-        val database = remember { OrgPortalDatabase.create(applicationContext) }
         val scheduleRepository = remember { RoomScheduleRepository(database.scheduleDao()) }
         val scheduleFactory = remember {
             ScheduleFeatureModel.Factory(

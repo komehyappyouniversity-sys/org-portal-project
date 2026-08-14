@@ -1,4 +1,5 @@
 import Foundation
+import DataLayer
 import Model
 import Session
 import XCTest
@@ -6,6 +7,56 @@ import XCTest
 
 @MainActor
 final class DistributedVideoFeatureModelTests: XCTestCase {
+    func testLoadsSavedFullVideoRepeatSettingWhenVideoOpens() async {
+        let (memoStore, defaults, suiteName) = makeMemoStore()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let repeatRepository = FakeVideoRepeatSettingRepository()
+        repeatRepository.savedSetting = VideoRepeatSetting(
+            userId: "guest-local",
+            videoId: "video-1",
+            isEnabled: true
+        )
+        let model = DistributedVideoFeatureModel(
+            repository: FakeDistributedVideoRepository(videos: [], questions: []),
+            session: AppSession(),
+            canViewMembersOnlyVideo: { _ in false },
+            memoStore: memoStore,
+            repeatSettingRepository: repeatRepository,
+            guestUserIdProvider: FakeGuestUserIdProvider(value: "unused")
+        )
+
+        await model.loadRepeatSetting(videoId: "video-1")
+
+        XCTAssertTrue(model.isRepeatEnabled(videoId: "video-1"))
+    }
+
+    func testGuestCanEnableAndDisableFullVideoRepeatSetting() async {
+        let (memoStore, defaults, suiteName) = makeMemoStore()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let repeatRepository = FakeVideoRepeatSettingRepository()
+        let model = DistributedVideoFeatureModel(
+            repository: FakeDistributedVideoRepository(videos: [], questions: []),
+            session: AppSession(),
+            canViewMembersOnlyVideo: { _ in false },
+            memoStore: memoStore,
+            repeatSettingRepository: repeatRepository,
+            guestUserIdProvider: FakeGuestUserIdProvider(value: "813AF24E-55FC-4D75-A61C-A8B453532BA6")
+        )
+
+        await model.loadRepeatSetting(videoId: "video-1")
+        XCTAssertFalse(model.isRepeatEnabled(videoId: "video-1"))
+
+        await model.setRepeatEnabled(videoId: "video-1", isEnabled: true)
+        XCTAssertTrue(model.isRepeatEnabled(videoId: "video-1"))
+        XCTAssertEqual(repeatRepository.savedSetting?.userId, "813AF24E-55FC-4D75-A61C-A8B453532BA6")
+        XCTAssertEqual(repeatRepository.savedSetting?.mode, .full)
+        XCTAssertNil(repeatRepository.savedSetting?.repeatStartSeconds)
+        XCTAssertNil(repeatRepository.savedSetting?.repeatEndSeconds)
+
+        await model.setRepeatEnabled(videoId: "video-1", isEnabled: false)
+        XCTAssertFalse(model.isRepeatEnabled(videoId: "video-1"))
+    }
+
     func testFiltersOutMembersOnlyAndPremiumVideosForUnapprovedCommunity() {
         let sourceVideos = [
             distributedVideo(id: "public", title: "公開動画", sortOrder: 1),
@@ -321,6 +372,29 @@ final class DistributedVideoFeatureModelTests: XCTestCase {
         XCTAssertEqual("質問を送信しました。", model.errorMessage)
         XCTAssertEqual(1, repository.saveVideoQuestionCallCount)
         XCTAssertEqual("質問内容", repository.savedQuestion?.questionText)
+    }
+}
+
+@MainActor
+private final class FakeVideoRepeatSettingRepository: VideoRepeatSettingRepository {
+    var savedSetting: VideoRepeatSetting?
+
+    func setting(videoId: String) async throws -> VideoRepeatSetting? {
+        guard savedSetting?.videoId == videoId else { return nil }
+        return savedSetting
+    }
+
+    func save(_ setting: VideoRepeatSetting) async throws {
+        savedSetting = setting
+    }
+}
+
+@MainActor
+private struct FakeGuestUserIdProvider: GuestUserIdProvider {
+    let value: String
+
+    func guestUserId() throws -> String {
+        value
     }
 }
 

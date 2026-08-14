@@ -38,7 +38,10 @@ import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextButton
@@ -358,6 +361,7 @@ internal fun videoPlayerSource(video: DistributedVideo): VideoPlayerSource {
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun DistributedVideoPlayer(
     model: DistributedVideoFeatureModel,
     video: DistributedVideo,
@@ -376,11 +380,13 @@ private fun DistributedVideoPlayer(
     var playbackCommandId by remember { mutableStateOf(0) }
     var showMemoCsvEmptyState by remember { mutableStateOf(false) }
     var showQuestionCsvEmptyState by remember { mutableStateOf(false) }
+    var showRepeatSettingPanel by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(video.id) {
         model.load()
+        model.loadRepeatSetting(video.id)
     }
 
     fun sendPlaybackCommand(action: VimeoPlaybackAction) {
@@ -422,8 +428,21 @@ private fun DistributedVideoPlayer(
                 videoId = videoId,
                 initialPlaybackSeconds = playbackSeconds,
                 command = playbackCommand,
+                isRepeatEnabled = model.isRepeatEnabled(video.id),
                 onPlaybackTimeChanged = { playbackSeconds = it },
             )
+
+            Button(onClick = { showRepeatSettingPanel = true }) {
+                Text("リピート再生設定")
+            }
+
+            if (model.isRepeatEnabled(video.id)) {
+                Text(
+                    "動画全体のリピート再生: ON",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             Button(onClick = { sendPlaybackCommand(VimeoPlaybackAction.ReportCurrentTime) }) {
                 Text("現在の再生位置を取得")
@@ -622,6 +641,49 @@ private fun DistributedVideoPlayer(
             }
         }
     }
+
+    if (showRepeatSettingPanel) {
+        ModalBottomSheet(
+            onDismissRequest = { showRepeatSettingPanel = false },
+        ) {
+            VideoRepeatSettingPanel(
+                isEnabled = model.isRepeatEnabled(video.id),
+                onEnabledChange = { model.setRepeatEnabled(video.id, it) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun VideoRepeatSettingPanel(
+    isEnabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text("リピート再生設定", style = MaterialTheme.typography.titleLarge)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("動画全体をリピート再生")
+            Switch(
+                checked = isEnabled,
+                onCheckedChange = onEnabledChange,
+            )
+        }
+        Text(
+            "ONにすると、動画の再生終了後に最初から再生を再開します。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.size(16.dp))
+    }
 }
 
 @Composable
@@ -691,6 +753,7 @@ private fun DistributedVimeoVideoPlayerView(
     videoId: String,
     initialPlaybackSeconds: Double,
     command: VimeoPlaybackCommand?,
+    isRepeatEnabled: Boolean,
     onPlaybackTimeChanged: (Double) -> Unit,
 ) {
     val state = remember {
@@ -711,7 +774,14 @@ private fun DistributedVimeoVideoPlayerView(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT,
                 )
-                webViewClient = WebViewClient()
+                webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView, url: String?) {
+                        view.evaluateJavascript(
+                            "window.vimeoSetRepeatEnabled(${state.isRepeatEnabled});",
+                            null,
+                        )
+                    }
+                }
                 webChromeClient = WebChromeClient()
                 addJavascriptInterface(bridge, "VimeoPlayerBridge")
                 settings.apply {
@@ -728,14 +798,27 @@ private fun DistributedVimeoVideoPlayerView(
             if (state.videoId != videoId) {
                 state.videoId = videoId
                 state.lastCommandId = null
+                state.isRepeatEnabled = isRepeatEnabled
                 webView.loadDataWithBaseURL(
                     "https://player.vimeo.com",
-                    distributedVimeoPlayerHTML(videoId, initialPlaybackSeconds),
+                    distributedVimeoPlayerHTML(
+                        videoId,
+                        initialPlaybackSeconds,
+                        isRepeatEnabled,
+                    ),
                     "text/html",
                     "UTF-8",
                     null,
                 )
                 return@AndroidView
+            }
+
+            if (state.isRepeatEnabled != isRepeatEnabled) {
+                state.isRepeatEnabled = isRepeatEnabled
+                webView.evaluateJavascript(
+                    "window.vimeoSetRepeatEnabled(${isRepeatEnabled.toString()});",
+                    null,
+                )
             }
 
             val commandToExecute = command ?: return@AndroidView
@@ -766,6 +849,7 @@ private fun DistributedVimeoVideoPlayerView(
 private fun distributedVimeoPlayerHTML(
     videoId: String,
     initialSeconds: Double,
+    isRepeatEnabled: Boolean,
 ): String {
     return """
         <!doctype html>
@@ -781,6 +865,7 @@ private fun distributedVimeoPlayerHTML(
         <div id="player"></div>
         <script>
         const initialSeconds = $initialSeconds;
+        let repeatEnabled = $isRepeatEnabled;
         const targetId = $videoId;
         const bridge = window.VimeoPlayerBridge;
 
@@ -810,6 +895,19 @@ private fun distributedVimeoPlayerHTML(
         }).catch(function(error) {
             postError(error && error.message ? error.message : 'Vimeoプレーヤーを準備できませんでした。');
         });
+
+        player.on('ended', function() {
+            if (!repeatEnabled) return;
+            player.setCurrentTime(0).then(function() {
+                return player.play();
+            }).catch(function(error) {
+                postError(error && error.message ? error.message : 'リピート再生に失敗しました。');
+            });
+        });
+
+        window.vimeoSetRepeatEnabled = function(isEnabled) {
+            repeatEnabled = !!isEnabled;
+        };
 
         window.vimeoReportTime = function() {
             player.getCurrentTime().then(function(value) {
@@ -857,6 +955,7 @@ private fun ToolDestinationContainer(
 private class DistributedVimeoPlayerState {
     var videoId: String? = null
     var lastCommandId: Int? = null
+    var isRepeatEnabled: Boolean = false
 }
 
 private class DistributedVimeoPlayerBridge(

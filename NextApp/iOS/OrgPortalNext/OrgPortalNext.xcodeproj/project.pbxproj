@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A10000000000000000000002 /* VideoRepeatSetting.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000001 /* VideoRepeatSetting.swift */; };
+		A10000000000000000000004 /* VideoRepeatSettingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000003 /* VideoRepeatSettingTests.swift */; };
+		A10000000000000000000006 /* VideoRepeatSettingRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000005 /* VideoRepeatSettingRepository.swift */; };
+		A10000000000000000000008 /* SwiftDataVideoRepeatSettingRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000007 /* SwiftDataVideoRepeatSettingRepository.swift */; };
+		A1000000000000000000000A /* SwiftDataVideoRepeatSettingRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000009 /* SwiftDataVideoRepeatSettingRepositoryTests.swift */; };
+		A1000000000000000000000B /* DataLayer.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 99C5997017C6EB672666414D /* DataLayer.framework */; };
 		018F9B1599720497E27266FD /* LocalDiaryPhotoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91F8D00F5C7E82B2ABAC32E /* LocalDiaryPhotoStore.swift */; };
 		0517A6782D48D05D575629BD /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 37235240B370E0427B02A868 /* Foundation.framework */; };
 		05B68E6970935B3DBB219846 /* MeetingMinutes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0644D768351EBF9ED93C512F /* MeetingMinutes.swift */; };
@@ -141,6 +147,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		A1000000000000000000000C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F6428551B309EE3C11818BB8 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 50BFB270BF5DAED9FB9D5035;
+			remoteInfo = DataLayer;
+		};
 		04265FAD52F44AF20626F30F /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F6428551B309EE3C11818BB8 /* Project object */;
@@ -311,6 +324,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A10000000000000000000001 /* VideoRepeatSetting.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoRepeatSetting.swift; sourceTree = "<group>"; };
+		A10000000000000000000003 /* VideoRepeatSettingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoRepeatSettingTests.swift; sourceTree = "<group>"; };
+		A10000000000000000000005 /* VideoRepeatSettingRepository.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoRepeatSettingRepository.swift; sourceTree = "<group>"; };
+		A10000000000000000000007 /* SwiftDataVideoRepeatSettingRepository.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SwiftDataVideoRepeatSettingRepository.swift; sourceTree = "<group>"; };
+		A10000000000000000000009 /* SwiftDataVideoRepeatSettingRepositoryTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SwiftDataVideoRepeatSettingRepositoryTests.swift; sourceTree = "<group>"; };
 		00021F941B642A5F1B96318D /* DiaryPhotoProcessor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DiaryPhotoProcessor.swift; sourceTree = "<group>"; };
 		00F422C6E7A8310A3202629C /* ScheduleCsvExporter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScheduleCsvExporter.swift; sourceTree = "<group>"; };
 		0644D768351EBF9ED93C512F /* MeetingMinutes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeetingMinutes.swift; sourceTree = "<group>"; };
@@ -468,6 +486,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0517A6782D48D05D575629BD /* Foundation.framework in Frameworks */,
+				A1000000000000000000000B /* DataLayer.framework in Frameworks */,
 				55BCF28317366AA1A86BF870 /* FeatureTools.framework in Frameworks */,
 				E01E68C7D75E841F88E0A6A0 /* Model.framework in Frameworks */,
 			);
@@ -582,6 +601,7 @@
 		562C15E3E0A033F1B236D7A1 /* Tests DataLayerTests */ = {
 			isa = PBXGroup;
 			children = (
+				A10000000000000000000009 /* SwiftDataVideoRepeatSettingRepositoryTests.swift */,
 				440C91DFFAA9CC447B8C0B10 /* CashDistributionBackupServiceTests.swift */,
 				8CF42601AAE3B00F28A19217 /* DiaryBackupServiceTests.swift */,
 				A8D4DA366B7ECED990B5AF8F /* FavoriteBookmarkBackupServiceTests.swift */,
@@ -655,6 +675,7 @@
 		7EFEC3C582A8C89BB7780807 /* Core Model */ = {
 			isa = PBXGroup;
 			children = (
+				A10000000000000000000001 /* VideoRepeatSetting.swift */,
 				ACCCAF7B6D8FE2884FB00B0C /* Denomination.swift */,
 				91B39764044F9DDA5F0C322A /* Diary.swift */,
 				62D42662D86A47E3ECEF878D /* FavoriteBookmark.swift */,
@@ -710,6 +731,7 @@
 		CCBE069747E9ABB4DE3BA6CE /* Tests ModelTests */ = {
 			isa = PBXGroup;
 			children = (
+				A10000000000000000000003 /* VideoRepeatSettingTests.swift */,
 				3348E97E3D1DEF4C9E1265E7 /* DenominationTests.swift */,
 				4514D2068A93D7B518CCF948 /* DiaryTests.swift */,
 				7C2413B5D64A33DAE76B451F /* FavoriteBookmarkTests.swift */,
@@ -745,6 +767,8 @@
 		D353CB4EEA10AEA163B4C145 /* Core DataLayer */ = {
 			isa = PBXGroup;
 			children = (
+				A10000000000000000000005 /* VideoRepeatSettingRepository.swift */,
+				A10000000000000000000007 /* SwiftDataVideoRepeatSettingRepository.swift */,
 				FDB3DF40F91B21ED1EC31562 /* CashDistributionBackupService.swift */,
 				4FBCF79DC9C284A105E50236 /* CashDistributionRepository.swift */,
 				2676393A7E874FE4BE89D7B4 /* DiaryBackupService.swift */,
@@ -1035,6 +1059,7 @@
 			dependencies = (
 				E7A03B1AB3296590AFAC3C3A /* PBXTargetDependency */,
 				2E9752A6C57BAAC2EAD28A4E /* PBXTargetDependency */,
+				A1000000000000000000000D /* PBXTargetDependency */,
 			);
 			name = FeatureToolsTests;
 			productName = FeatureToolsTests;
@@ -1276,6 +1301,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1000000000000000000000A /* SwiftDataVideoRepeatSettingRepositoryTests.swift in Sources */,
 				3E32849B6C09B380E7C2E471 /* CashDistributionBackupServiceTests.swift in Sources */,
 				DA14C03129B7C84A36B9D23E /* DiaryBackupServiceTests.swift in Sources */,
 				46399FAC2947D9326CE1A152 /* FavoriteBookmarkBackupServiceTests.swift in Sources */,
@@ -1330,6 +1356,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000000000000000000002 /* VideoRepeatSetting.swift in Sources */,
 				98C7DC3148820F167D666092 /* Denomination.swift in Sources */,
 				232CC72D43400B3804BE63DD /* Diary.swift in Sources */,
 				A62DB47A49A23ABC1D2C743B /* FavoriteBookmark.swift in Sources */,
@@ -1380,6 +1407,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000000000000000000006 /* VideoRepeatSettingRepository.swift in Sources */,
+				A10000000000000000000008 /* SwiftDataVideoRepeatSettingRepository.swift in Sources */,
 				9E30F1586C99E0156593D867 /* CashDistributionBackupService.swift in Sources */,
 				0668FA29D1CFACB63588CF9A /* CashDistributionRepository.swift in Sources */,
 				78ABE424937BF103FDE4E266 /* DiaryBackupService.swift in Sources */,
@@ -1407,6 +1436,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000000000000000000004 /* VideoRepeatSettingTests.swift in Sources */,
 				2A983BF7F7A621660D94B9B4 /* DenominationTests.swift in Sources */,
 				07AD82304C18BB810F522C25 /* DiaryTests.swift in Sources */,
 				775E570AD9F557B6790464FD /* FavoriteBookmarkTests.swift in Sources */,
@@ -1429,6 +1459,12 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		A1000000000000000000000D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = DataLayer;
+			target = 50BFB270BF5DAED9FB9D5035 /* DataLayer */;
+			targetProxy = A1000000000000000000000C /* PBXContainerItemProxy */;
+		};
 		26A1B56DF3CDD49B52A0B492 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = Model;
