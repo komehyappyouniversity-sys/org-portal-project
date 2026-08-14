@@ -35,6 +35,7 @@ import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.VideoLibrary
+import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Divider
@@ -85,6 +86,7 @@ private sealed class ToolsDestination {
     data object Friends : ToolsDestination()
     data object Manual : ToolsDestination()
     data object DistributedVideos : ToolsDestination()
+    data object BudgetSettlement : ToolsDestination()
     data class DistributedVideoPlayer(val video: DistributedVideo) : ToolsDestination()
     data object VideoQuestions : ToolsDestination()
     data class VideoQuestionDetail(val question: VideoQuestion) : ToolsDestination()
@@ -100,6 +102,7 @@ private sealed class ToolsDestination {
             is Friends -> "friends"
             is Manual -> "manual"
             is DistributedVideos -> "distributedVideos"
+            is BudgetSettlement -> "budgetSettlement"
             is DistributedVideoPlayer -> "distributedVideoPlayer:${video.id}"
             is VideoQuestions -> "videoQuestions"
             is VideoQuestionDetail -> "videoQuestionDetail:${question.id}"
@@ -116,6 +119,7 @@ fun ToolsHubRoot(
     favoriteBookmarkModel: FavoriteBookmarkFeatureModel,
     friendExchangeModel: FriendExchangeFeatureModel,
     distributedVideoModel: DistributedVideoFeatureModel,
+    budgetSettlementModel: BudgetSettlementFeatureModel,
 ) {
     var destination by remember { mutableStateOf<ToolsDestination?>(null) }
     when (val current = destination) {
@@ -170,6 +174,11 @@ fun ToolsHubRoot(
                 onOpenQuestions = { destination = ToolsDestination.VideoQuestions },
             )
         }
+        ToolsDestination.BudgetSettlement -> ToolDestinationContainer(
+            onBack = { destination = null },
+        ) {
+            BudgetSettlementRoot(budgetSettlementModel)
+        }
         is ToolsDestination.DistributedVideoPlayer -> ToolDestinationContainer(
             onBack = { destination = ToolsDestination.DistributedVideos },
         ) {
@@ -218,6 +227,13 @@ fun ToolsHubRoot(
                     title = "金種計算",
                     description = "配布額から必要な金種を計算し、現金の集計もできます。",
                     icon = Icons.Outlined.Calculate,
+                )
+            }
+            Button(onClick = { destination = ToolsDestination.BudgetSettlement }) {
+                FeatureCard(
+                    title = "予算・決算",
+                    description = "本人専用の帳簿で収入・支出・残高を管理します。",
+                    icon = Icons.Outlined.AccountBalanceWallet,
                 )
             }
             Button(onClick = { destination = ToolsDestination.DistributedVideos }) {

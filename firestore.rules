@@ -224,6 +224,14 @@ service cloud.firestore {
 
       allow delete: if isOwner(uid);
 
+      match /budgetSettlementReports/{reportId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+
+        match /entries/{entryId} {
+          allow read, write: if request.auth != null && request.auth.uid == uid;
+        }
+      }
+
       match /{document=**} {
         allow read, write: if isOwner(uid);
       }

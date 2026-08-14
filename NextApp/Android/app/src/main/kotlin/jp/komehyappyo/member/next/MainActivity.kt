@@ -41,6 +41,11 @@ import jp.komehyappyo.member.next.core.data.RoomFavoriteBookmarkRepository
 import jp.komehyappyo.member.next.core.data.RoomFriendExchangeRepository
 import jp.komehyappyo.member.next.core.data.RoomVideoRepeatSettingRepository
 import jp.komehyappyo.member.next.core.data.AndroidKeystoreGuestUserIdProvider
+import jp.komehyappyo.member.next.core.data.BudgetSettlementMigrationService
+import jp.komehyappyo.member.next.core.data.FirebaseRestBudgetSettlementRepository
+import jp.komehyappyo.member.next.core.data.LocalBudgetReceiptStore
+import jp.komehyappyo.member.next.core.data.RoomBudgetSettlementRepository
+import jp.komehyappyo.member.next.core.data.DataStoreBudgetMigrationStateStore
 import jp.komehyappyo.member.next.core.model.CommunityMembershipStatus
 import jp.komehyappyo.member.next.core.designsystem.OrgPortalTheme
 import jp.komehyappyo.member.next.core.navigation.AppShell
@@ -57,6 +62,7 @@ import jp.komehyappyo.member.next.feature.tools.MeetingRecordingService
 import jp.komehyappyo.member.next.feature.tools.SnsPostingAssistantFeatureModel
 import jp.komehyappyo.member.next.feature.tools.FavoriteBookmarkFeatureModel
 import jp.komehyappyo.member.next.feature.tools.FriendExchangeFeatureModel
+import jp.komehyappyo.member.next.feature.tools.BudgetSettlementFeatureModel
 import jp.komehyappyo.member.next.core.session.AppSession
 import jp.komehyappyo.member.next.feature.account.AccountFeatureModel
 import jp.komehyappyo.member.next.feature.account.AccountRoot
@@ -239,6 +245,36 @@ class MainActivity : FragmentActivity() {
         val friendExchangeModel: FriendExchangeFeatureModel = viewModel(
             factory = friendExchangeFactory,
         )
+        val budgetReceiptStore = remember { LocalBudgetReceiptStore(applicationContext) }
+        val budgetLocalRepository = remember {
+            RoomBudgetSettlementRepository(database) { budgetReceiptStore.delete(it) }
+        }
+        val budgetRemoteRepository = remember {
+            FirebaseRestBudgetSettlementRepository(
+                projectId = BuildConfig.FIREBASE_PROJECT_ID,
+                storageBucket = "${BuildConfig.FIREBASE_PROJECT_ID}.firebasestorage.app",
+            )
+        }
+        val budgetMigrationService = remember {
+            BudgetSettlementMigrationService(
+                budgetLocalRepository,
+                budgetReceiptStore,
+                budgetRemoteRepository,
+                DataStoreBudgetMigrationStateStore(applicationContext),
+            )
+        }
+        val budgetSettlementFactory = remember {
+            BudgetSettlementFeatureModel.Factory(
+                budgetLocalRepository,
+                budgetReceiptStore,
+                budgetRemoteRepository,
+                budgetMigrationService,
+                appSession,
+            )
+        }
+        val budgetSettlementModel: BudgetSettlementFeatureModel = viewModel(
+            factory = budgetSettlementFactory,
+        )
         val appBackupFactory = remember {
             AppBackupFeatureModel.Factory(
                 AppBackupService(
@@ -277,6 +313,7 @@ class MainActivity : FragmentActivity() {
                     favoriteBookmarkModel,
                     friendExchangeModel,
                     distributedVideoModel,
+                    budgetSettlementModel,
                 )
             },
             connect = {
