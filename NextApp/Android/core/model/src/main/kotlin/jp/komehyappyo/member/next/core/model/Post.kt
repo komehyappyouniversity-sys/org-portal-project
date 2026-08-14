@@ -57,6 +57,11 @@ data class RadioProgram(
     val broadcastEndAt: java.time.Instant,
 )
 
+object RadioPlaybackPolicy {
+    fun isPlayable(program: RadioProgram, at: java.time.Instant): Boolean =
+        !at.isBefore(program.broadcastStartAt)
+}
+
 data class RadioPlaybackRecord(
     val userId: String,
     val programId: String,

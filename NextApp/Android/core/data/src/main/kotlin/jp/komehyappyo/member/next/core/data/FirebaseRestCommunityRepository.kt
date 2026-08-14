@@ -8,6 +8,7 @@ import jp.komehyappyo.member.next.core.model.BookingEvent
 import jp.komehyappyo.member.next.core.model.BookingReservation
 import jp.komehyappyo.member.next.core.model.BookingSlot
 import jp.komehyappyo.member.next.core.model.DistributedVideo
+import jp.komehyappyo.member.next.core.model.RadioProgram
 import jp.komehyappyo.member.next.core.model.VideoQuestion
 import jp.komehyappyo.member.next.core.model.VideoQuestionSyncStatus
 import jp.komehyappyo.member.next.core.model.CommunityCodeParser
@@ -135,6 +136,10 @@ interface CommunityRepository {
         communityId: String,
         idToken: String,
     ): Result<List<DistributedVideo>>
+    suspend fun radioPrograms(
+        communityId: String,
+        idToken: String,
+    ): Result<List<RadioProgram>>
     suspend fun videoMemos(userId: String, idToken: String): Result<Map<String, String>>
     suspend fun saveVideoMemo(
         userId: String,
@@ -1004,6 +1009,25 @@ class FirebaseRestCommunityRepository(
         }.sortedWith(compareBy<DistributedVideo> { it.sortOrder }.thenBy { it.title })
     }
 
+    override suspend fun radioPrograms(
+        communityId: String,
+        idToken: String,
+    ): Result<List<RadioProgram>> = runCatching {
+        val response = request(
+            "documents/organizations/$communityId/radioPrograms?pageSize=1000",
+            "GET",
+            idToken,
+            null,
+        ) as JSONObject
+        val documents = response.optJSONArray("documents") ?: JSONArray()
+        buildList {
+            for (index in 0 until documents.length()) {
+                val document = documents.optJSONObject(index) ?: continue
+                add(parseRadioProgram(document, communityId))
+            }
+        }
+    }
+
     override suspend fun videoMemos(
         userId: String,
         idToken: String,
@@ -1741,5 +1765,24 @@ internal fun parseDistributedVideo(document: JSONObject, communityId: String): D
         isPremium = boolean(fields, "isPremium") ?: false,
         createdAt = timestamp(fields, "createdAt") ?: "",
         updatedAt = timestamp(fields, "updatedAt") ?: "",
+    )
+}
+
+internal fun parseRadioProgram(document: JSONObject, communityId: String): RadioProgram {
+    val fields = document.optJSONObject("fields") ?: JSONObject()
+    val documentId = document.optString("name").substringAfterLast("/")
+    fun instant(key: String): Instant = timestamp(fields, key)
+        ?.let { value -> runCatching { Instant.parse(value) }.getOrNull() }
+        ?: Instant.EPOCH
+
+    return RadioProgram(
+        id = documentId.takeIf(String::isNotBlank) ?: UUID.randomUUID().toString(),
+        communityId = communityId,
+        title = string(fields, "title") ?: "ラジオ番組",
+        description = string(fields, "description") ?: "",
+        imageUrl = string(fields, "imageUrl") ?: "",
+        audioUrl = string(fields, "audioUrl") ?: "",
+        broadcastStartAt = instant("broadcastStartAt"),
+        broadcastEndAt = instant("broadcastEndAt"),
     )
 }

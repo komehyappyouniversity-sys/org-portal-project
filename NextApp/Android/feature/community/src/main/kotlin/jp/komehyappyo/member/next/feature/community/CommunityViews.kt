@@ -81,6 +81,7 @@ fun CommunityRoot(
     LaunchedEffect(sessionState.authenticationToken) {
         model.refreshPublicCommunities()
         if (sessionState.authenticationToken != null) model.refresh()
+        model.refreshRadioPrograms()
         onRefreshManagementPosts()
     }
     LaunchedEffect(sessionState.selectedCommunityId) {
@@ -130,21 +131,25 @@ fun CommunityRoot(
         }
         state.message?.let { Text(it) }
 
-        Text("インターネットラジオ")
-        if (state.radioPrograms.isEmpty()) {
-            Text("コミュニティを選択すると、番組一覧を表示できます。")
-        } else {
-            RadioSection(
-                programs = state.radioPrograms,
-                records = state.radioPlaybackRecords,
-                playingProgramId = state.radioPlayingProgramId,
-                currentUserId = sessionState.userId,
-                formatter = radioDateTimeFormatter(),
-                isLoading = state.isLoading,
-                onToggle = model::toggleRadioPlayback,
-                isPlayable = model::isRadioPlayable,
-            )
-            HorizontalDivider()
+        if (model.canAccessRadio()) {
+            Text("インターネットラジオ")
+            if (state.radioIsLoading) {
+                CircularProgressIndicator()
+            } else if (state.radioPrograms.isEmpty()) {
+                Text("ラジオ番組はありません。")
+            } else {
+                RadioSection(
+                    programs = state.radioPrograms,
+                    records = state.radioPlaybackRecords,
+                    playingProgramId = state.radioPlayingProgramId,
+                    currentUserId = sessionState.userId,
+                    formatter = radioDateTimeFormatter(),
+                    isLoading = state.radioIsLoading,
+                    onToggle = model::toggleRadioPlayback,
+                    isPlayable = model::isRadioPlayable,
+                )
+                HorizontalDivider()
+            }
         }
 
         Text("コミュニティを探す")

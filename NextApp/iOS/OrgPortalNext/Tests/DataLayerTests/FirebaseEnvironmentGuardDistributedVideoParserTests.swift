@@ -3,6 +3,62 @@ import XCTest
 @testable import DataLayer
 
 final class FirebaseEnvironmentGuardDistributedVideoParserTests: XCTestCase {
+    func testParseRadioProgramMapsFirestoreFields() {
+        let fields: [String: Any] = [
+            "title": ["stringValue": "朝のラジオ"],
+            "description": ["stringValue": "お知らせ番組"],
+            "imageUrl": ["stringValue": "https://example.com/radio.jpg"],
+            "audioUrl": ["stringValue": "https://example.com/radio.mp3"],
+            "broadcastStartAt": ["timestampValue": "2026-08-14T01:00:00Z"],
+            "broadcastEndAt": ["timestampValue": "2026-08-14T02:00:00Z"],
+            "futureField": ["stringValue": "ignored"],
+        ]
+        let document: [String: Any] = [
+            "name": "projects/test/databases/(default)/documents/organizations/org-1/radioPrograms/radio-1",
+            "fields": fields,
+        ]
+
+        let program = parseRadioProgram(
+            document: document,
+            fields: fields,
+            communityId: "org-1"
+        )
+
+        XCTAssertEqual(program.id, "radio-1")
+        XCTAssertEqual(program.communityId, "org-1")
+        XCTAssertEqual(program.title, "朝のラジオ")
+        XCTAssertEqual(program.description, "お知らせ番組")
+        XCTAssertEqual(program.imageUrl, "https://example.com/radio.jpg")
+        XCTAssertEqual(program.audioUrl.absoluteString, "https://example.com/radio.mp3")
+        XCTAssertEqual(program.broadcastStartAt, ISO8601DateFormatter().date(from: "2026-08-14T01:00:00Z"))
+        XCTAssertEqual(program.broadcastEndAt, ISO8601DateFormatter().date(from: "2026-08-14T02:00:00Z"))
+    }
+
+    func testParseRadioProgramFallsBackForMissingAndInvalidFields() {
+        let fields: [String: Any] = [
+            "broadcastStartAt": ["timestampValue": "invalid"],
+        ]
+        let document: [String: Any] = [
+            "name": "",
+            "fields": fields,
+        ]
+
+        let program = parseRadioProgram(
+            document: document,
+            fields: fields,
+            communityId: "org-2"
+        )
+
+        XCTAssertFalse(program.id.isEmpty)
+        XCTAssertEqual(program.communityId, "org-2")
+        XCTAssertEqual(program.title, "ラジオ番組")
+        XCTAssertEqual(program.description, "")
+        XCTAssertEqual(program.imageUrl, "")
+        XCTAssertEqual(program.audioUrl.absoluteString, "about:blank")
+        XCTAssertEqual(program.broadcastStartAt, Date(timeIntervalSince1970: 0))
+        XCTAssertEqual(program.broadcastEndAt, Date(timeIntervalSince1970: 0))
+    }
+
     func testParseDistributedVideoFallsBackForMissingFields() {
         let document: [String: Any] = [
             "name": "projects/test/databases/(default)/documents/organizations/org-1/videos/",

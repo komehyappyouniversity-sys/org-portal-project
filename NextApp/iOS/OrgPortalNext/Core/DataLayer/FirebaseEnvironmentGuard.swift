@@ -814,6 +814,10 @@ public protocol CommunityRepository: Sendable {
         communityId: String,
         idToken: String
     ) async throws -> [DistributedVideo]
+    func radioPrograms(
+        communityId: String,
+        idToken: String
+    ) async throws -> [RadioProgram]
     func videoMemos(userId: String, idToken: String) async throws -> [String: String]
     func saveVideoMemo(
         userId: String,
@@ -1651,6 +1655,25 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
         }
     }
 
+    public func radioPrograms(
+        communityId: String,
+        idToken: String
+    ) async throws -> [RadioProgram] {
+        let response = try await requestJSON(
+            path: "documents/organizations/\(communityId)/radioPrograms?pageSize=1000",
+            method: "GET",
+            idToken: idToken
+        ) as? [String: Any]
+        let documents = response?["documents"] as? [[String: Any]] ?? []
+        return documents.map { document in
+            parseRadioProgram(
+                document: document,
+                fields: document["fields"] as? [String: Any] ?? [:],
+                communityId: communityId
+            )
+        }
+    }
+
     public func videoMemos(
         userId: String,
         idToken: String
@@ -2357,5 +2380,31 @@ internal func parseDistributedVideo(
         isPublished: bool(fields, "isPublished") ?? false,
         isMembersOnly: bool(fields, "isMembersOnly") ?? false,
         sortOrder: Int(number(fields, "sortOrder") ?? 0)
+    )
+}
+
+internal func parseRadioProgram(
+    document: [String: Any],
+    fields: [String: Any],
+    communityId: String
+) -> RadioProgram {
+    let documentName = document["name"] as? String ?? ""
+    let documentID = documentName.hasSuffix("/")
+        ? ""
+        : documentName.split(separator: "/").last.map(String.init) ?? ""
+    let rawAudioURL = string(fields, "audioUrl") ?? ""
+    return RadioProgram(
+        id: documentID.isEmpty ? UUID().uuidString : documentID,
+        communityId: communityId,
+        title: string(fields, "title")?.isEmpty == false
+            ? string(fields, "title")!
+            : "ラジオ番組",
+        description: string(fields, "description") ?? "",
+        imageUrl: string(fields, "imageUrl") ?? "",
+        audioUrl: URL(string: rawAudioURL) ?? URL(string: "about:blank")!,
+        broadcastStartAt: timestamp(fields, "broadcastStartAt")
+            ?? Date(timeIntervalSince1970: 0),
+        broadcastEndAt: timestamp(fields, "broadcastEndAt")
+            ?? Date(timeIntervalSince1970: 0)
     )
 }

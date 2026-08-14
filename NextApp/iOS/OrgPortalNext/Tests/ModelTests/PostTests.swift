@@ -2,6 +2,24 @@ import XCTest
 @testable import Model
 
 final class PostTests: XCTestCase {
+    func testRadioProgramIsPlayableFromBroadcastStartAndAfterBroadcastEnd() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let program = RadioProgram(
+            id: "radio-1",
+            communityId: "org-1",
+            title: "番組",
+            description: "",
+            imageUrl: "",
+            audioUrl: URL(string: "https://example.com/radio.mp3")!,
+            broadcastStartAt: start,
+            broadcastEndAt: start.addingTimeInterval(3_600)
+        )
+
+        XCTAssertFalse(RadioPlaybackPolicy.isPlayable(program, at: start.addingTimeInterval(-0.001)))
+        XCTAssertTrue(RadioPlaybackPolicy.isPlayable(program, at: start))
+        XCTAssertTrue(RadioPlaybackPolicy.isPlayable(program, at: start.addingTimeInterval(7_200)))
+    }
+
     func testUnreadReplyRequiresReplyAndUnreadFlag() {
         let post = makePost(reply: "回答です", hasRead: false)
         XCTAssertTrue(post.hasUnreadReply)
