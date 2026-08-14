@@ -3,20 +3,37 @@ import Model
 
 public enum VideoQuestionCsvExporter {
     public static func data(for questions: [VideoQuestion], video: DistributedVideo) -> Data {
+        data(for: questions, videosByID: [video.id: video], fallbackVideo: video)
+    }
+
+    public static func data(for questions: [VideoQuestion], videos: [DistributedVideo]) -> Data {
+        data(
+            for: questions,
+            videosByID: Dictionary(uniqueKeysWithValues: videos.map { ($0.id, $0) }),
+            fallbackVideo: nil
+        )
+    }
+
+    private static func data(
+        for questions: [VideoQuestion],
+        videosByID: [String: DistributedVideo],
+        fallbackVideo: DistributedVideo?
+    ) -> Data {
         let formatter = ISO8601DateFormatter()
         let lines = [
             "schema_version=1",
             "video_title,video_url,playback_seconds,question,answer,status,created_at,answered_at,memo",
         ] + questions.map { question in
-            [
-                video.title,
-                exportedVideoUrl(video),
+            let video = videosByID[question.videoId] ?? fallbackVideo
+            return [
+                question.videoTitle.isEmpty ? (video?.title ?? "") : question.videoTitle,
+                video.map(exportedVideoUrl) ?? "",
                 String(question.playbackSeconds),
                 question.questionText,
                 question.answerText,
-                question.answerText.isEmpty ? "unanswered" : "answered",
+                question.isAnswered ? "answered" : "unanswered",
                 question.createdAt.map { formatter.string(from: $0) } ?? "",
-                "",
+                question.answeredAt.map { formatter.string(from: $0) } ?? "",
                 question.memoText,
             ]
             .map(escape)

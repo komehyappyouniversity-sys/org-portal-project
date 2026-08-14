@@ -164,3 +164,63 @@ public final class VimeoMemoStore {
         return 0
     }
 }
+
+public final class VideoQuestionDraftStore {
+    private let userDefaults: UserDefaults
+    private let storageKey = "video_question_drafts"
+
+    public init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+    }
+
+    public func questions(communityId: String, memberUid: String) -> [VideoQuestion] {
+        allQuestions()
+            .filter { $0.communityId == communityId && $0.memberUid == memberUid }
+            .sorted { ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast) }
+    }
+
+    public func pendingQuestions(communityId: String, memberUid: String) -> [VideoQuestion] {
+        questions(communityId: communityId, memberUid: memberUid)
+            .filter { $0.syncStatus.requiresSync }
+    }
+
+    public func allQuestions() -> [VideoQuestion] {
+        guard let data = userDefaults.data(forKey: storageKey) else { return [] }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode([VideoQuestion].self, from: data)) ?? []
+    }
+
+    public func save(_ question: VideoQuestion) {
+        var values = allQuestions()
+        let identity = questionIdentity(question)
+        if let index = values.firstIndex(where: { questionIdentity($0) == identity }) {
+            values[index] = question
+        } else {
+            values.append(question)
+        }
+        write(values)
+    }
+
+    public func replaceQuestions(
+        communityId: String,
+        memberUid: String,
+        with questions: [VideoQuestion]
+    ) {
+        let retained = allQuestions().filter {
+            $0.communityId != communityId || $0.memberUid != memberUid
+        }
+        write(retained + questions)
+    }
+
+    private func write(_ questions: [VideoQuestion]) {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(questions) else { return }
+        userDefaults.set(data, forKey: storageKey)
+    }
+
+    private func questionIdentity(_ question: VideoQuestion) -> String {
+        question.clientRequestId.isEmpty ? question.id : question.clientRequestId
+    }
+}

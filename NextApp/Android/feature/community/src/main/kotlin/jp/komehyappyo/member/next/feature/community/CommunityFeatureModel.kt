@@ -424,6 +424,7 @@ class CommunityFeatureModel(
                 memo,
                 question,
                 playbackSeconds,
+                java.util.UUID.randomUUID().toString(),
                 token,
             ).onSuccess {
                 mutableState.value = mutableState.value.copy(message = "質問を送信しました。")

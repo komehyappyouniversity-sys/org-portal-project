@@ -150,6 +150,38 @@ data class FriendInteractionHistoryEntity(
     val updatedAtEpochMillis: Long,
 )
 
+@Entity(tableName = "budget_settlement_reports")
+data class BudgetSettlementReportEntity(
+    @PrimaryKey val id: String,
+    val userId: String,
+    val fiscalYearStartEpochDay: Long,
+    val fiscalYearEndEpochDay: Long,
+    val bookName: String,
+    val incomeTotalDecimal: String,
+    val expenseTotalDecimal: String,
+    val balanceDecimal: String,
+    val createdAtEpochMillis: Long,
+    val updatedAtEpochMillis: Long,
+)
+
+@Entity(
+    tableName = "budget_entries",
+    indices = [Index(value = ["reportId"])],
+)
+data class BudgetEntryEntity(
+    @PrimaryKey val id: String,
+    val reportId: String,
+    val dateEpochDay: Long,
+    val entryType: String,
+    val accountItem: String,
+    val detail: String,
+    val amountDecimal: String,
+    val receiptType: String,
+    val receiptImageUrl: String?,
+    val createdAtEpochMillis: Long,
+    val updatedAtEpochMillis: Long,
+)
+
 @Dao
 interface ScheduleDao {
     @Query("SELECT * FROM schedules ORDER BY startEpochMillis, title")
@@ -264,6 +296,45 @@ interface FriendInteractionHistoryDao {
     suspend fun deleteForFriend(friendId: String)
 }
 
+@Dao
+interface BudgetSettlementDao {
+    @Query(
+        "SELECT * FROM budget_settlement_reports " +
+            "ORDER BY fiscalYearStartEpochDay DESC, bookName",
+    )
+    fun observeReports(): Flow<List<BudgetSettlementReportEntity>>
+
+    @Query("SELECT * FROM budget_settlement_reports WHERE id = :id LIMIT 1")
+    suspend fun findReport(id: String): BudgetSettlementReportEntity?
+
+    @Query(
+        "SELECT * FROM budget_entries WHERE reportId = :reportId " +
+            "ORDER BY dateEpochDay DESC, updatedAtEpochMillis DESC",
+    )
+    fun observeEntries(reportId: String): Flow<List<BudgetEntryEntity>>
+
+    @Query("SELECT * FROM budget_entries WHERE reportId = :reportId")
+    suspend fun findEntries(reportId: String): List<BudgetEntryEntity>
+
+    @Query("SELECT * FROM budget_entries WHERE id = :id LIMIT 1")
+    suspend fun findEntry(id: String): BudgetEntryEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertReport(report: BudgetSettlementReportEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertEntry(entry: BudgetEntryEntity)
+
+    @Query("DELETE FROM budget_entries WHERE id = :id")
+    suspend fun deleteEntry(id: String)
+
+    @Query("DELETE FROM budget_entries WHERE reportId = :reportId")
+    suspend fun deleteEntries(reportId: String)
+
+    @Query("DELETE FROM budget_settlement_reports WHERE id = :id")
+    suspend fun deleteReport(id: String)
+}
+
 @Database(
     entities = [
         ScheduleEntity::class,
@@ -275,8 +346,10 @@ interface FriendInteractionHistoryDao {
         FriendContactEntity::class,
         FriendInteractionHistoryEntity::class,
         VideoRepeatSettingEntity::class,
+        BudgetSettlementReportEntity::class,
+        BudgetEntryEntity::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = true,
 )
 abstract class OrgPortalDatabase : RoomDatabase() {
@@ -289,6 +362,7 @@ abstract class OrgPortalDatabase : RoomDatabase() {
     abstract fun friendContactDao(): FriendContactDao
     abstract fun friendInteractionHistoryDao(): FriendInteractionHistoryDao
     abstract fun videoRepeatSettingDao(): VideoRepeatSettingDao
+    abstract fun budgetSettlementDao(): BudgetSettlementDao
 
     companion object {
         val migration1To2 = object : Migration(1, 2) {
@@ -473,6 +547,50 @@ abstract class OrgPortalDatabase : RoomDatabase() {
             }
         }
 
+        val migration10To11 = object : Migration(10, 11) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `budget_settlement_reports` (
+                        `id` TEXT NOT NULL,
+                        `userId` TEXT NOT NULL,
+                        `fiscalYearStartEpochDay` INTEGER NOT NULL,
+                        `fiscalYearEndEpochDay` INTEGER NOT NULL,
+                        `bookName` TEXT NOT NULL,
+                        `incomeTotalDecimal` TEXT NOT NULL,
+                        `expenseTotalDecimal` TEXT NOT NULL,
+                        `balanceDecimal` TEXT NOT NULL,
+                        `createdAtEpochMillis` INTEGER NOT NULL,
+                        `updatedAtEpochMillis` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `budget_entries` (
+                        `id` TEXT NOT NULL,
+                        `reportId` TEXT NOT NULL,
+                        `dateEpochDay` INTEGER NOT NULL,
+                        `entryType` TEXT NOT NULL,
+                        `accountItem` TEXT NOT NULL,
+                        `detail` TEXT NOT NULL,
+                        `amountDecimal` TEXT NOT NULL,
+                        `receiptType` TEXT NOT NULL,
+                        `receiptImageUrl` TEXT,
+                        `createdAtEpochMillis` INTEGER NOT NULL,
+                        `updatedAtEpochMillis` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_budget_entries_reportId` " +
+                        "ON `budget_entries` (`reportId`)",
+                )
+            }
+        }
+
         fun create(context: Context): OrgPortalDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
@@ -488,6 +606,7 @@ abstract class OrgPortalDatabase : RoomDatabase() {
                 migration7To8,
                 migration8To9,
                 migration9To10,
+                migration10To11,
             ).build()
     }
 }

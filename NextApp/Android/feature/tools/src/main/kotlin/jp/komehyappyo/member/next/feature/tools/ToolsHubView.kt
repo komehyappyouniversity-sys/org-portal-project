@@ -35,6 +35,7 @@ import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.VideoLibrary
+import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Divider
@@ -67,8 +68,11 @@ import jp.komehyappyo.member.next.core.designsystem.FeatureCard
 import jp.komehyappyo.member.next.core.designsystem.OfflineBanner
 import jp.komehyappyo.member.next.core.designsystem.LoadingState
 import jp.komehyappyo.member.next.core.model.DistributedVideo
+import jp.komehyappyo.member.next.core.model.VideoQuestion
+import jp.komehyappyo.member.next.core.model.VideoQuestionSyncStatus
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
+import java.time.Instant
 import java.util.Date
 import java.util.Locale
 
@@ -82,7 +86,10 @@ private sealed class ToolsDestination {
     data object Friends : ToolsDestination()
     data object Manual : ToolsDestination()
     data object DistributedVideos : ToolsDestination()
+    data object BudgetSettlement : ToolsDestination()
     data class DistributedVideoPlayer(val video: DistributedVideo) : ToolsDestination()
+    data object VideoQuestions : ToolsDestination()
+    data class VideoQuestionDetail(val question: VideoQuestion) : ToolsDestination()
 
     val id: String
         get() = when (this) {
@@ -95,7 +102,10 @@ private sealed class ToolsDestination {
             is Friends -> "friends"
             is Manual -> "manual"
             is DistributedVideos -> "distributedVideos"
+            is BudgetSettlement -> "budgetSettlement"
             is DistributedVideoPlayer -> "distributedVideoPlayer:${video.id}"
+            is VideoQuestions -> "videoQuestions"
+            is VideoQuestionDetail -> "videoQuestionDetail:${question.id}"
         }
 }
 
@@ -109,6 +119,7 @@ fun ToolsHubRoot(
     favoriteBookmarkModel: FavoriteBookmarkFeatureModel,
     friendExchangeModel: FriendExchangeFeatureModel,
     distributedVideoModel: DistributedVideoFeatureModel,
+    budgetSettlementModel: BudgetSettlementFeatureModel,
 ) {
     var destination by remember { mutableStateOf<ToolsDestination?>(null) }
     when (val current = destination) {
@@ -160,7 +171,13 @@ fun ToolsHubRoot(
                 onSelect = { selected ->
                     destination = ToolsDestination.DistributedVideoPlayer(selected)
                 },
+                onOpenQuestions = { destination = ToolsDestination.VideoQuestions },
             )
+        }
+        ToolsDestination.BudgetSettlement -> ToolDestinationContainer(
+            onBack = { destination = null },
+        ) {
+            BudgetSettlementRoot(budgetSettlementModel)
         }
         is ToolsDestination.DistributedVideoPlayer -> ToolDestinationContainer(
             onBack = { destination = ToolsDestination.DistributedVideos },
@@ -168,7 +185,21 @@ fun ToolsHubRoot(
             DistributedVideoPlayer(
                 model = distributedVideoModel,
                 video = current.video,
+                onOpenQuestions = { destination = ToolsDestination.VideoQuestions },
             )
+        }
+        ToolsDestination.VideoQuestions -> ToolDestinationContainer(
+            onBack = { destination = ToolsDestination.DistributedVideos },
+        ) {
+            VideoQuestionList(
+                model = distributedVideoModel,
+                onSelect = { destination = ToolsDestination.VideoQuestionDetail(it) },
+            )
+        }
+        is ToolsDestination.VideoQuestionDetail -> ToolDestinationContainer(
+            onBack = { destination = ToolsDestination.VideoQuestions },
+        ) {
+            VideoQuestionDetail(current.question)
         }
         null -> Column(
             modifier = Modifier
@@ -198,10 +229,24 @@ fun ToolsHubRoot(
                     icon = Icons.Outlined.Calculate,
                 )
             }
+            Button(onClick = { destination = ToolsDestination.BudgetSettlement }) {
+                FeatureCard(
+                    title = "予算・決算",
+                    description = "本人専用の帳簿で収入・支出・残高を管理します。",
+                    icon = Icons.Outlined.AccountBalanceWallet,
+                )
+            }
             Button(onClick = { destination = ToolsDestination.DistributedVideos }) {
                 FeatureCard(
                     title = "配信動画",
                     description = "配信動画の一覧を開いて再生できます。",
+                    icon = Icons.Outlined.VideoLibrary,
+                )
+            }
+            Button(onClick = { destination = ToolsDestination.VideoQuestions }) {
+                FeatureCard(
+                    title = "動画の質問・回答",
+                    description = "送信した質問と管理者からの回答を確認できます。",
                     icon = Icons.Outlined.VideoLibrary,
                 )
             }
@@ -248,6 +293,7 @@ fun ToolsHubRoot(
 private fun DistributedVideoListRoot(
     model: DistributedVideoFeatureModel,
     onSelect: (DistributedVideo) -> Unit,
+    onOpenQuestions: () -> Unit,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
     val errorMessage = state.errorMessage
@@ -256,40 +302,46 @@ private fun DistributedVideoListRoot(
         model.load()
     }
 
-    if (state.hasPendingVideoMemoSync) {
-        OfflineBanner()
-    }
-
-    when {
-        state.isLoading && state.videos.isEmpty() -> {
-            LoadingState()
+    Column(modifier = Modifier.fillMaxSize()) {
+        Button(onClick = onOpenQuestions) {
+            Text("自分の質問・回答")
         }
 
-        errorMessage != null && state.videos.isEmpty() -> {
-            ErrorState(
-                message = errorMessage,
-                onRetry = { model.load() },
-            )
+        if (state.hasPendingVideoMemoSync || state.hasPendingVideoQuestionSync) {
+            OfflineBanner()
         }
 
-        state.videos.isEmpty() -> {
-            EmptyState(
-                title = "配信動画",
-                message = "配信動画はまだありません",
-            )
-        }
+        when {
+            state.isLoading && state.videos.isEmpty() -> {
+                LoadingState()
+            }
 
-        else -> {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(state.videos) { video ->
-                    Button(
-                        onClick = { onSelect(video) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        DistributedVideoCard(video)
+            errorMessage != null && state.videos.isEmpty() -> {
+                ErrorState(
+                    message = errorMessage,
+                    onRetry = { model.load() },
+                )
+            }
+
+            state.videos.isEmpty() -> {
+                EmptyState(
+                    title = "配信動画",
+                    message = "配信動画はまだありません",
+                )
+            }
+
+            else -> {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(state.videos) { video ->
+                        Button(
+                            onClick = { onSelect(video) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            DistributedVideoCard(video)
+                        }
                     }
                 }
             }
@@ -351,6 +403,195 @@ private fun DistributedVideoCard(video: DistributedVideo) {
     }
 }
 
+@Composable
+private fun VideoQuestionList(
+    model: DistributedVideoFeatureModel,
+    onSelect: (VideoQuestion) -> Unit,
+) {
+    val state by model.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var showsCsvEmptyState by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        model.load()
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("動画質問・回答一覧", style = MaterialTheme.typography.titleLarge)
+            Button(onClick = {
+                if (state.videoQuestions.isEmpty()) {
+                    showsCsvEmptyState = true
+                } else {
+                    showsCsvEmptyState = false
+                    shareCsv(
+                        context = context,
+                        subject = "video-questions.csv",
+                        csv = VideoQuestionCsvExporter.export(
+                            questions = state.videoQuestions,
+                            videos = state.videos,
+                        ),
+                    )
+                }
+            }) {
+                Text("CSV共有")
+            }
+        }
+
+        if (state.hasPendingVideoQuestionSync) {
+            OfflineBanner()
+        }
+
+        when {
+            state.isLoading && state.videoQuestions.isEmpty() -> LoadingState()
+            state.errorMessage != null && state.videoQuestions.isEmpty() -> ErrorState(
+                message = state.errorMessage ?: "質問を取得できませんでした。",
+                onRetry = { model.load() },
+            )
+            state.videoQuestions.isEmpty() -> EmptyState(
+                title = if (showsCsvEmptyState) {
+                    "CSV共有対象の質問がありません"
+                } else {
+                    "送信済みの質問はありません"
+                },
+                message = "質問を送信すると、ここで回答状況を確認できます。",
+            )
+            else -> {
+                val unanswered = model.unansweredQuestions()
+                val answered = model.answeredQuestions()
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    item {
+                        Text(
+                            "未回答（${unanswered.size}件）",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    }
+                    if (unanswered.isEmpty()) {
+                        item { Text("未回答の質問はありません。", color = Color.Gray) }
+                    } else {
+                        items(unanswered, key = { it.id }) { question ->
+                            VideoQuestionRow(question = question, onSelect = { onSelect(question) })
+                        }
+                    }
+
+                    item {
+                        Text(
+                            "回答済み（${answered.size}件）",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(top = 12.dp),
+                        )
+                    }
+                    if (answered.isEmpty()) {
+                        item { Text("回答済みの質問はありません。", color = Color.Gray) }
+                    } else {
+                        items(answered, key = { it.id }) { question ->
+                            VideoQuestionRow(question = question, onSelect = { onSelect(question) })
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VideoQuestionRow(
+    question: VideoQuestion,
+    onSelect: () -> Unit,
+) {
+    Button(
+        onClick = onSelect,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                question.videoTitle.ifEmpty { "配信動画" },
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Text(question.questionText, maxLines = 2)
+            Text(
+                videoQuestionStatusLabel(question),
+                color = when {
+                    question.syncStatus == VideoQuestionSyncStatus.Failed -> Color.Red
+                    question.syncStatus == VideoQuestionSyncStatus.Synced && question.isAnswered -> Color(0xFF2E7D32)
+                    else -> Color(0xFFFF9800)
+                },
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+    }
+}
+
+@Composable
+private fun VideoQuestionDetail(question: VideoQuestion) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text("質問詳細", style = MaterialTheme.typography.titleLarge)
+
+        QuestionDetailCard(title = "対象動画") {
+            Text(question.videoTitle.ifEmpty { "配信動画" })
+        }
+        QuestionDetailCard(title = "質問本文") {
+            Text(question.questionText)
+        }
+        QuestionDetailCard(title = "管理者回答") {
+            if (question.isAnswered) {
+                Text(question.answerText)
+                Spacer(modifier = Modifier.size(8.dp))
+                Text(
+                    "回答日時: ${question.answeredAt?.let(::questionDateLabel) ?: "日時情報なし"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Text("回答待ち", color = Color(0xFFFF9800))
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuestionDetailCard(
+    title: String,
+    content: @Composable () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            content()
+        }
+    }
+}
+
+private fun questionDateLabel(value: String): String {
+    val instant = runCatching { Instant.parse(value) }.getOrNull() ?: return value
+    return SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.JAPAN).format(Date.from(instant))
+}
+
 internal fun videoPlayerSource(video: DistributedVideo): VideoPlayerSource {
     return when {
         video.embedHtml.isNotBlank() -> VideoPlayerSource.Html(video.embedHtml)
@@ -365,6 +606,7 @@ internal fun videoPlayerSource(video: DistributedVideo): VideoPlayerSource {
 private fun DistributedVideoPlayer(
     model: DistributedVideoFeatureModel,
     video: DistributedVideo,
+    onOpenQuestions: () -> Unit,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
     val source = videoPlayerSource(video)
@@ -379,7 +621,6 @@ private fun DistributedVideoPlayer(
     var playbackCommand by remember { mutableStateOf<VimeoPlaybackCommand?>(null) }
     var playbackCommandId by remember { mutableStateOf(0) }
     var showMemoCsvEmptyState by remember { mutableStateOf(false) }
-    var showQuestionCsvEmptyState by remember { mutableStateOf(false) }
     var showRepeatSettingPanel by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -408,7 +649,7 @@ private fun DistributedVideoPlayer(
                 color = MaterialTheme.colorScheme.error,
             )
         }
-        if (state.hasPendingVideoMemoSync) {
+        if (state.hasPendingVideoMemoSync || state.hasPendingVideoQuestionSync) {
             OfflineBanner()
         }
 
@@ -461,7 +702,6 @@ private fun DistributedVideoPlayer(
                     val memos = model.videoMemosFor(video)
                     if (memos.isEmpty()) {
                         showMemoCsvEmptyState = true
-                        showQuestionCsvEmptyState = false
                     } else {
                         showMemoCsvEmptyState = false
                         shareCsv(
@@ -573,24 +813,8 @@ private fun DistributedVideoPlayer(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text("質問")
-                Button(onClick = {
-                    val questions = model.questionsFor(video)
-                    if (questions.isEmpty()) {
-                        showQuestionCsvEmptyState = true
-                        showMemoCsvEmptyState = false
-                    } else {
-                        showQuestionCsvEmptyState = false
-                        shareCsv(
-                            context,
-                            subject = "video-questions-${video.id}.csv",
-                            csv = VideoQuestionCsvExporter.export(
-                                questions = questions,
-                                video = video,
-                            ),
-                        )
-                    }
-                }) {
-                    Text("CSV共有")
+                Button(onClick = onOpenQuestions) {
+                    Text("自分の質問・回答一覧")
                 }
             }
             TextField(
@@ -606,38 +830,14 @@ private fun DistributedVideoPlayer(
                         memo = memoText,
                         question = questionText,
                         playbackSeconds = playbackSeconds,
+                        onSubmitted = {
+                            questionText = ""
+                            onOpenQuestions()
+                        },
                     )
-                    questionText = ""
                 }
             }) {
                 Text("質問を送信")
-            }
-
-            val questions = model.questionsFor(video)
-            if (questions.isEmpty()) {
-                if (showQuestionCsvEmptyState) {
-                    EmptyState(
-                        title = "CSV共有対象の質問がありません",
-                        message = "CSV共有するには質問が必要です。",
-                    )
-                } else {
-                    Text("まだ質問はありません。", color = Color.Gray)
-                }
-            } else {
-                if (showQuestionCsvEmptyState) {
-                    showQuestionCsvEmptyState = false
-                }
-                questions.forEach { question ->
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text("質問: ${question.questionText}")
-                        if (question.answerText.trim().isBlank()) {
-                            Text("回答待ち", color = Color(0xFFFF9800))
-                        } else {
-                            Text("回答: ${question.answerText}", color = Color(0xFF4CAF50))
-                        }
-                    }
-                    Divider()
-                }
             }
         }
     }
@@ -652,6 +852,13 @@ private fun DistributedVideoPlayer(
             )
         }
     }
+}
+
+private fun videoQuestionStatusLabel(question: VideoQuestion): String = when (question.syncStatus) {
+    VideoQuestionSyncStatus.Draft -> "下書き"
+    VideoQuestionSyncStatus.Sending -> "送信中"
+    VideoQuestionSyncStatus.Failed -> "送信失敗（オフライン保持中）"
+    VideoQuestionSyncStatus.Synced -> if (question.isAnswered) "回答済み" else "送信済み・回答待ち"
 }
 
 @Composable

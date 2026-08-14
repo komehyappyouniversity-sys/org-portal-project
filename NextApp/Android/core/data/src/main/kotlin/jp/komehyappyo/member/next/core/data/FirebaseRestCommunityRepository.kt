@@ -10,6 +10,7 @@ import jp.komehyappyo.member.next.core.model.BookingSlot
 import jp.komehyappyo.member.next.core.model.DistributedVideo
 import jp.komehyappyo.member.next.core.model.RadioProgram
 import jp.komehyappyo.member.next.core.model.VideoQuestion
+import jp.komehyappyo.member.next.core.model.VideoQuestionSyncStatus
 import jp.komehyappyo.member.next.core.model.CommunityCodeParser
 import jp.komehyappyo.member.next.core.model.CommunityMembership
 import jp.komehyappyo.member.next.core.model.CommunityMembershipStatus
@@ -163,6 +164,7 @@ interface CommunityRepository {
         memoText: String,
         questionText: String,
         playbackSeconds: Double,
+        clientRequestId: String,
         idToken: String,
     ): Result<Unit>
     suspend fun answerVideoQuestion(
@@ -1109,6 +1111,9 @@ class FirebaseRestCommunityRepository(
                         questionText = question,
                         answerText = string(fields, "answerText").orEmpty(),
                         createdAt = timestamp(fields, "createdAt"),
+                        answeredAt = timestamp(fields, "answeredAt"),
+                        syncStatus = VideoQuestionSyncStatus.fromValue(string(fields, "syncStatus")),
+                        clientRequestId = string(fields, "clientRequestId") ?: document.optString("name").substringAfterLast("/"),
                     ),
                 )
             }
@@ -1143,6 +1148,9 @@ class FirebaseRestCommunityRepository(
                         questionText = question,
                         answerText = string(fields, "answerText").orEmpty(),
                         createdAt = timestamp(fields, "createdAt"),
+                        answeredAt = timestamp(fields, "answeredAt"),
+                        syncStatus = VideoQuestionSyncStatus.fromValue(string(fields, "syncStatus")),
+                        clientRequestId = string(fields, "clientRequestId") ?: document.optString("name").substringAfterLast("/"),
                     ),
                 )
             }
@@ -1156,10 +1164,14 @@ class FirebaseRestCommunityRepository(
         memoText: String,
         questionText: String,
         playbackSeconds: Double,
+        clientRequestId: String,
         idToken: String,
     ): Result<Unit> = runCatching {
         val normalized = questionText.trim()
         require(normalized.isNotEmpty()) { "質問内容を入力してください。" }
+        val normalizedRequestId = clientRequestId.trim()
+        require(normalizedRequestId.isNotEmpty()) { "clientRequestId is required." }
+        val documentId = normalizedRequestId.replace(Regex("[^A-Za-z0-9_-]"), "_")
         val fields = JSONObject()
             .put("memberUid", stringValue(memberUid))
             .put("videoId", stringValue(video.id))
@@ -1169,13 +1181,21 @@ class FirebaseRestCommunityRepository(
             .put("memoText", stringValue(memoText.trim()))
             .put("questionText", stringValue(normalized))
             .put("answerText", stringValue(""))
+            .put("answeredAt", JSONObject().put("nullValue", JSONObject.NULL))
+            .put("syncStatus", stringValue(VideoQuestionSyncStatus.Synced.rawValue()))
+            .put("clientRequestId", stringValue(normalizedRequestId))
             .put("createdAt", timestampValue(Instant.now().toString()))
-        request(
-            "documents/organizations/$communityId/videoQuestions/${java.util.UUID.randomUUID()}",
-            "PATCH",
-            idToken,
-            JSONObject().put("fields", fields),
-        )
+        try {
+            request(
+                "documents/organizations/$communityId/videoQuestions?documentId=$documentId",
+                "POST",
+                idToken,
+                JSONObject().put("fields", fields),
+            )
+        } catch (error: CommunityHttpException) {
+            if (error.status != 409) throw error
+            // A create-only retry means the first request already committed.
+        }
         Unit
     }
 
@@ -1186,9 +1206,11 @@ class FirebaseRestCommunityRepository(
         idToken: String,
     ): Result<Unit> = runCatching {
         val normalized = answerText.trim()
+        val answeredAt = Instant.now().toString()
         val fields = JSONObject()
             .put("answerText", stringValue(normalized))
-            .put("updatedAt", timestampValue(Instant.now().toString()))
+            .put("answeredAt", timestampValue(answeredAt))
+            .put("updatedAt", timestampValue(answeredAt))
         request(
             "documents/organizations/$communityId/videoQuestions/$questionId",
             "PATCH",

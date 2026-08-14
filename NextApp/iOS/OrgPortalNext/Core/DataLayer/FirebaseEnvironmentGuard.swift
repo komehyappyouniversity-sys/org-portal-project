@@ -842,6 +842,7 @@ public protocol CommunityRepository: Sendable {
         memoText: String,
         questionText: String,
         playbackSeconds: Double,
+        clientRequestId: String,
         idToken: String
     ) async throws
     func answerVideoQuestion(
@@ -921,6 +922,7 @@ public enum CommunityRepositoryError: LocalizedError, Equatable {
     case invalidResponse
     case requestFailed
     case notAuthorized
+    case alreadyExists
 
     public var errorDescription: String? {
         switch self {
@@ -931,6 +933,7 @@ public enum CommunityRepositoryError: LocalizedError, Equatable {
         case .invalidResponse: "コミュニティ情報を読み取れませんでした。"
         case .requestFailed: "通信に失敗しました。時間をおいて再度お試しください。"
         case .notAuthorized: "この操作を行う管理者権限がありません。"
+        case .alreadyExists: "同じ内容は送信済みです。"
         }
     }
 }
@@ -1759,7 +1762,12 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
                 memoText: string(fields, "memoText") ?? "",
                 questionText: questionText,
                 answerText: string(fields, "answerText") ?? "",
-                createdAt: timestamp(fields, "createdAt")
+                createdAt: timestamp(fields, "createdAt"),
+                answeredAt: timestamp(fields, "answeredAt"),
+                syncStatus: VideoQuestionSyncStatus(
+                    rawValue: string(fields, "syncStatus") ?? "synced"
+                ) ?? .synced,
+                clientRequestId: string(fields, "clientRequestId") ?? id
             )
         }.sorted { ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast) }
     }
@@ -1771,10 +1779,18 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
         memoText: String,
         questionText: String,
         playbackSeconds: Double,
+        clientRequestId: String,
         idToken: String
     ) async throws {
         let normalized = questionText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { throw CommunityRepositoryError.invalidResponse }
+        let normalizedRequestId = clientRequestId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedRequestId.isEmpty else { throw CommunityRepositoryError.invalidResponse }
+        let documentId = normalizedRequestId.replacingOccurrences(
+            of: "[^A-Za-z0-9_-]",
+            with: "_",
+            options: .regularExpression
+        )
         let fields: [String: Any] = [
             "memberUid": stringValue(memberUid),
             "videoId": stringValue(video.id),
@@ -1784,14 +1800,22 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
             "memoText": stringValue(memoText.trimmingCharacters(in: .whitespacesAndNewlines)),
             "questionText": stringValue(normalized),
             "answerText": stringValue(""),
+            "answeredAt": ["nullValue": NSNull()],
+            "syncStatus": stringValue(VideoQuestionSyncStatus.synced.rawValue),
+            "clientRequestId": stringValue(normalizedRequestId),
             "createdAt": ["timestampValue": ISO8601DateFormatter().string(from: Date())]
         ]
-        _ = try await requestJSON(
-            path: "documents/organizations/\(communityId)/videoQuestions/\(UUID().uuidString.lowercased())",
-            method: "PATCH",
-            idToken: idToken,
-            body: ["fields": fields]
-        )
+        do {
+            _ = try await requestJSON(
+                path: "documents/organizations/\(communityId)/videoQuestions?documentId=\(documentId)",
+                method: "POST",
+                idToken: idToken,
+                body: ["fields": fields]
+            )
+        } catch CommunityRepositoryError.alreadyExists {
+            // The first request may have committed even if its response was lost.
+            // A create-only retry with the same clientRequestId is therefore success.
+        }
     }
 
     public func adminVideoQuestions(
@@ -1818,7 +1842,12 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
                 memoText: string(fields, "memoText") ?? "",
                 questionText: questionText,
                 answerText: string(fields, "answerText") ?? "",
-                createdAt: timestamp(fields, "createdAt")
+                createdAt: timestamp(fields, "createdAt"),
+                answeredAt: timestamp(fields, "answeredAt"),
+                syncStatus: VideoQuestionSyncStatus(
+                    rawValue: string(fields, "syncStatus") ?? "synced"
+                ) ?? .synced,
+                clientRequestId: string(fields, "clientRequestId") ?? id
             )
         }.sorted { ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast) }
     }
@@ -1830,9 +1859,11 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
         idToken: String
     ) async throws {
         let normalized = answerText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let answeredAt = ISO8601DateFormatter().string(from: Date())
         let fields: [String: Any] = [
             "answerText": stringValue(normalized),
-            "updatedAt": ["timestampValue": ISO8601DateFormatter().string(from: Date())],
+            "answeredAt": ["timestampValue": answeredAt],
+            "updatedAt": ["timestampValue": answeredAt],
         ]
         _ = try await requestJSON(
             path: "documents/organizations/\(communityId)/videoQuestions/\(questionId)",
@@ -2281,6 +2312,7 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
             throw CommunityRepositoryError.requestFailed
         }
         if httpResponse.statusCode == 404 { throw CommunityRepositoryError.notFound }
+        if httpResponse.statusCode == 409 { throw CommunityRepositoryError.alreadyExists }
         if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
             throw CommunityRepositoryError.notAuthorized
         }

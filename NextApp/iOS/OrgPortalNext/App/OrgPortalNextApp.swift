@@ -41,7 +41,9 @@ struct OrgPortalNextApp: App {
                 FavoriteBookmarkRecord.self,
                 FriendContactRecord.self,
                 FriendInteractionHistoryRecord.self,
-                VideoRepeatSettingRecord.self
+                VideoRepeatSettingRecord.self,
+                BudgetSettlementReportRecord.self,
+                BudgetEntryRecord.self
             )
         } catch {
             fatalError("Unable to initialize local storage: \(error)")
@@ -71,6 +73,7 @@ private struct AppBootstrapView: View {
     @StateObject private var distributedVideoModel: DistributedVideoFeatureModel
     @StateObject private var announcementModel: AnnouncementFeatureModel
     @StateObject private var postModel: PostFeatureModel
+    @StateObject private var budgetSettlementModel: BudgetSettlementFeatureModel
 
     init(modelContainer: ModelContainer) {
         let session = AppSession()
@@ -109,6 +112,7 @@ private struct AppBootstrapView: View {
                     }
                 },
                 memoStore: FeatureTools.VimeoMemoStore(),
+                questionStore: FeatureTools.VideoQuestionDraftStore(),
                 repeatSettingRepository: SwiftDataVideoRepeatSettingRepository(
                     modelContainer: modelContainer
                 ),
@@ -192,6 +196,30 @@ private struct AppBootstrapView: View {
                 repository: friendExchangeRepository
             )
         )
+        let budgetReceiptStore = LocalBudgetReceiptStore()
+        let budgetLocalRepository = SwiftDataBudgetSettlementRepository(
+            modelContainer: modelContainer,
+            deleteReceipt: { try budgetReceiptStore.delete(reference: $0) }
+        )
+        let budgetRemoteRepository = FirebaseRESTBudgetSettlementRepository(
+            projectId: firebaseProjectID,
+            storageBucket: "\(firebaseProjectID).firebasestorage.app"
+        )
+        let budgetMigrationService = BudgetSettlementMigrationService(
+            localRepository: budgetLocalRepository,
+            localReceiptStore: budgetReceiptStore,
+            remoteRepository: budgetRemoteRepository,
+            stateStore: UserDefaultsBudgetMigrationStateStore()
+        )
+        _budgetSettlementModel = StateObject(
+            wrappedValue: BudgetSettlementFeatureModel(
+                localRepository: budgetLocalRepository,
+                localReceiptStore: budgetReceiptStore,
+                remoteRepository: budgetRemoteRepository,
+                migrationService: budgetMigrationService,
+                session: session
+            )
+        )
         _appBackupModel = StateObject(
             wrappedValue: AppBackupFeatureModel(
                 service: AppBackupService(
@@ -228,6 +256,7 @@ private struct AppBootstrapView: View {
                 favoriteBookmarkModel: favoriteBookmarkModel,
                 friendExchangeModel: friendExchangeModel,
                 distributedVideoModel: distributedVideoModel,
+                budgetSettlementModel: budgetSettlementModel
             ),
             community: ConnectedRootView(
                 communityModel: communityModel,
@@ -240,6 +269,9 @@ private struct AppBootstrapView: View {
                 postModel: postModel
             )
         )
+        .task(id: "\(appSession.authenticatedUserId ?? ""):\(appSession.selectedCommunityId ?? "")") {
+            await distributedVideoModel.load()
+        }
     }
 }
 
@@ -727,6 +759,7 @@ private final class CommunityFeatureModel: ObservableObject {
                     memoText: memo,
                     questionText: question,
                     playbackSeconds: playbackSeconds,
+                    clientRequestId: UUID().uuidString.lowercased(),
                     idToken: token
                 )
                 message = "質問を送信しました。"
