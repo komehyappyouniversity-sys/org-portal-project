@@ -108,6 +108,10 @@ service cloud.firestore {
       }
     }
 
+    match /memberPrivate/{userId}/videoMemos/{memoId} {
+      allow read, write: if isSelf(userId);
+    }
+
     match /memberPrivate/{userId}/{document=**} {
       allow read, write: if isSelf(userId);
     }

@@ -8,6 +8,10 @@ public protocol PostRepository: Sendable {
         userId: String,
         idToken: String
     ) async throws -> [MemberPost]
+    func allMemberPosts(
+        communityId: String,
+        idToken: String
+    ) async throws -> [MemberPost]
     func replies(
         communityId: String,
         postId: String,
@@ -36,6 +40,14 @@ public protocol PostRepository: Sendable {
     func markReplyRead(
         communityId: String,
         postId: String,
+        idToken: String
+    ) async throws
+    func saveAdminReply(
+        communityId: String,
+        postId: String,
+        adminUserId: String,
+        adminName: String?,
+        body: String,
         idToken: String
     ) async throws
 }
@@ -86,6 +98,23 @@ public struct FirebaseRESTPostRepository: PostRepository {
         return (result?["documents"] as? [[String: Any]] ?? [])
             .compactMap { parseMemberPost($0, communityId: communityId) }
             .filter { $0.authorUserId == userId }
+            .sorted {
+                ($0.updatedAt ?? $0.createdAt ?? .distantPast)
+                    > ($1.updatedAt ?? $1.createdAt ?? .distantPast)
+            }
+    }
+
+    public func allMemberPosts(
+        communityId: String,
+        idToken: String
+    ) async throws -> [MemberPost] {
+        let result = try await request(
+            path: "documents/organizations/\(communityId)/memberPosts?pageSize=1000",
+            method: "GET",
+            idToken: idToken
+        ) as? [String: Any]
+        return (result?["documents"] as? [[String: Any]] ?? [])
+            .compactMap { parseMemberPost($0, communityId: communityId) }
             .sorted {
                 ($0.updatedAt ?? $0.createdAt ?? .distantPast)
                     > ($1.updatedAt ?? $1.createdAt ?? .distantPast)
@@ -193,6 +222,42 @@ public struct FirebaseRESTPostRepository: PostRepository {
             method: "PATCH",
             idToken: idToken,
             body: ["fields": ["memberHasReadReply": boolValue(true)]]
+            )
+    }
+
+    public func saveAdminReply(
+        communityId: String,
+        postId: String,
+        adminUserId: String,
+        adminName: String?,
+        body: String,
+        idToken: String
+    ) async throws {
+        let now = ISO8601DateFormatter().string(from: Date())
+        let text = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        _ = try await request(
+            path: "documents/organizations/\(communityId)/memberPosts/\(postId)/replies/adminReply",
+            method: "PATCH",
+            idToken: idToken,
+            body: ["fields": [
+                "createdBy": stringValue(adminUserId),
+                "createdByName": stringValue(adminName ?? "管理者"),
+                "body": stringValue(text),
+                "createdAt": timestampValue(now),
+            ]]
+        )
+        _ = try await request(
+            path: "documents/organizations/\(communityId)/memberPosts/\(postId)" +
+                "?updateMask.fieldPaths=adminReply" +
+                "&updateMask.fieldPaths=memberHasReadReply" +
+                "&updateMask.fieldPaths=updatedAt",
+            method: "PATCH",
+            idToken: idToken,
+            body: ["fields": [
+                "adminReply": stringValue(text),
+                "memberHasReadReply": boolValue(false),
+                "updatedAt": timestampValue(now),
+            ]]
         )
     }
 

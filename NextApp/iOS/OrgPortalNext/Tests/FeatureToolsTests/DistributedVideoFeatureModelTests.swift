@@ -140,6 +140,118 @@ final class DistributedVideoFeatureModelTests: XCTestCase {
         XCTAssertEqual(["new", "old"], questions.map(\.id))
     }
 
+    func testLoadMergesRemoteMemosAndPreservesPendingLocalMemos() async {
+        let (memoStore, defaults, suiteName) = makeMemoStore()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let session = AppSession()
+        session.selectCommunity("org-1")
+        session.updateAuthenticatedUser(userId: "member", idToken: "token")
+        let localPendingMemo = VimeoVideoMemo(
+            id: "memo-1",
+            text: "端末側の編集版",
+            playbackSeconds: 20,
+            createdAtMillis: 3,
+            updatedAtMillis: 3,
+            syncStatus: .pendingSync,
+        )
+        memoStore.save(communityId: "org-1", videoId: "video-1", entries: [localPendingMemo])
+        let remoteMemo = VimeoVideoMemo(
+            id: "memo-1",
+            text: "サーバー側の古い値",
+            playbackSeconds: 10,
+            createdAtMillis: 1,
+            updatedAtMillis: 1,
+            syncStatus: .synced,
+        )
+        let remoteMemoOther = VimeoVideoMemo(
+            id: "memo-2",
+            text: "サーバー側の別メモ",
+            playbackSeconds: 30,
+            createdAtMillis: 2,
+            updatedAtMillis: 2,
+            syncStatus: .synced,
+        )
+        let repository = FakeDistributedVideoRepository(
+            videos: [
+                distributedVideo(
+                    id: "video-1",
+                    title: "配信動画",
+                    sortOrder: 1,
+                ),
+            ],
+            questions: [],
+            memoValues: ["org-1:video-1": memoStore.serialized(entries: [remoteMemo, remoteMemoOther])],
+        )
+        let model = DistributedVideoFeatureModel(
+            repository: repository,
+            session: session,
+            canViewMembersOnlyVideo: { _ in false },
+            memoStore: memoStore,
+        )
+
+        await model.load()
+
+        let merged = model.videoMemosFor(distributedVideo(id: "video-1", title: "配信動画", sortOrder: 1))
+        XCTAssertEqual(2, merged.count)
+        XCTAssertTrue(merged.contains { $0.id == "memo-1" && $0.text == "端末側の編集版" })
+        XCTAssertTrue(merged.contains { $0.id == "memo-2" })
+        // The repository's saveVideoMemo succeeds by default, so load()'s automatic
+        // retry of the merged-in pending memo completes and clears the pending flag.
+        XCTAssertFalse(model.hasPendingVideoMemoSync)
+    }
+
+    func testSaveVideoMemoFailureSetsPendingSyncAndRetryOnLoad() async {
+        let (memoStore, defaults, suiteName) = makeMemoStore()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let session = AppSession()
+        session.selectCommunity("org-1")
+        session.updateAuthenticatedUser(userId: "member", idToken: "token")
+
+        let repository = FakeDistributedVideoRepository(
+            videos: [
+                distributedVideo(
+                    id: "video-1",
+                    title: "配信動画",
+                    sortOrder: 1,
+                ),
+            ],
+            questions: [],
+            shouldFailVideoMemoSave: true,
+        )
+        let model = DistributedVideoFeatureModel(
+            repository: repository,
+            session: session,
+            canViewMembersOnlyVideo: { _ in false },
+            memoStore: memoStore,
+        )
+        let video = distributedVideo(id: "video-1", title: "配信動画", sortOrder: 1)
+        let memoText = "保存されるべきメモ"
+
+        model.addVideoMemo(video, memo: memoText, playbackSeconds: 10)
+        // The failed save is handled on an unstructured Task with several await hops
+        // (repository call, MainActor hops). Plain Task.yield() isn't reliably enough
+        // to drain it under XCTest's executor, so poll with brief real sleeps until the
+        // pending status is observed (bounded so a genuine regression still fails fast).
+        for _ in 0..<50 {
+            if model.hasPendingVideoMemoSync,
+               memoStore.entries(communityId: "org-1", videoId: "video-1").first?.syncStatus == .pendingSync {
+                break
+            }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        XCTAssertTrue(model.hasPendingVideoMemoSync)
+        XCTAssertEqual(.pendingSync, memoStore.entries(communityId: "org-1", videoId: "video-1")[0].syncStatus)
+        XCTAssertEqual(1, repository.saveVideoMemoCallCount)
+
+        repository.shouldFailVideoMemoSave = false
+        await model.load()
+
+        XCTAssertFalse(model.hasPendingVideoMemoSync)
+        XCTAssertTrue(memoStore.entries(communityId: "org-1", videoId: "video-1")[0].syncStatus == .synced)
+    }
+
     func testAddUpdateAndDeleteVideoMemoByVideo() {
         let (memoStore, defaults, suiteName) = makeMemoStore()
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -264,10 +376,20 @@ private final class FakeDistributedVideoRepository: DistributedVideoRepository, 
     let questions: [VideoQuestion]
     private(set) var saveVideoQuestionCallCount = 0
     private(set) var savedQuestion: VideoQuestion?
+    private(set) var saveVideoMemoCallCount = 0
+    var shouldFailVideoMemoSave = false
+    var memoValues: [String: String] = [:]
 
-    init(videos: [DistributedVideo], questions: [VideoQuestion]) {
+    init(
+        videos: [DistributedVideo],
+        questions: [VideoQuestion],
+        memoValues: [String: String] = [:],
+        shouldFailVideoMemoSave: Bool = false
+    ) {
         self.videos = videos
         self.questions = questions
+        self.memoValues = memoValues
+        self.shouldFailVideoMemoSave = shouldFailVideoMemoSave
     }
 
     func communityVideos(
@@ -307,6 +429,27 @@ private final class FakeDistributedVideoRepository: DistributedVideoRepository, 
             answerText: "",
             createdAt: Date(),
         )
+    }
+
+    func videoMemos(
+        userId: String,
+        idToken: String
+    ) async throws -> [String: String] {
+        memoValues
+    }
+
+    func saveVideoMemo(
+        userId: String,
+        communityId: String,
+        videoId: String,
+        memo: String,
+        idToken: String
+    ) async throws {
+        saveVideoMemoCallCount += 1
+        if shouldFailVideoMemoSave {
+            throw NSError(domain: "video.memo.test", code: 0)
+        }
+        memoValues["\(communityId):\(videoId)"] = memo
     }
 }
 

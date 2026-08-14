@@ -64,6 +64,7 @@ import jp.komehyappyo.member.next.feature.community.VimeoMemoStore
 import jp.komehyappyo.member.next.feature.tools.VimeoMemoStore as ToolsVimeoMemoStore
 import jp.komehyappyo.member.next.feature.messages.AnnouncementFeatureModel
 import jp.komehyappyo.member.next.feature.messages.AnnouncementRoot
+import jp.komehyappyo.member.next.feature.messages.MemberPostReplySection
 import jp.komehyappyo.member.next.feature.messages.PostFeatureModel
 import jp.komehyappyo.member.next.feature.messages.PostRoot
 
@@ -270,7 +271,13 @@ class MainActivity : FragmentActivity() {
                     model = accountModel,
                     activity = this@MainActivity,
                     canEnterManagementMode = communityState.adminAccess?.canReviewMembers == true,
-                    managementContent = { CommunityRoot(communityModel) },
+                    managementContent = {
+                        CommunityRoot(
+                            model = communityModel,
+                            onRefreshManagementPosts = postModel::refreshManagementMemberPosts,
+                            memberPostReplyContent = { MemberPostReplySection(postModel) },
+                        )
+                    },
                 )
             },
         )
@@ -297,7 +304,11 @@ class MainActivity : FragmentActivity() {
                 }
             }
             when (selectedSection) {
-                0 -> CommunityRoot(communityModel)
+                0 -> CommunityRoot(
+                    model = communityModel,
+                    onRefreshManagementPosts = postModel::refreshManagementMemberPosts,
+                    memberPostReplyContent = { MemberPostReplySection(postModel) },
+                )
                 1 -> PostRoot(postModel)
                 else -> AnnouncementRoot(announcementModel)
             }

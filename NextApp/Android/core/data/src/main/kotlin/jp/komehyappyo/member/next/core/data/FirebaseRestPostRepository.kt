@@ -20,6 +20,10 @@ interface PostRepository {
         userId: String,
         idToken: String,
     ): Result<List<MemberPost>>
+    suspend fun allMemberPosts(
+        communityId: String,
+        idToken: String,
+    ): Result<List<MemberPost>>
     suspend fun replies(
         communityId: String,
         postId: String,
@@ -50,6 +54,14 @@ interface PostRepository {
         postId: String,
         idToken: String,
     ): Result<Unit>
+    suspend fun saveAdminReply(
+        communityId: String,
+        postId: String,
+        adminUserId: String,
+        adminName: String?,
+        body: String,
+        idToken: String,
+    ): Result<Unit>
 }
 
 class FirebaseRestPostRepository(
@@ -70,6 +82,15 @@ class FirebaseRestPostRepository(
         listDocuments("organizations/$communityId/memberPosts", idToken)
             .mapNotNull { parseMemberPost(communityId, it) }
             .filter { it.authorUserId == userId }
+            .sortedByDescending { it.updatedAt ?: it.createdAt.orEmpty() }
+    }
+
+    override suspend fun allMemberPosts(
+        communityId: String,
+        idToken: String,
+    ): Result<List<MemberPost>> = runCatching {
+        listDocuments("organizations/$communityId/memberPosts", idToken)
+            .mapNotNull { parseMemberPost(communityId, it) }
             .sortedByDescending { it.updatedAt ?: it.createdAt.orEmpty() }
     }
 
@@ -162,6 +183,47 @@ class FirebaseRestPostRepository(
             JSONObject().put(
                 "fields",
                 JSONObject().put("memberHasReadReply", booleanValue(true)),
+            ),
+        )
+        Unit
+    }
+
+    override suspend fun saveAdminReply(
+        communityId: String,
+        postId: String,
+        adminUserId: String,
+        adminName: String?,
+        body: String,
+        idToken: String,
+    ): Result<Unit> = runCatching {
+        val now = Instant.now().toString()
+        val normalized = body.trim()
+        request(
+            "documents/organizations/$communityId/memberPosts/$postId/replies/adminReply",
+            "PATCH",
+            idToken,
+            JSONObject().put(
+                "fields",
+                JSONObject()
+                    .put("createdBy", stringValue(adminUserId))
+                    .put("createdByName", stringValue(adminName ?: "管理者"))
+                    .put("body", stringValue(normalized))
+                    .put("createdAt", timestampValue(now)),
+            ),
+        )
+        request(
+            "documents/organizations/$communityId/memberPosts/$postId" +
+                "?updateMask.fieldPaths=adminReply" +
+                "&updateMask.fieldPaths=memberHasReadReply" +
+                "&updateMask.fieldPaths=updatedAt",
+            "PATCH",
+            idToken,
+            JSONObject().put(
+                "fields",
+                JSONObject()
+                    .put("adminReply", stringValue(normalized))
+                    .put("memberHasReadReply", booleanValue(false))
+                    .put("updatedAt", timestampValue(now)),
             ),
         )
         Unit

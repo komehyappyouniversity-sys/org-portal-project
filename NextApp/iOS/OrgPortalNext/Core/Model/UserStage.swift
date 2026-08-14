@@ -485,19 +485,26 @@ public struct VimeoVideoMemo: Identifiable, Equatable, Codable, Sendable {
     public let playbackSeconds: Double
     public let createdAtMillis: Int64
     public let updatedAtMillis: Int64
+    public let syncStatus: VimeoVideoMemoSyncStatus
+
+    public var isPendingSync: Bool {
+        syncStatus == .pendingSync
+    }
 
     public init(
         id: String,
         text: String,
         playbackSeconds: Double,
         createdAtMillis: Int64,
-        updatedAtMillis: Int64
+        updatedAtMillis: Int64,
+        syncStatus: VimeoVideoMemoSyncStatus = .synced
     ) {
         self.id = id
         self.text = text
         self.playbackSeconds = playbackSeconds
         self.createdAtMillis = createdAtMillis
         self.updatedAtMillis = updatedAtMillis
+        self.syncStatus = syncStatus
     }
 
     public var createdAt: Date {
@@ -507,6 +514,11 @@ public struct VimeoVideoMemo: Identifiable, Equatable, Codable, Sendable {
     public var updatedAt: Date {
         Date(timeIntervalSince1970: TimeInterval(updatedAtMillis) / 1000)
     }
+}
+
+public enum VimeoVideoMemoSyncStatus: String, Codable, Sendable {
+    case synced
+    case pendingSync
 }
 
 public enum CommunityCodeParser {

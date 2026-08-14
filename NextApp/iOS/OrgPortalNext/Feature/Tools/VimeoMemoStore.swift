@@ -16,7 +16,16 @@ public final class VimeoMemoStore {
             let data = raw.data(using: .utf8),
             let payload = (try? JSONSerialization.jsonObject(with: data, options: [])) as? [[String: Any]]
         else {
-            return [VimeoVideoMemo(id: "legacy", text: raw, playbackSeconds: 0, createdAtMillis: 0, updatedAtMillis: 0)]
+            return [
+                VimeoVideoMemo(
+                    id: "legacy",
+                    text: raw,
+                    playbackSeconds: 0,
+                    createdAtMillis: 0,
+                    updatedAtMillis: 0,
+                    syncStatus: .synced,
+                )
+            ]
         }
 
         return payload.compactMap { item in
@@ -27,8 +36,21 @@ public final class VimeoMemoStore {
                 playbackSeconds: numberFromJSON(item["playbackSeconds"]) ?? 0,
                 createdAtMillis: int64FromJSON(item["createdAtMillis"]),
                 updatedAtMillis: int64FromJSON(item["updatedAtMillis"]),
+                syncStatus: syncStatusFromJSON(item["syncStatus"])
             )
         }.sorted { $0.createdAtMillis > $1.createdAtMillis }
+    }
+
+    public func allEntries() -> [String: [VimeoVideoMemo]] {
+        read().entries.reduce(into: [String: [VimeoVideoMemo]]()) { result, item in
+            result[item.key] = entries(fromRaw: item.value)
+        }
+    }
+
+    public func pendingEntries() -> [String: [VimeoVideoMemo]] {
+        allEntries().mapValues { memos in
+            memos.filter { $0.syncStatus == .pendingSync }
+        }.filter { !$0.value.isEmpty }
     }
 
     public func serialized(entries: [VimeoVideoMemo]) -> String {
@@ -40,12 +62,22 @@ public final class VimeoMemoStore {
                 "playbackSeconds": memo.playbackSeconds,
                 "createdAtMillis": memo.createdAtMillis,
                 "updatedAtMillis": memo.updatedAtMillis,
+                "syncStatus": memo.syncStatus.rawValue,
             ]
         }
         guard let data = try? JSONSerialization.data(withJSONObject: payload, options: []) else {
             return ""
         }
         return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    public func saveAllEntries(_ entries: [String: [VimeoVideoMemo]]) {
+        let values = Dictionary(uniqueKeysWithValues: entries.map { (key, memoEntries) in
+            (key, serialized(entries: memoEntries))
+        })
+        let jsonData = try? JSONSerialization.data(withJSONObject: values, options: [])
+        let jsonString = jsonData.flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+        userDefaults.setValue(jsonString, forKey: storageKey)
     }
 
     public func save(communityId: String, videoId: String, entries: [VimeoVideoMemo]) {
@@ -66,6 +98,36 @@ public final class VimeoMemoStore {
         userDefaults.setValue(memos, forKey: storageKey)
     }
 
+    public func entries(fromRaw raw: String) -> [VimeoVideoMemo] {
+        guard
+            let data = raw.data(using: .utf8),
+            let payload = (try? JSONSerialization.jsonObject(with: data, options: [])) as? [[String: Any]]
+        else {
+            return [
+                VimeoVideoMemo(
+                    id: "legacy",
+                    text: raw,
+                    playbackSeconds: 0,
+                    createdAtMillis: 0,
+                    updatedAtMillis: 0,
+                    syncStatus: .synced,
+                )
+            ]
+        }
+
+        return payload.compactMap { item in
+            guard let id = item["id"] as? String else { return nil }
+            return VimeoVideoMemo(
+                id: id,
+                text: item["text"] as? String ?? "",
+                playbackSeconds: numberFromJSON(item["playbackSeconds"]) ?? 0,
+                createdAtMillis: int64FromJSON(item["createdAtMillis"]),
+                updatedAtMillis: int64FromJSON(item["updatedAtMillis"]),
+                syncStatus: syncStatusFromJSON(item["syncStatus"]),
+            )
+        }
+    }
+
     private func read() -> (entries: [String: String], json: String) {
         guard let raw = userDefaults.string(forKey: storageKey),
               let data = raw.data(using: .utf8),
@@ -77,6 +139,13 @@ public final class VimeoMemoStore {
 
     private func key(for communityId: String, videoId: String) -> String {
         "\(communityId):\(videoId)"
+    }
+
+    private func syncStatusFromJSON(_ value: Any?) -> VimeoVideoMemoSyncStatus {
+        if let status = value as? String, let parsed = VimeoVideoMemoSyncStatus(rawValue: status) {
+            return parsed
+        }
+        return .synced
     }
 
     private func numberFromJSON(_ value: Any?) -> Double? {

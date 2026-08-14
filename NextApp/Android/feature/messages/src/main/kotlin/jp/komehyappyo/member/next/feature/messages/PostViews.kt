@@ -182,3 +182,98 @@ private fun MemberPostDetail(post: MemberPost, replies: List<String>, model: Pos
         TextButton(onClick = { model.delete(post) }) { Text("削除") }
     }
 }
+
+@Composable
+fun MemberPostReplySection(postModel: PostFeatureModel) {
+    val postState by postModel.state.collectAsStateWithLifecycle()
+
+    Text("会員投稿への返信")
+    val selectedManagementPost = postState.selectedManagementMemberPost
+    if (selectedManagementPost != null) {
+        Text("対象投稿")
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text("投稿者: ${selectedManagementPost.authorName}")
+            Text(selectedManagementPost.title)
+            Text(selectedManagementPost.body.take(160))
+            OutlinedTextField(
+                value = postState.managementReplyDraft,
+                onValueChange = postModel::updateManagementReplyDraft,
+                label = { Text("返信を入力") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = postModel::saveManagementReply,
+                    enabled = !postState.isLoading,
+                ) {
+                    Text("返信を保存")
+                }
+                OutlinedButton(onClick = postModel::closeManagementReply) {
+                    Text("編集をやめる")
+                }
+            }
+        }
+        HorizontalDivider()
+    } else {
+        val unansweredPosts = postState.managementMemberPosts.filter {
+            it.adminReply.trim().isEmpty()
+        }
+        if (unansweredPosts.isEmpty()) {
+            Text("未返信の投稿はありません。")
+        } else {
+            Text("未返信")
+            unansweredPosts.forEach { post ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text("投稿者: ${post.authorName}")
+                    Text(post.title)
+                    Text(post.body.take(160))
+                    Button(
+                        onClick = { postModel.startManagementReply(post) },
+                    ) {
+                        Text("返信を入力")
+                    }
+                }
+                HorizontalDivider()
+            }
+        }
+
+        val answeredPosts = postState.managementMemberPosts.filter {
+            it.adminReply.trim().isNotEmpty()
+        }
+        if (answeredPosts.isNotEmpty()) {
+            Text("回答済み")
+            answeredPosts.forEach { post ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text("投稿者: ${post.authorName}")
+                    Text(post.title)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        if (post.hasUnreadReply) {
+                            Text("新着")
+                        }
+                        Text(if (post.adminReply.isBlank()) "（未返信）" else "返信あり")
+                    }
+                    Text("返信: ${post.adminReply.ifBlank { "（未入力）" }}")
+                }
+                HorizontalDivider()
+            }
+        }
+    }
+}

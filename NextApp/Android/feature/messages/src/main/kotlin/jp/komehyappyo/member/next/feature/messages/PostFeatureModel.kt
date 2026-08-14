@@ -18,8 +18,11 @@ import kotlinx.coroutines.launch
 data class PostUiState(
     val publicPosts: List<PublicPost> = emptyList(),
     val memberPosts: List<MemberPost> = emptyList(),
+    val managementMemberPosts: List<MemberPost> = emptyList(),
     val selectedPublicPost: PublicPost? = null,
     val selectedMemberPost: MemberPost? = null,
+    val selectedManagementMemberPost: MemberPost? = null,
+    val managementReplyDraft: String = "",
     val replies: List<AdminReply> = emptyList(),
     val isEditing: Boolean = false,
     val editorPost: MemberPost? = null,
@@ -47,6 +50,30 @@ class PostFeatureModel(
         repository.publicPosts().onSuccess {
             mutableState.value = mutableState.value.copy(publicPosts = it, isLoading = false)
         }.onFailure(::showError)
+    }
+
+    fun refreshManagementMemberPosts() {
+        val current = session.state.value
+        val membership = approvedMembership
+        val token = current.authenticationToken
+        if (membership == null || token == null) {
+            mutableState.value = mutableState.value.copy(
+                managementMemberPosts = emptyList(),
+                isLoading = false,
+            )
+            return
+        }
+        launchLoad {
+            repository.allMemberPosts(
+                membership.communityId,
+                token,
+            ).onSuccess {
+                mutableState.value = mutableState.value.copy(
+                    managementMemberPosts = it,
+                    isLoading = false,
+                )
+            }.onFailure(::showError)
+        }
     }
 
     fun refreshMember() {
@@ -183,6 +210,59 @@ class PostFeatureModel(
             editorTitle = "",
             editorBody = "",
         )
+    }
+
+    fun startManagementReply(post: MemberPost) {
+        mutableState.value = mutableState.value.copy(
+            selectedManagementMemberPost = post,
+            managementReplyDraft = post.adminReply,
+            selectedMemberPost = null,
+        )
+    }
+
+    fun updateManagementReplyDraft(value: String) {
+        mutableState.value = mutableState.value.copy(managementReplyDraft = value)
+    }
+
+    fun closeManagementReply() {
+        mutableState.value = mutableState.value.copy(
+            selectedManagementMemberPost = null,
+            managementReplyDraft = "",
+        )
+    }
+
+    fun saveManagementReply() {
+        val current = session.state.value
+        val membership = approvedMembership
+        val selected = mutableState.value.selectedManagementMemberPost
+        val token = current.authenticationToken
+        val draft = mutableState.value.managementReplyDraft.trim()
+        if (selected == null || membership == null || token == null) {
+            showError(IllegalStateException("承認済みコミュニティを選択してください。"))
+            return
+        }
+        if (draft.isBlank()) {
+            showError(IllegalArgumentException("返信内容を入力してください。"))
+            return
+        }
+        launchLoad {
+            repository.saveAdminReply(
+                selected.communityId,
+                selected.id,
+                current.userId,
+                membership.applicantName,
+                draft,
+                token,
+            ).onSuccess {
+                mutableState.value = mutableState.value.copy(
+                    selectedManagementMemberPost = null,
+                    managementReplyDraft = "",
+                    isLoading = false,
+                    message = "返信を保存しました。",
+                )
+                refreshManagementMemberPosts()
+            }.onFailure(::showError)
+        }
     }
 
     private fun launchLoad(block: suspend () -> Unit) {

@@ -61,6 +61,7 @@ import coil.compose.AsyncImage
 import jp.komehyappyo.member.next.core.designsystem.EmptyState
 import jp.komehyappyo.member.next.core.designsystem.ErrorState
 import jp.komehyappyo.member.next.core.designsystem.FeatureCard
+import jp.komehyappyo.member.next.core.designsystem.OfflineBanner
 import jp.komehyappyo.member.next.core.designsystem.LoadingState
 import jp.komehyappyo.member.next.core.model.DistributedVideo
 import kotlinx.coroutines.launch
@@ -252,6 +253,10 @@ private fun DistributedVideoListRoot(
         model.load()
     }
 
+    if (state.hasPendingVideoMemoSync) {
+        OfflineBanner()
+    }
+
     when {
         state.isLoading && state.videos.isEmpty() -> {
             LoadingState()
@@ -396,6 +401,9 @@ private fun DistributedVideoPlayer(
                 message,
                 color = MaterialTheme.colorScheme.error,
             )
+        }
+        if (state.hasPendingVideoMemoSync) {
+            OfflineBanner()
         }
 
         if (videoId == null) {

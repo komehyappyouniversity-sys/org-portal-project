@@ -9,11 +9,14 @@ final class PostFeatureModel: ObservableObject {
     @Published private(set) var publicPosts: [PublicPost] = []
     @Published private(set) var memberPosts: [MemberPost] = []
     @Published private(set) var replies: [AdminReply] = []
+    @Published private(set) var managementMemberPosts: [MemberPost] = []
     @Published var selectedPublicPost: PublicPost?
     @Published var selectedMemberPost: MemberPost?
+    @Published var selectedManagementMemberPost: MemberPost?
     @Published var editorPost: MemberPost?
     @Published var editorTitle = ""
     @Published var editorBody = ""
+    @Published var managementReplyDraft = ""
     @Published var isEditing = false
     @Published private(set) var isLoading = false
     @Published var message: String?
@@ -56,6 +59,20 @@ final class PostFeatureModel: ObservableObject {
                 communityId: membership.communityId,
                 userId: userID,
                 idToken: token
+            )
+        }
+    }
+
+    func refreshManagementMemberPosts() {
+        guard let membership = approvedMembership,
+              let token = session.authenticationToken else {
+            managementMemberPosts = []
+            return
+        }
+        load {
+            self.managementMemberPosts = try await self.repository.allMemberPosts(
+                communityId: membership.communityId,
+                idToken: token,
             )
         }
     }
@@ -164,6 +181,48 @@ final class PostFeatureModel: ObservableObject {
             self.selectedMemberPost = nil
             self.message = "投稿を削除しました。"
             self.refreshMember()
+        }
+    }
+
+    func startManagementReply(for post: MemberPost) {
+        selectedManagementMemberPost = post
+        managementReplyDraft = post.legacyAdminReply ?? ""
+    }
+
+    func updateManagementReplyDraft(_ value: String) {
+        managementReplyDraft = value
+    }
+
+    func closeManagementReply() {
+        selectedManagementMemberPost = nil
+        managementReplyDraft = ""
+    }
+
+    func saveManagementReply() {
+        guard let post = selectedManagementMemberPost,
+              let userID = session.authenticatedUserId,
+              let token = session.authenticationToken else {
+            message = "承認済みコミュニティを選択してください。"
+            return
+        }
+        let body = managementReplyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty else {
+            message = "返信内容を入力してください。"
+            return
+        }
+        load {
+            try await self.repository.saveAdminReply(
+                communityId: post.communityId,
+                postId: post.id,
+                adminUserId: userID,
+                adminName: self.approvedMembership?.applicantName ?? "管理者",
+                body: body,
+                idToken: token,
+            )
+            self.selectedManagementMemberPost = nil
+            self.managementReplyDraft = ""
+            self.message = "返信を保存しました。"
+            self.refreshManagementMemberPosts()
         }
     }
 

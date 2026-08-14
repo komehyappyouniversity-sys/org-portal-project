@@ -20,6 +20,7 @@ import jp.komehyappyo.member.next.core.model.VideoQuestion
 import jp.komehyappyo.member.next.core.model.CommunityCodeParser
 import jp.komehyappyo.member.next.core.model.CommunityMembership
 import jp.komehyappyo.member.next.core.model.CommunityMembershipStatus
+import jp.komehyappyo.member.next.core.model.VimeoVideoMemoSyncStatus
 import jp.komehyappyo.member.next.core.model.UserStage
 import jp.komehyappyo.member.next.core.model.RadioPlaybackRecord
 import jp.komehyappyo.member.next.core.model.RadioProgram
@@ -68,6 +69,7 @@ data class CommunityUiState(
     val radioPrograms: List<RadioProgram> = emptyList(),
     val radioPlaybackRecords: List<RadioPlaybackRecord> = emptyList(),
     val radioPlayingProgramId: String? = null,
+    val hasPendingVideoMemoSync: Boolean = false,
 )
 
 class CommunityFeatureModel(
@@ -172,6 +174,7 @@ class CommunityFeatureModel(
                 playbackSeconds = playbackSeconds,
                 createdAtMillis = now,
                 updatedAtMillis = now,
+                syncStatus = VimeoVideoMemoSyncStatus.Synced,
             ),
             "動画メモを追加しました。",
         )
@@ -186,7 +189,19 @@ class CommunityFeatureModel(
         persistVideoMemos(
             video,
             videoMemosFor(video).map { item ->
-                if (item.id == entry.id) item.copy(text = normalized, updatedAtMillis = System.currentTimeMillis()) else item
+                if (item.id == entry.id) {
+                    item.copy(
+                        text = normalized,
+                        updatedAtMillis = System.currentTimeMillis(),
+                        syncStatus = if (item.syncStatus == VimeoVideoMemoSyncStatus.PendingSync) {
+                            VimeoVideoMemoSyncStatus.PendingSync
+                        } else {
+                            VimeoVideoMemoSyncStatus.Synced
+                        },
+                    )
+                } else {
+                    item
+                }
             },
             "動画メモを更新しました。",
         )
@@ -206,22 +221,151 @@ class CommunityFeatureModel(
         successMessage: String,
     ) {
         val current = session.state.value
-        val token = current.authenticationToken ?: return
-        val payload = memoStore.serialized(entries)
+        val token = current.authenticationToken
+        memoStore.save(video.communityId, video.id, entries)
+        if (token == null) {
+            mutableState.value = mutableState.value.copy(
+                message = successMessage,
+                hasPendingVideoMemoSync = memoStore.pendingEntries().isNotEmpty(),
+            )
+            return
+        }
         viewModelScope.launch {
-            repository.saveVideoMemo(current.userId, video.communityId, video.id, payload, token)
-                .onSuccess {
-                    memoStore.save(video.communityId, video.id, entries)
-                    mutableState.value = mutableState.value.copy(
-                        message = successMessage,
-                    )
-                }
-                .onFailure { showError(it, clearCandidate = false) }
+            syncVideoMemos(
+                video,
+                entries,
+                current.userId,
+                token,
+                successMessage,
+                reportSuccess = true,
+            )
         }
     }
 
     fun questionsFor(video: DistributedVideo): List<VideoQuestion> =
         state.value.videoQuestions.filter { it.videoId == video.id }
+
+    private suspend fun syncVideoMemos(
+        video: DistributedVideo,
+        entries: List<VimeoVideoMemo>,
+        userId: String,
+        token: String,
+        successMessage: String,
+        reportSuccess: Boolean,
+    ) {
+        runCatching {
+            repository.saveVideoMemo(
+                userId = userId,
+                communityId = video.communityId,
+                videoId = video.id,
+                memo = memoStore.serialized(entries),
+                idToken = token,
+            ).getOrThrow()
+            memoStore.save(
+                video.communityId,
+                video.id,
+                entries.map { it.copy(syncStatus = VimeoVideoMemoSyncStatus.Synced) },
+            )
+            if (reportSuccess) {
+                mutableState.value = mutableState.value.copy(
+                    message = successMessage,
+                    hasPendingVideoMemoSync = false,
+                )
+            }
+        }.onFailure {
+            memoStore.save(
+                video.communityId,
+                video.id,
+                entries.map { it.copy(syncStatus = VimeoVideoMemoSyncStatus.PendingSync) },
+            )
+            if (reportSuccess) {
+                mutableState.value = mutableState.value.copy(
+                    message = "オフライン時は動画メモを保留しました。",
+                )
+            }
+        }
+        updatePendingVideoMemoSyncState()
+    }
+
+    private fun synchronizePendingVideoMemos(userId: String, token: String) {
+        val pending = memoStore.pendingEntries()
+        if (pending.isEmpty()) {
+            updatePendingVideoMemoSyncState()
+            return
+        }
+        val allEntries = memoStore.allEntries()
+        viewModelScope.launch {
+            pending.forEach { (key, entries) ->
+                val components = key.split(":", limit = 2)
+                if (components.size != 2) return@forEach
+                // Sync the full entry list for this video, not just the pending subset —
+                // syncVideoMemos overwrites the store for this key, so passing only the
+                // pending entries would silently drop any already-synced memos.
+                syncVideoMemos(
+                    memoVideo(components[0], components[1]),
+                    allEntries[key] ?: entries,
+                    userId,
+                    token,
+                    successMessage = "",
+                    reportSuccess = false,
+                )
+            }
+        }
+    }
+
+    private fun memoVideo(communityId: String, videoId: String): DistributedVideo =
+        DistributedVideo(
+            id = videoId,
+            communityId = communityId,
+            videoTitle = "",
+            description = "",
+            embedHtml = "",
+            videoUrl = "",
+            vimeoUrl = "",
+            providerVideoId = "",
+            videoType = "distributed_vimeo",
+            thumbnailUrl = "",
+            isPremium = false,
+            createdAt = null,
+            updatedAt = null,
+            isPublished = true,
+            isMembersOnly = false,
+            sortOrder = 0,
+        )
+
+    private fun mergeMemoEntries(
+        local: Map<String, List<VimeoVideoMemo>>,
+        remote: Map<String, String>,
+    ): Map<String, List<VimeoVideoMemo>> {
+        return local.toMutableMap().also { merged ->
+            remote.forEach { (key, payload) ->
+                val localEntries = local[key] ?: emptyList()
+                val remoteEntries = memoStore.entries(fromRaw = payload)
+                val localById = localEntries.associateBy { it.id }
+                val remoteIds = remoteEntries.map { it.id }.toSet()
+                val mergedEntries = buildList {
+                    remoteEntries.forEach { remoteEntry ->
+                        val localEntry = localById[remoteEntry.id]
+                        if (localEntry?.syncStatus == VimeoVideoMemoSyncStatus.PendingSync) {
+                            add(localEntry)
+                        } else {
+                            add(remoteEntry)
+                        }
+                    }
+                    localEntries
+                        .filter { it.syncStatus == VimeoVideoMemoSyncStatus.PendingSync && it.id !in remoteIds }
+                        .forEach(::add)
+                }
+                merged[key] = mergedEntries
+            }
+        }
+    }
+
+    private fun updatePendingVideoMemoSyncState() {
+        mutableState.value = mutableState.value.copy(
+            hasPendingVideoMemoSync = memoStore.pendingEntries().isNotEmpty(),
+        )
+    }
 
     fun submitVideoQuestion(
         video: DistributedVideo,
@@ -488,6 +632,7 @@ class CommunityFeatureModel(
                 myBookingSlots = emptyMap(),
                 bookingProcessingSlotId = null,
                 reviewingUserId = null,
+                hasPendingVideoMemoSync = false,
                 isLoading = false,
             )
             return
@@ -651,6 +796,7 @@ class CommunityFeatureModel(
             mutableState.value = mutableState.value.copy(
                 distributedVideos = emptyList(),
                 videoQuestions = emptyList(),
+                hasPendingVideoMemoSync = false,
             )
             return
         }
@@ -659,15 +805,30 @@ class CommunityFeatureModel(
                 .onSuccess { videos ->
                     val questions = repository.videoQuestions(communityId, current.userId, token)
                         .getOrDefault(emptyList())
+                    val remoteMemos = runCatching {
+                        repository.videoMemos(current.userId, token).getOrThrow()
+                    }.getOrNull()
+                    if (remoteMemos != null) {
+                        memoStore.saveAll(
+                            mergeMemoEntries(
+                                local = memoStore.allEntries(),
+                                remote = remoteMemos,
+                            ).mapValues { (_, value) ->
+                                memoStore.serialized(value)
+                            },
+                        )
+                    }
+                    synchronizePendingVideoMemos(current.userId, token)
                     mutableState.value = mutableState.value.copy(
                         distributedVideos = videos,
                         videoQuestions = questions,
                     )
-                    repository.videoMemos(current.userId, token).onSuccess { memos ->
-                        memoStore.saveAll(memos)
-                    }
+                    updatePendingVideoMemoSyncState()
                 }
-                .onFailure { showError(it, clearCandidate = false) }
+                .onFailure {
+                    showError(it, clearCandidate = false)
+                    updatePendingVideoMemoSyncState()
+                    }
         }
     }
 

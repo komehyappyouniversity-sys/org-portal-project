@@ -4,29 +4,60 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
+interface VimeoMemoStoreProtocol {
+    fun entries(communityId: String, videoId: String): List<VimeoVideoMemo>
+    fun entries(fromRaw: String): List<VimeoVideoMemo>
+    fun allEntries(): Map<String, List<VimeoVideoMemo>>
+    fun pendingEntries(): Map<String, List<VimeoVideoMemo>>
+    fun serialized(entries: List<VimeoVideoMemo>): String
+    fun save(communityId: String, videoId: String, entries: List<VimeoVideoMemo>)
+    fun saveAll(memos: Map<String, String>)
+}
+
 data class VimeoVideoMemo(
     val id: String,
     val text: String,
     val playbackSeconds: Double,
     val createdAtMillis: Long,
     val updatedAtMillis: Long,
+    val syncStatus: jp.komehyappyo.member.next.core.model.VimeoVideoMemoSyncStatus =
+        jp.komehyappyo.member.next.core.model.VimeoVideoMemoSyncStatus.Synced,
 )
 
-class VimeoMemoStore(context: Context) {
+class VimeoMemoStore(context: Context) : VimeoMemoStoreProtocol {
     private val preferences = context.getSharedPreferences(
         "vimeo_video_memos",
         Context.MODE_PRIVATE,
     )
 
-    fun entries(communityId: String, videoId: String): List<VimeoVideoMemo> {
-        val raw = read().optString(key(communityId, videoId), "")
-        if (raw.isBlank()) return emptyList()
+    override fun entries(communityId: String, videoId: String): List<VimeoVideoMemo> {
+        return entries(fromRaw = read().optString(key(communityId, videoId), ""))
+            .sortedByDescending { it.createdAtMillis }
+    }
 
+    override fun allEntries(): Map<String, List<VimeoVideoMemo>> {
+        return read().let {
+            buildMap {
+                it.keys().forEach { k ->
+                    put(k, entries(fromRaw = it.optString(k, "")))
+                }
+            }
+        }
+    }
+
+    override fun pendingEntries(): Map<String, List<VimeoVideoMemo>> =
+        allEntries().mapValues { it.value.filter { item ->
+            item.syncStatus == jp.komehyappyo.member.next.core.model.VimeoVideoMemoSyncStatus.PendingSync
+        } }.filterValues { it.isNotEmpty() }
+
+    override fun entries(fromRaw: String): List<VimeoVideoMemo> {
+        if (fromRaw.isBlank()) return emptyList()
         val parsed = runCatching {
-            val array = JSONArray(raw)
+            val array = JSONArray(fromRaw)
             buildList {
                 for (index in 0 until array.length()) {
                     val item = array.optJSONObject(index) ?: continue
+                    val status = item.optString("syncStatus", "")
                     add(
                         VimeoVideoMemo(
                             id = item.optString("id"),
@@ -34,17 +65,27 @@ class VimeoMemoStore(context: Context) {
                             playbackSeconds = item.optDouble("playbackSeconds", 0.0),
                             createdAtMillis = item.optLong("createdAtMillis", 0),
                             updatedAtMillis = item.optLong("updatedAtMillis", 0),
+                            syncStatus = jp.komehyappyo.member.next.core.model.VimeoVideoMemoSyncStatus.fromValue(
+                                status.ifBlank { "synced" },
+                            ),
                         ),
                     )
                 }
             }
         }.getOrNull()
 
-        return parsed?.sortedByDescending { it.createdAtMillis }
-            ?: listOf(VimeoVideoMemo("legacy", raw, 0.0, 0L, 0L))
+        return parsed ?: listOf(
+            VimeoVideoMemo(
+                id = "legacy",
+                text = fromRaw,
+                playbackSeconds = 0.0,
+                createdAtMillis = 0L,
+                updatedAtMillis = 0L,
+            ),
+        )
     }
 
-    fun serialized(entries: List<VimeoVideoMemo>): String {
+    override fun serialized(entries: List<VimeoVideoMemo>): String {
         if (entries.isEmpty()) return ""
 
         return JSONArray().apply {
@@ -55,13 +96,14 @@ class VimeoMemoStore(context: Context) {
                         .put("text", entry.text)
                         .put("playbackSeconds", entry.playbackSeconds)
                         .put("createdAtMillis", entry.createdAtMillis)
-                        .put("updatedAtMillis", entry.updatedAtMillis),
+                        .put("updatedAtMillis", entry.updatedAtMillis)
+                        .put("syncStatus", entry.syncStatus.rawValue()),
                 )
             }
         }.toString()
     }
 
-    fun save(communityId: String, videoId: String, entries: List<VimeoVideoMemo>) {
+    override fun save(communityId: String, videoId: String, entries: List<VimeoVideoMemo>) {
         val values = read()
         val value = serialized(entries)
         if (value.isEmpty()) {
@@ -72,7 +114,7 @@ class VimeoMemoStore(context: Context) {
         preferences.edit().putString(STORAGE_KEY, values.toString()).apply()
     }
 
-    fun saveAll(memos: Map<String, String>) {
+    override fun saveAll(memos: Map<String, String>) {
         val values = JSONObject()
         memos.forEach { (k, v) -> values.put(k, v) }
         preferences.edit().putString(STORAGE_KEY, values.toString()).apply()

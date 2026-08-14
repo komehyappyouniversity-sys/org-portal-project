@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import jp.komehyappyo.member.next.core.designsystem.OfflineBanner
 import jp.komehyappyo.member.next.core.model.RadioPlaybackRecord
 import jp.komehyappyo.member.next.core.model.RadioProgram
 import jp.komehyappyo.member.next.core.model.BookingEvent
@@ -52,7 +53,11 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
-fun CommunityRoot(model: CommunityFeatureModel) {
+fun CommunityRoot(
+    model: CommunityFeatureModel,
+    onRefreshManagementPosts: () -> Unit,
+    memberPostReplyContent: @Composable () -> Unit,
+) {
     val state by model.state.collectAsStateWithLifecycle()
     val sessionState by model.session.state.collectAsStateWithLifecycle()
     val activity = LocalContext.current as Activity
@@ -76,8 +81,12 @@ fun CommunityRoot(model: CommunityFeatureModel) {
     LaunchedEffect(sessionState.authenticationToken) {
         model.refreshPublicCommunities()
         if (sessionState.authenticationToken != null) model.refresh()
+        onRefreshManagementPosts()
     }
     LaunchedEffect(sessionState.selectedCommunityId) {
+        if (sessionState.authenticationToken != null) {
+            onRefreshManagementPosts()
+        }
         model.refreshRadioPrograms()
     }
 
@@ -116,6 +125,9 @@ fun CommunityRoot(model: CommunityFeatureModel) {
     ) {
         Text("つながる")
         if (state.isLoading) CircularProgressIndicator()
+        if (state.hasPendingVideoMemoSync) {
+            OfflineBanner()
+        }
         state.message?.let { Text(it) }
 
         Text("インターネットラジオ")
@@ -216,9 +228,9 @@ fun CommunityRoot(model: CommunityFeatureModel) {
             HorizontalDivider()
         }
 
-        if (sessionState.authenticationToken == null) {
-            Text("マイページで会員登録またはログイン後に参加申請できます。")
-        } else {
+            if (sessionState.authenticationToken == null) {
+                Text("マイページで会員登録またはログイン後に参加申請できます。")
+            } else {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -266,6 +278,8 @@ fun CommunityRoot(model: CommunityFeatureModel) {
             }
 
             if (state.adminAccess?.canReviewMembers == true) {
+                memberPostReplyContent()
+
                 Text("参加申請の承認")
                 if (state.pendingApplications.isEmpty()) {
                     Text("承認待ちの申請はありません。")
@@ -1150,6 +1164,7 @@ private fun VimeoVideoDetailScreen(
     video: jp.komehyappyo.member.next.core.model.DistributedVideo,
     onBack: () -> Unit,
 ) {
+    val state by model.state.collectAsStateWithLifecycle()
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     var memo by rememberSaveable(video.id) { mutableStateOf("") }
@@ -1186,6 +1201,9 @@ private fun VimeoVideoDetailScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         TextButton(onClick = onBack) { Text("動画一覧へ戻る") }
+        if (state.hasPendingVideoMemoSync) {
+            OfflineBanner()
+        }
         VimeoPlayerView(
             videoId = video.vimeoVideoId,
             playbackCommand = playbackCommand,
