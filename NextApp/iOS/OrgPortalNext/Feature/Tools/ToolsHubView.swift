@@ -15,6 +15,7 @@ public struct ToolsHubView: View {
         case friends
         case manual
         case distributedVideos
+        case budgetSettlement
         case distributedVideoPlayer(DistributedVideo)
 
         var id: String {
@@ -28,6 +29,7 @@ public struct ToolsHubView: View {
             case .friends: "friends"
             case .manual: "manual"
             case .distributedVideos: "distributedVideos"
+            case .budgetSettlement: "budgetSettlement"
             case let .distributedVideoPlayer(video): "distributedVideoPlayer:\(video.id)"
             }
         }
@@ -41,6 +43,7 @@ public struct ToolsHubView: View {
     @ObservedObject private var favoriteBookmarkModel: FavoriteBookmarkFeatureModel
     @ObservedObject private var friendExchangeModel: FriendExchangeFeatureModel
     @ObservedObject private var distributedVideoModel: DistributedVideoFeatureModel
+    @ObservedObject private var budgetSettlementModel: BudgetSettlementFeatureModel
     @State private var destination: Destination?
     public init(
         scheduleModel: ScheduleFeatureModel,
@@ -50,7 +53,8 @@ public struct ToolsHubView: View {
         snsPostingAssistantModel: SnsPostingAssistantFeatureModel,
         favoriteBookmarkModel: FavoriteBookmarkFeatureModel,
         friendExchangeModel: FriendExchangeFeatureModel,
-        distributedVideoModel: DistributedVideoFeatureModel
+        distributedVideoModel: DistributedVideoFeatureModel,
+        budgetSettlementModel: BudgetSettlementFeatureModel
     ) {
         self.scheduleModel = scheduleModel
         self.diaryModel = diaryModel
@@ -60,6 +64,7 @@ public struct ToolsHubView: View {
         self.favoriteBookmarkModel = favoriteBookmarkModel
         self.friendExchangeModel = friendExchangeModel
         self.distributedVideoModel = distributedVideoModel
+        self.budgetSettlementModel = budgetSettlementModel
     }
 
     public var body: some View {
@@ -102,6 +107,16 @@ public struct ToolsHubView: View {
                         "home.denomination.title",
                         subtitle: "home.denomination.subtitle",
                         systemImage: "yensign.circle"
+                    )
+                }
+                .buttonStyle(.plain)
+                Button {
+                    destination = .budgetSettlement
+                } label: {
+                    FeatureCard(
+                        "予算・決算",
+                        subtitle: "本人専用の帳簿で収入・支出・残高を管理します。",
+                        systemImage: "yensign.bank.building"
                     )
                 }
                 .buttonStyle(.plain)
@@ -197,6 +212,8 @@ public struct ToolsHubView: View {
                         model: distributedVideoModel,
                         onSelect: { self.destination = .distributedVideoPlayer($0) },
                     )
+                case .budgetSettlement:
+                    BudgetSettlementRootView(model: budgetSettlementModel)
                 case let .distributedVideoPlayer(video):
                     DistributedVideoPlayerView(
                         model: distributedVideoModel,
