@@ -453,6 +453,13 @@ public struct VideoQuestion: Identifiable, Equatable, Codable, Sendable {
     public let questionText: String
     public let answerText: String
     public let createdAt: Date?
+    public let answeredAt: Date?
+    public let syncStatus: VideoQuestionSyncStatus
+    public let clientRequestId: String
+
+    public var isAnswered: Bool {
+        !answerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     public init(
         id: String,
@@ -464,7 +471,10 @@ public struct VideoQuestion: Identifiable, Equatable, Codable, Sendable {
         memoText: String = "",
         questionText: String,
         answerText: String = "",
-        createdAt: Date? = nil
+        createdAt: Date? = nil,
+        answeredAt: Date? = nil,
+        syncStatus: VideoQuestionSyncStatus = .synced,
+        clientRequestId: String = ""
     ) {
         self.id = id
         self.communityId = communityId
@@ -476,6 +486,20 @@ public struct VideoQuestion: Identifiable, Equatable, Codable, Sendable {
         self.questionText = questionText
         self.answerText = answerText
         self.createdAt = createdAt
+        self.answeredAt = answeredAt
+        self.syncStatus = syncStatus
+        self.clientRequestId = clientRequestId
+    }
+}
+
+public enum VideoQuestionSyncStatus: String, Codable, Sendable {
+    case draft
+    case sending
+    case synced
+    case failed
+
+    public var requiresSync: Bool {
+        self != .synced
     }
 }
 

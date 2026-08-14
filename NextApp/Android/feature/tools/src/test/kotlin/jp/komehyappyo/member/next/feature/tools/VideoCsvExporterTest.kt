@@ -59,6 +59,7 @@ class VideoCsvExporterTest {
                 questionText = "質問\"内容\"",
                 answerText = "回答",
                 createdAt = "2026-07-23T01:00:00Z",
+                answeredAt = "2026-07-23T02:00:00Z",
             ),
         )
         val csv = VideoQuestionCsvExporter.export(
@@ -76,10 +77,12 @@ class VideoCsvExporterTest {
 
         val formatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME
         val expectedCreatedAt = formatter.format(java.time.Instant.parse("2026-07-23T01:00:00Z").atZone(ZoneId.of("UTC")))
+        val expectedAnsweredAt = formatter.format(java.time.Instant.parse("2026-07-23T02:00:00Z").atZone(ZoneId.of("UTC")))
         assertTrue(lines[2].contains("\"質問\"\"内容\"\""))
         assertTrue(lines[2].contains("\"回答\""))
         assertTrue(lines[2].contains("\"answered\""))
         assertTrue(lines[2].contains("\"$expectedCreatedAt\""))
+        assertTrue(lines[2].contains("\"$expectedAnsweredAt\""))
     }
 
     @Test

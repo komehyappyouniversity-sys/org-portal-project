@@ -10,6 +10,7 @@ import jp.komehyappyo.member.next.core.model.DistributedVideo
 import jp.komehyappyo.member.next.core.model.VideoRepeatMode
 import jp.komehyappyo.member.next.core.model.VideoRepeatSetting
 import jp.komehyappyo.member.next.core.model.VideoQuestion
+import jp.komehyappyo.member.next.core.model.VideoQuestionSyncStatus
 import jp.komehyappyo.member.next.core.model.VimeoVideoMemoSyncStatus
 import jp.komehyappyo.member.next.core.session.AppSession
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +30,7 @@ data class DistributedVideosUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val hasPendingVideoMemoSync: Boolean = false,
+    val hasPendingVideoQuestionSync: Boolean = false,
     val videoRepeatSettings: Map<String, VideoRepeatSetting> = emptyMap(),
 )
 
@@ -37,11 +39,13 @@ class DistributedVideoFeatureModel(
     private val session: AppSession,
     private val canViewMembersOnlyVideo: (String) -> Boolean,
     private val memoStore: VimeoMemoStoreProtocol,
+    private val questionStore: VideoQuestionStoreProtocol = InMemoryVideoQuestionStore(),
     private val repeatSettingRepository: VideoRepeatSettingRepository? = null,
     private val guestUserIdProvider: GuestUserIdProvider? = null,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(DistributedVideosUiState())
     val state: StateFlow<DistributedVideosUiState> = mutableState.asStateFlow()
+    private val syncingVideoQuestionRequestIds = mutableSetOf<String>()
 
     fun loadRepeatSetting(videoId: String) {
         val localRepository = repeatSettingRepository ?: return
@@ -110,16 +114,40 @@ class DistributedVideoFeatureModel(
         val token = current.authenticationToken
         val userId = current.userId
 
-        if (communityId == null || token == null) {
+        if (communityId == null) {
             mutableState.value = DistributedVideosUiState()
             return
         }
 
+        val localQuestions = questionStore.questions(communityId, userId)
+        if (token == null) {
+            mutableState.update {
+                it.copy(
+                    videos = emptyList(),
+                    videoQuestions = localQuestions,
+                    isLoading = false,
+                    errorMessage = null,
+                    hasPendingVideoQuestionSync = questionStore
+                        .pendingQuestions(communityId, userId)
+                        .isNotEmpty(),
+                )
+            }
+            return
+        }
+
         mutableState.update {
-            it.copy(isLoading = true, errorMessage = null)
+            it.copy(
+                videoQuestions = localQuestions,
+                isLoading = true,
+                errorMessage = null,
+                hasPendingVideoQuestionSync = questionStore
+                    .pendingQuestions(communityId, userId)
+                    .isNotEmpty(),
+            )
         }
 
         viewModelScope.launch {
+            synchronizePendingVideoQuestions(communityId, userId, token)
             runCatching {
                 Triple(
                     repository.communityVideos(communityId, token).getOrThrow(),
@@ -137,14 +165,22 @@ class DistributedVideoFeatureModel(
                     },
                 )
                 synchronizePendingVideoMemos(userId, token)
+                val mergedQuestions = mergeVideoQuestions(
+                    local = questionStore.questions(communityId, userId),
+                    remote = questions,
+                )
+                questionStore.replaceQuestions(communityId, userId, mergedQuestions)
 
                 mutableState.update {
                     it.copy(
                         videos = filterDistributedVideos(videos, canViewMembersOnly),
-                        videoQuestions = questions,
+                        videoQuestions = mergedQuestions,
                         isLoading = false,
                         errorMessage = null,
                         hasPendingVideoMemoSync = memoStore.pendingEntries().isNotEmpty(),
+                        hasPendingVideoQuestionSync = questionStore
+                            .pendingQuestions(communityId, userId)
+                            .isNotEmpty(),
                     )
                 }
             }.onFailure {
@@ -153,6 +189,10 @@ class DistributedVideoFeatureModel(
                         isLoading = false,
                         errorMessage = "動画を取得できませんでした。",
                         hasPendingVideoMemoSync = memoStore.pendingEntries().isNotEmpty(),
+                        videoQuestions = questionStore.questions(communityId, userId),
+                        hasPendingVideoQuestionSync = questionStore
+                            .pendingQuestions(communityId, userId)
+                            .isNotEmpty(),
                     )
                 }
             }
@@ -258,11 +298,18 @@ class DistributedVideoFeatureModel(
         .filter { it.videoId == video.id }
         .sortedByDescending { parseQuestionCreatedAtMillis(it.createdAt) }
 
+    fun unansweredQuestions(): List<VideoQuestion> = state.value.videoQuestions
+        .filterNot { it.isAnswered }
+
+    fun answeredQuestions(): List<VideoQuestion> = state.value.videoQuestions
+        .filter { it.isAnswered }
+
     fun submitVideoQuestion(
         video: DistributedVideo,
         memo: String,
         question: String,
         playbackSeconds: Double,
+        onSubmitted: () -> Unit = {},
     ) {
         val normalizedQuestion = question.trim()
         if (normalizedQuestion.isBlank()) {
@@ -272,32 +319,51 @@ class DistributedVideoFeatureModel(
 
         val current = session.state.value
         val communityId = current.selectedCommunityId
-        val token = current.authenticationToken
-        if (communityId == null || token == null) {
+        if (communityId == null) {
             mutableState.update { it.copy(errorMessage = "動画情報を取得できませんでした。") }
             return
         }
 
+        val clientRequestId = UUID.randomUUID().toString()
+        val draft = VideoQuestion(
+            id = clientRequestId,
+            communityId = communityId,
+            memberUid = current.userId,
+            videoId = video.id,
+            videoTitle = video.title,
+            playbackSeconds = playbackSeconds,
+            memoText = memo.trim(),
+            questionText = normalizedQuestion,
+            answerText = "",
+            createdAt = Instant.now().toString(),
+            answeredAt = null,
+            syncStatus = VideoQuestionSyncStatus.Draft,
+            clientRequestId = clientRequestId,
+        )
+        questionStore.save(draft)
+        refreshLocalVideoQuestions(communityId, current.userId)
+        onSubmitted()
+
+        val token = current.authenticationToken
+        if (token == null) {
+            questionStore.save(draft.copy(syncStatus = VideoQuestionSyncStatus.Failed))
+            refreshLocalVideoQuestions(communityId, current.userId)
+            mutableState.update {
+                it.copy(errorMessage = "オフラインのため質問を端末内に保存しました。")
+            }
+            return
+        }
+
         viewModelScope.launch {
-            runCatching {
-                repository.saveVideoQuestion(
-                    communityId = communityId,
-                    memberUid = current.userId,
-                    video = video,
-                    memoText = memo,
-                    questionText = normalizedQuestion,
-                    playbackSeconds = playbackSeconds,
-                    idToken = token,
-                ).getOrThrow()
-                load()
-            }.onSuccess {
-                mutableState.update {
-                    it.copy(errorMessage = "質問を送信しました。")
-                }
-            }.onFailure { error ->
-                mutableState.update {
-                    it.copy(errorMessage = error.localizedMessage)
-                }
+            val sent = syncVideoQuestion(draft, token)
+            mutableState.update {
+                it.copy(
+                    errorMessage = if (sent) {
+                        "質問を送信しました。"
+                    } else {
+                        "オフラインのため質問を端末内に保存しました。"
+                    },
+                )
             }
         }
     }
@@ -371,6 +437,91 @@ class DistributedVideoFeatureModel(
         }
     }
 
+    private suspend fun synchronizePendingVideoQuestions(
+        communityId: String,
+        memberUid: String,
+        token: String,
+    ) {
+        questionStore.pendingQuestions(communityId, memberUid).forEach { question ->
+            syncVideoQuestion(question, token)
+        }
+    }
+
+    private suspend fun syncVideoQuestion(question: VideoQuestion, token: String): Boolean {
+        val requestId = question.clientRequestId.ifBlank { question.id }
+        if (!syncingVideoQuestionRequestIds.add(requestId)) return true
+        try {
+            val sending = question.copy(syncStatus = VideoQuestionSyncStatus.Sending)
+            questionStore.save(sending)
+            refreshLocalVideoQuestions(question.communityId, question.memberUid)
+            return repository.saveVideoQuestion(
+                communityId = question.communityId,
+                memberUid = question.memberUid,
+                video = questionVideo(question),
+                memoText = question.memoText,
+                questionText = question.questionText,
+                playbackSeconds = question.playbackSeconds,
+                clientRequestId = requestId,
+                idToken = token,
+            ).fold(
+                onSuccess = {
+                    questionStore.save(sending.copy(syncStatus = VideoQuestionSyncStatus.Synced))
+                    refreshLocalVideoQuestions(question.communityId, question.memberUid)
+                    true
+                },
+                onFailure = {
+                    questionStore.save(sending.copy(syncStatus = VideoQuestionSyncStatus.Failed))
+                    refreshLocalVideoQuestions(question.communityId, question.memberUid)
+                    false
+                },
+            )
+        } finally {
+            syncingVideoQuestionRequestIds.remove(requestId)
+        }
+    }
+
+    private fun refreshLocalVideoQuestions(communityId: String, memberUid: String) {
+        mutableState.update {
+            it.copy(
+                videoQuestions = questionStore.questions(communityId, memberUid),
+                hasPendingVideoQuestionSync = questionStore
+                    .pendingQuestions(communityId, memberUid)
+                    .isNotEmpty(),
+            )
+        }
+    }
+
+    private fun mergeVideoQuestions(
+        local: List<VideoQuestion>,
+        remote: List<VideoQuestion>,
+    ): List<VideoQuestion> {
+        val remoteIdentities = remote.map(::questionIdentity).toSet()
+        return (remote + local.filter { questionIdentity(it) !in remoteIdentities })
+            .sortedByDescending { parseQuestionCreatedAtMillis(it.createdAt) }
+    }
+
+    private fun questionIdentity(question: VideoQuestion): String =
+        question.clientRequestId.ifBlank { question.id }
+
+    private fun questionVideo(question: VideoQuestion) = DistributedVideo(
+        id = question.videoId,
+        communityId = question.communityId,
+        videoTitle = question.videoTitle,
+        description = "",
+        embedHtml = "",
+        videoUrl = "",
+        vimeoUrl = "",
+        providerVideoId = "",
+        videoType = "distributed_vimeo",
+        thumbnailUrl = "",
+        isPremium = false,
+        createdAt = null,
+        updatedAt = null,
+        isPublished = true,
+        isMembersOnly = false,
+        sortOrder = 0,
+    )
+
     private fun memoVideo(communityId: String, videoId: String) = DistributedVideo(
         id = videoId,
         communityId = communityId,
@@ -425,18 +576,20 @@ class DistributedVideoFeatureModel(
         private val session: AppSession,
         private val canViewMembersOnlyVideo: (String) -> Boolean,
         private val memoStore: VimeoMemoStoreProtocol,
+        private val questionStore: VideoQuestionStoreProtocol,
         private val repeatSettingRepository: VideoRepeatSettingRepository,
         private val guestUserIdProvider: GuestUserIdProvider,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
             return DistributedVideoFeatureModel(
-                repository,
-                session,
-                canViewMembersOnlyVideo,
-                memoStore,
-                repeatSettingRepository,
-                guestUserIdProvider,
+                repository = repository,
+                session = session,
+                canViewMembersOnlyVideo = canViewMembersOnlyVideo,
+                memoStore = memoStore,
+                questionStore = questionStore,
+                repeatSettingRepository = repeatSettingRepository,
+                guestUserIdProvider = guestUserIdProvider,
             ) as T
         }
     }

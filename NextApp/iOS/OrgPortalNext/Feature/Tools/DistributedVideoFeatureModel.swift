@@ -25,6 +25,7 @@ public protocol DistributedVideoRepository: Sendable {
         memoText: String,
         questionText: String,
         playbackSeconds: Double,
+        clientRequestId: String,
         idToken: String
     ) async throws
 }
@@ -37,6 +38,7 @@ public final class DistributedVideoFeatureModel: ObservableObject {
     @Published public private(set) var videoQuestions: [VideoQuestion] = []
     @Published public private(set) var isLoading = false
     @Published public private(set) var hasPendingVideoMemoSync = false
+    @Published public private(set) var hasPendingVideoQuestionSync = false
     @Published public private(set) var videoRepeatSettings: [String: VideoRepeatSetting] = [:]
     @Published public var errorMessage: String?
 
@@ -44,14 +46,17 @@ public final class DistributedVideoFeatureModel: ObservableObject {
     private let session: AppSession
     private let canViewMembersOnlyVideo: (String) -> Bool
     private let memoStore: VimeoMemoStore
+    private let questionStore: VideoQuestionDraftStore
     private let repeatSettingRepository: (any VideoRepeatSettingRepository)?
     private let guestUserIdProvider: (any GuestUserIdProvider)?
+    private var syncingVideoQuestionRequestIds: Set<String> = []
 
     public init(
         repository: any DistributedVideoRepository,
         session: AppSession,
         canViewMembersOnlyVideo: @escaping (String) -> Bool,
         memoStore: VimeoMemoStore = VimeoMemoStore(),
+        questionStore: VideoQuestionDraftStore = VideoQuestionDraftStore(),
         repeatSettingRepository: (any VideoRepeatSettingRepository)? = nil,
         guestUserIdProvider: (any GuestUserIdProvider)? = nil
     ) {
@@ -59,6 +64,7 @@ public final class DistributedVideoFeatureModel: ObservableObject {
         self.session = session
         self.canViewMembersOnlyVideo = canViewMembersOnlyVideo
         self.memoStore = memoStore
+        self.questionStore = questionStore
         self.repeatSettingRepository = repeatSettingRepository
         self.guestUserIdProvider = guestUserIdProvider
     }
@@ -113,15 +119,29 @@ public final class DistributedVideoFeatureModel: ObservableObject {
 
     public func load() async {
         guard let communityId = session.selectedCommunityId,
-              let token = session.authenticationToken else {
+              let memberUid = session.authenticatedUserId else {
             videos = []
             videoQuestions = []
             errorMessage = nil
             hasPendingVideoMemoSync = false
+            hasPendingVideoQuestionSync = false
+            return
+        }
+        videoQuestions = questionStore.questions(communityId: communityId, memberUid: memberUid)
+        updatePendingVideoQuestionSyncState(communityId: communityId, memberUid: memberUid)
+        guard let token = session.authenticationToken else {
+            videos = []
+            errorMessage = nil
             return
         }
         isLoading = true
         errorMessage = nil
+
+        await synchronizePendingVideoQuestions(
+            communityId: communityId,
+            memberUid: memberUid,
+            token: token
+        )
 
         do {
             let allowed = canViewMembersOnlyVideo(communityId)
@@ -131,7 +151,7 @@ public final class DistributedVideoFeatureModel: ObservableObject {
             )
             let questionsResult = try await repository.videoQuestions(
                 communityId: communityId,
-                memberUid: session.authenticatedUserId ?? "",
+                memberUid: memberUid,
                 idToken: token
             )
             if let userId = session.authenticatedUserId {
@@ -148,11 +168,22 @@ public final class DistributedVideoFeatureModel: ObservableObject {
                 videosResult,
                 canViewMembersOnlyVideo: allowed
             )
-            videoQuestions = questionsResult
+            let mergedQuestions = mergeVideoQuestions(
+                local: questionStore.questions(communityId: communityId, memberUid: memberUid),
+                remote: questionsResult
+            )
+            questionStore.replaceQuestions(
+                communityId: communityId,
+                memberUid: memberUid,
+                with: mergedQuestions
+            )
+            videoQuestions = mergedQuestions
         } catch {
             errorMessage = "動画を取得できませんでした。"
+            videoQuestions = questionStore.questions(communityId: communityId, memberUid: memberUid)
         }
         updatePendingVideoMemoSyncState()
+        updatePendingVideoQuestionSyncState(communityId: communityId, memberUid: memberUid)
         isLoading = false
     }
 
@@ -260,39 +291,62 @@ public final class DistributedVideoFeatureModel: ObservableObject {
             }
     }
 
+    public var unansweredQuestions: [VideoQuestion] {
+        videoQuestions.filter { !$0.isAnswered }
+    }
+
+    public var answeredQuestions: [VideoQuestion] {
+        videoQuestions.filter { $0.isAnswered }
+    }
+
+    @discardableResult
     public func submitVideoQuestion(
         _ video: DistributedVideo,
         memo: String,
         question: String,
         playbackSeconds: Double
-    ) async {
+    ) async -> Bool {
         let normalizedQuestion = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedQuestion.isEmpty else {
             errorMessage = "質問を入力してください。"
-            return
+            return false
         }
         guard
-            let token = session.authenticationToken,
             let memberUid = session.authenticatedUserId,
             let communityId = session.selectedCommunityId
         else {
-            return
+            return false
         }
-        do {
-            try await repository.saveVideoQuestion(
-                communityId: communityId,
-                memberUid: memberUid,
-                video: video,
-                memoText: memo,
-                questionText: normalizedQuestion,
-                playbackSeconds: playbackSeconds,
-                idToken: token,
-            )
-            await load()
-            errorMessage = "質問を送信しました。"
-        } catch {
-            errorMessage = error.localizedDescription
+        let clientRequestId = UUID().uuidString.lowercased()
+        let draft = VideoQuestion(
+            id: clientRequestId,
+            communityId: communityId,
+            memberUid: memberUid,
+            videoId: video.id,
+            videoTitle: video.title,
+            playbackSeconds: playbackSeconds,
+            memoText: memo.trimmingCharacters(in: .whitespacesAndNewlines),
+            questionText: normalizedQuestion,
+            answerText: "",
+            createdAt: Date(),
+            answeredAt: nil,
+            syncStatus: .draft,
+            clientRequestId: clientRequestId
+        )
+        questionStore.save(draft)
+        refreshLocalVideoQuestions(communityId: communityId, memberUid: memberUid)
+
+        guard let token = session.authenticationToken else {
+            questionStore.save(copyQuestion(draft, syncStatus: .failed))
+            refreshLocalVideoQuestions(communityId: communityId, memberUid: memberUid)
+            errorMessage = "オフラインのため質問を端末内に保存しました。"
+            return true
         }
+        let sent = await syncVideoQuestion(draft, token: token, reportResult: true)
+        errorMessage = sent
+            ? "質問を送信しました。"
+            : "オフラインのため質問を端末内に保存しました。"
+        return true
     }
 
     public func clearError() {
@@ -378,6 +432,117 @@ public final class DistributedVideoFeatureModel: ObservableObject {
         }
     }
 
+    private func synchronizePendingVideoQuestions(
+        communityId: String,
+        memberUid: String,
+        token: String
+    ) async {
+        let pending = questionStore.pendingQuestions(
+            communityId: communityId,
+            memberUid: memberUid
+        )
+        for question in pending {
+            _ = await syncVideoQuestion(question, token: token, reportResult: false)
+        }
+    }
+
+    private func syncVideoQuestion(
+        _ question: VideoQuestion,
+        token: String,
+        reportResult: Bool
+    ) async -> Bool {
+        let requestId = question.clientRequestId.isEmpty ? question.id : question.clientRequestId
+        guard !syncingVideoQuestionRequestIds.contains(requestId) else { return true }
+        syncingVideoQuestionRequestIds.insert(requestId)
+        defer { syncingVideoQuestionRequestIds.remove(requestId) }
+
+        let sending = copyQuestion(question, syncStatus: .sending)
+        questionStore.save(sending)
+        refreshLocalVideoQuestions(communityId: question.communityId, memberUid: question.memberUid)
+        do {
+            try await repository.saveVideoQuestion(
+                communityId: question.communityId,
+                memberUid: question.memberUid,
+                video: questionVideo(question),
+                memoText: question.memoText,
+                questionText: question.questionText,
+                playbackSeconds: question.playbackSeconds,
+                clientRequestId: requestId,
+                idToken: token
+            )
+            questionStore.save(copyQuestion(sending, syncStatus: .synced))
+            refreshLocalVideoQuestions(communityId: question.communityId, memberUid: question.memberUid)
+            return true
+        } catch {
+            questionStore.save(copyQuestion(sending, syncStatus: .failed))
+            refreshLocalVideoQuestions(communityId: question.communityId, memberUid: question.memberUid)
+            if reportResult {
+                errorMessage = "オフラインのため質問を端末内に保存しました。"
+            }
+            return false
+        }
+    }
+
+    private func refreshLocalVideoQuestions(communityId: String, memberUid: String) {
+        videoQuestions = questionStore.questions(communityId: communityId, memberUid: memberUid)
+        updatePendingVideoQuestionSyncState(communityId: communityId, memberUid: memberUid)
+    }
+
+    private func mergeVideoQuestions(
+        local: [VideoQuestion],
+        remote: [VideoQuestion]
+    ) -> [VideoQuestion] {
+        let remoteIdentities = Set(remote.map(questionIdentity))
+        return (remote + local.filter { !remoteIdentities.contains(questionIdentity($0)) })
+            .sorted { ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast) }
+    }
+
+    private func questionIdentity(_ question: VideoQuestion) -> String {
+        question.clientRequestId.isEmpty ? question.id : question.clientRequestId
+    }
+
+    private func questionVideo(_ question: VideoQuestion) -> DistributedVideo {
+        DistributedVideo(
+            id: question.videoId,
+            communityId: question.communityId,
+            videoTitle: question.videoTitle,
+            description: "",
+            embedHtml: "",
+            videoUrl: "",
+            vimeoUrl: "",
+            providerVideoId: "",
+            videoType: "distributed_vimeo",
+            thumbnailUrl: "",
+            isPremium: false,
+            createdAt: nil,
+            updatedAt: nil,
+            isPublished: true,
+            isMembersOnly: false,
+            sortOrder: 0
+        )
+    }
+
+    private func copyQuestion(
+        _ question: VideoQuestion,
+        syncStatus: VideoQuestionSyncStatus
+    ) -> VideoQuestion {
+        VideoQuestion(
+            id: question.id,
+            communityId: question.communityId,
+            memberUid: question.memberUid,
+            videoId: question.videoId,
+            videoTitle: question.videoTitle,
+            playbackSeconds: question.playbackSeconds,
+            memoText: question.memoText,
+            questionText: question.questionText,
+            answerText: question.answerText,
+            createdAt: question.createdAt,
+            answeredAt: question.answeredAt,
+            syncStatus: syncStatus,
+            clientRequestId: question.clientRequestId
+        )
+    }
+
     private func videoEntriesKeyToVideo(communityId: String, videoId: String) -> DistributedVideo {
         DistributedVideo(
             id: videoId,
@@ -432,6 +597,13 @@ public final class DistributedVideoFeatureModel: ObservableObject {
 
     private func updatePendingVideoMemoSyncState() {
         hasPendingVideoMemoSync = !memoStore.pendingEntries().isEmpty
+    }
+
+    private func updatePendingVideoQuestionSyncState(communityId: String, memberUid: String) {
+        hasPendingVideoQuestionSync = !questionStore.pendingQuestions(
+            communityId: communityId,
+            memberUid: memberUid
+        ).isEmpty
     }
 }
 

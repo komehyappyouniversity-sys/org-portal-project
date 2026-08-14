@@ -1,8 +1,75 @@
 import Foundation
+import Model
 import XCTest
 @testable import DataLayer
 
 final class FirebaseRESTCommunityRepositoryVideoQuestionTests: XCTestCase {
+    func testSaveVideoQuestionUsesClientRequestIdAsIdempotentDocumentId() async throws {
+        MockFirestoreProtocol.reset()
+        let session = URLSession(configuration: mockSessionConfiguration())
+        let repository = FirebaseRESTCommunityRepository(projectId: "test-project", session: session)
+        let path = "/v1/projects/test-project/databases/(default)/documents/organizations/org-1/videoQuestions"
+        let request = requestKey(
+            path: path,
+            method: "POST",
+            query: "documentId=request-123"
+        )
+        let video = DistributedVideo(
+            id: "video-1",
+            communityId: "org-1",
+            videoTitle: "動画",
+            description: "",
+            embedHtml: "",
+            videoUrl: "",
+            vimeoUrl: "",
+            providerVideoId: "",
+            videoType: "distributed_vimeo",
+            thumbnailUrl: "",
+            isPremium: false,
+            createdAt: nil,
+            updatedAt: nil,
+            isPublished: true,
+            isMembersOnly: false,
+            sortOrder: 0
+        )
+
+        for statusCode in [200, 409] {
+            MockFirestoreProtocol.responses[request] = FakeResponse(
+                statusCode: statusCode,
+                body: ["writeTime": [:]]
+            )
+            try await repository.saveVideoQuestion(
+                communityId: "org-1",
+                memberUid: "member",
+                video: video,
+                memoText: "メモ",
+                questionText: "質問",
+                playbackSeconds: 10,
+                clientRequestId: "request-123",
+                idToken: "id-token"
+            )
+        }
+
+        XCTAssertEqual(MockFirestoreProtocol.requests.map(\.path), [path, path])
+        XCTAssertEqual(MockFirestoreProtocol.requests.map(\.method), ["POST", "POST"])
+        XCTAssertEqual(
+            MockFirestoreProtocol.requests.map(\.query),
+            ["documentId=request-123", "documentId=request-123"]
+        )
+        let payload = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: MockFirestoreProtocol.requests[0].body) as? [String: Any]
+        )
+        let fields = try XCTUnwrap(payload["fields"] as? [String: Any])
+        XCTAssertEqual(
+            (fields["clientRequestId"] as? [String: Any])?["stringValue"] as? String,
+            "request-123"
+        )
+        XCTAssertEqual(
+            (fields["syncStatus"] as? [String: Any])?["stringValue"] as? String,
+            "synced"
+        )
+    }
+
     func testAdminVideoQuestionsLoadsAllQuestionsSortedByCreatedAt() async throws {
         MockFirestoreProtocol.reset()
         let session = URLSession(
@@ -44,6 +111,7 @@ final class FirebaseRESTCommunityRepositoryVideoQuestionTests: XCTestCase {
                             "videoId": ["stringValue": "video-b"],
                             "playbackSeconds": ["doubleValue": 20.0],
                             "createdAt": ["timestampValue": "2026-08-12T09:00:00Z"],
+                            "answeredAt": ["timestampValue": "2026-08-12T10:00:00Z"],
                         ],
                     ],
                 ],
@@ -62,6 +130,11 @@ final class FirebaseRESTCommunityRepositoryVideoQuestionTests: XCTestCase {
         XCTAssertEqual(result[0].memberUid, "member-a")
         XCTAssertEqual(result[0].memoText, "メモ")
         XCTAssertEqual(result[0].answerText, "")
+        XCTAssertNil(result[0].answeredAt)
+        XCTAssertEqual(
+            result[1].answeredAt,
+            ISO8601DateFormatter().date(from: "2026-08-12T10:00:00Z")
+        )
     }
 
     func testAnswerVideoQuestionSendsTrimmedPayload() async throws {
@@ -103,9 +176,12 @@ final class FirebaseRESTCommunityRepositoryVideoQuestionTests: XCTestCase {
         let fields = try XCTUnwrap(payload["fields"] as? [String: Any])
         let answerText = try XCTUnwrap((fields["answerText"] as? [String: Any])?["stringValue"] as? String)
         let updatedAt = (fields["updatedAt"] as? [String: Any])?["timestampValue"] as? String
+        let answeredAt = (fields["answeredAt"] as? [String: Any])?["timestampValue"] as? String
 
         XCTAssertEqual(answerText, "回答します")
         XCTAssertNotNil(updatedAt)
+        XCTAssertNotNil(answeredAt)
+        XCTAssertEqual(answeredAt, updatedAt)
     }
 
     private func mockSessionConfiguration() -> URLSessionConfiguration {
