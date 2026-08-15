@@ -16,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -46,6 +47,8 @@ import jp.komehyappyo.member.next.core.data.FirebaseRestBudgetSettlementReposito
 import jp.komehyappyo.member.next.core.data.LocalBudgetReceiptStore
 import jp.komehyappyo.member.next.core.data.RoomBudgetSettlementRepository
 import jp.komehyappyo.member.next.core.data.DataStoreBudgetMigrationStateStore
+import jp.komehyappyo.member.next.core.data.DataStoreUsageAnalyticsPreferenceStore
+import jp.komehyappyo.member.next.core.data.UsageLogRecorder
 import jp.komehyappyo.member.next.core.model.CommunityMembershipStatus
 import jp.komehyappyo.member.next.core.designsystem.OrgPortalTheme
 import jp.komehyappyo.member.next.core.navigation.AppShell
@@ -77,6 +80,7 @@ import jp.komehyappyo.member.next.feature.messages.AnnouncementRoot
 import jp.komehyappyo.member.next.feature.messages.MemberPostReplySection
 import jp.komehyappyo.member.next.feature.messages.PostFeatureModel
 import jp.komehyappyo.member.next.feature.messages.PostRoot
+import kotlinx.coroutines.launch
 
 class MainActivity : FragmentActivity() {
     private val notificationPermission =
@@ -116,11 +120,18 @@ class MainActivity : FragmentActivity() {
         val communityRepository = remember {
             FirebaseRestCommunityRepository(BuildConfig.FIREBASE_PROJECT_ID)
         }
+        val usageAnalyticsPreferences = remember {
+            DataStoreUsageAnalyticsPreferenceStore(applicationContext)
+        }
+        val usageLogRecorder = remember {
+            UsageLogRecorder(communityRepository, usageAnalyticsPreferences)
+        }
         val communityFactory = remember {
             CommunityFeatureModel.Factory(
                 communityRepository,
                 appSession,
                 VimeoMemoStore(applicationContext),
+                usageLogRecorder,
             )
         }
         val communityModel: CommunityFeatureModel = viewModel(factory = communityFactory)
@@ -140,6 +151,7 @@ class MainActivity : FragmentActivity() {
                     database.videoRepeatSettingDao(),
                 ),
                 guestUserIdProvider = AndroidKeystoreGuestUserIdProvider(applicationContext),
+                usageLogRecorder = usageLogRecorder,
             )
         }
         val distributedVideoModel: DistributedVideoFeatureModel = viewModel(
@@ -321,10 +333,19 @@ class MainActivity : FragmentActivity() {
             },
             myPage = {
                 val communityState by communityModel.state.collectAsStateWithLifecycle()
+                val usageAnalyticsOptOut by usageAnalyticsPreferences.optOutFlow
+                    .collectAsStateWithLifecycle(initialValue = false)
+                val preferenceScope = rememberCoroutineScope()
                 AccountRoot(
                     model = accountModel,
                     activity = this@MainActivity,
                     canEnterManagementMode = communityState.adminAccess?.canReviewMembers == true,
+                    usageAnalyticsOptOut = usageAnalyticsOptOut,
+                    onUsageAnalyticsOptOutChange = { optedOut ->
+                        preferenceScope.launch {
+                            usageAnalyticsPreferences.setOptedOut(optedOut)
+                        }
+                    },
                     managementContent = {
                         CommunityRoot(
                             model = communityModel,

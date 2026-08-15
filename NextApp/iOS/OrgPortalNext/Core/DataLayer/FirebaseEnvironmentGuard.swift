@@ -938,7 +938,97 @@ public enum CommunityRepositoryError: LocalizedError, Equatable {
     }
 }
 
-public struct FirebaseRESTCommunityRepository: CommunityRepository {
+public enum UsageAnalyticsPreferenceKey {
+    public static let optOut = "usageAnalyticsOptOut"
+}
+
+public protocol UsageAnalyticsPreferenceStore: Sendable {
+    func isOptedOut() async -> Bool
+}
+
+public struct UserDefaultsUsageAnalyticsPreferenceStore: UsageAnalyticsPreferenceStore,
+    @unchecked Sendable {
+    private let defaults: UserDefaults
+
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    public func isOptedOut() async -> Bool {
+        defaults.bool(forKey: UsageAnalyticsPreferenceKey.optOut)
+    }
+}
+
+public protocol UsageLogRemoteRepository: Sendable {
+    func saveUsageLog(_ log: UsageLog, idToken: String) async throws
+}
+
+public struct UsageLogRecorder: Sendable {
+    private let remoteRepository: any UsageLogRemoteRepository
+    private let preferenceStore: any UsageAnalyticsPreferenceStore
+    private let idProvider: @Sendable () -> String
+    private let now: @Sendable () -> Date
+
+    public init(
+        remoteRepository: any UsageLogRemoteRepository,
+        preferenceStore: any UsageAnalyticsPreferenceStore,
+        idProvider: @escaping @Sendable () -> String = { UUID().uuidString },
+        now: @escaping @Sendable () -> Date = Date.init
+    ) {
+        self.remoteRepository = remoteRepository
+        self.preferenceStore = preferenceStore
+        self.idProvider = idProvider
+        self.now = now
+    }
+
+    @discardableResult
+    public func record(
+        userId: String,
+        idToken: String,
+        eventType: UsageLogEventType,
+        targetId: String,
+        positionSeconds: Double = 0
+    ) async throws -> Bool {
+        guard await preferenceStore.isOptedOut() == false else { return false }
+        let log = UsageLog(
+            id: idProvider(),
+            userId: userId,
+            eventType: eventType,
+            targetId: targetId,
+            positionSeconds: positionSeconds,
+            occurredAt: now()
+        )
+        try log.validate()
+        try await remoteRepository.saveUsageLog(log, idToken: idToken)
+        return true
+    }
+}
+
+public enum UsageLogRetention {
+    public static let normalEventDays = 90
+    public static let normalEventDuration: TimeInterval = 90 * 24 * 60 * 60
+}
+
+internal func usageLogFirestoreFields(_ log: UsageLog) throws -> [String: Any] {
+    try log.validate()
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return [
+        "id": ["stringValue": log.id],
+        "userId": ["stringValue": log.userId],
+        "eventType": ["stringValue": log.eventType.rawValue],
+        "targetId": ["stringValue": log.targetId],
+        "positionSeconds": ["doubleValue": log.positionSeconds],
+        "occurredAt": ["timestampValue": formatter.string(from: log.occurredAt)],
+        "expiresAt": [
+            "timestampValue": formatter.string(
+                from: log.occurredAt.addingTimeInterval(UsageLogRetention.normalEventDuration)
+            )
+        ],
+    ]
+}
+
+public struct FirebaseRESTCommunityRepository: CommunityRepository, UsageLogRemoteRepository {
     private let projectId: String
     private let session: URLSession
 
@@ -1672,6 +1762,16 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
                 communityId: communityId
             )
         }
+    }
+
+    public func saveUsageLog(_ log: UsageLog, idToken: String) async throws {
+        let fields = try usageLogFirestoreFields(log)
+        _ = try await requestJSON(
+            path: "documents/memberPrivate/\(log.userId)/usageLogs/\(log.id)",
+            method: "PATCH",
+            idToken: idToken,
+            body: ["fields": fields]
+        )
     }
 
     public func videoMemos(

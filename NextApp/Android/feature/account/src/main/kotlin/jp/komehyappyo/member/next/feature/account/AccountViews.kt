@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -16,6 +17,7 @@ import androidx.compose.material3.Divider
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,11 +42,20 @@ fun AccountRoot(
     model: AccountFeatureModel,
     activity: FragmentActivity,
     canEnterManagementMode: Boolean,
+    usageAnalyticsOptOut: Boolean,
+    onUsageAnalyticsOptOutChange: (Boolean) -> Unit,
     managementContent: @Composable () -> Unit,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
     when (state.screen) {
-        AccountScreen.Overview -> AccountOverview(state, model, activity, canEnterManagementMode)
+        AccountScreen.Overview -> AccountOverview(
+            state,
+            model,
+            activity,
+            canEnterManagementMode,
+            usageAnalyticsOptOut,
+            onUsageAnalyticsOptOutChange,
+        )
         AccountScreen.Management -> ManagementModeRoot(managementContent) { model.show(AccountScreen.Overview) }
         AccountScreen.Register -> AccountForm(true, state, model)
         AccountScreen.Login -> AccountForm(false, state, model)
@@ -58,6 +69,8 @@ private fun AccountOverview(
     model: AccountFeatureModel,
     activity: FragmentActivity,
     canEnterManagementMode: Boolean,
+    usageAnalyticsOptOut: Boolean,
+    onUsageAnalyticsOptOutChange: (Boolean) -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
@@ -138,6 +151,21 @@ private fun AccountOverview(
                     }
                     OutlinedButton(onClick = model::logout) { Text("ログアウト") }
                 }
+        }
+        Divider()
+        Text("アプリ設定")
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("任意の利用状況記録を停止")
+                Text("ONにすると、機能改善のための動画・ラジオ利用イベントを送信しません。")
+            }
+            Switch(
+                checked = usageAnalyticsOptOut,
+                onCheckedChange = onUsageAnalyticsOptOutChange,
+            )
         }
         StatusMessage(state)
     }

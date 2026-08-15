@@ -4,6 +4,76 @@ import XCTest
 @testable import DataLayer
 
 final class FirebaseRESTCommunityRepositoryVideoQuestionTests: XCTestCase {
+    func testUsageLogConversionAddsNinetyDayExpirationWithoutContentFields() throws {
+        let occurredAt = Date(timeIntervalSince1970: 1_786_680_000)
+        let fields = try usageLogFirestoreFields(UsageLog(
+            id: "log-1",
+            userId: "member-1",
+            eventType: .videoCompleted,
+            targetId: "video-1",
+            positionSeconds: 120,
+            occurredAt: occurredAt
+        ))
+
+        XCTAssertEqual((fields["eventType"] as? [String: Any])?["stringValue"] as? String, "video_completed")
+        XCTAssertEqual((fields["positionSeconds"] as? [String: Any])?["doubleValue"] as? Double, 120)
+        XCTAssertNil(fields["body"])
+        XCTAssertNil(fields["memo"])
+        let expirationValue = try XCTUnwrap(
+            (fields["expiresAt"] as? [String: Any])?["timestampValue"] as? String
+        )
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        XCTAssertEqual(
+            formatter.date(from: expirationValue),
+            occurredAt.addingTimeInterval(UsageLogRetention.normalEventDuration)
+        )
+    }
+
+    func testUsageLogRecorderDoesNotSendWhenOptedOut() async throws {
+        let remote = UsageLogRemoteSpy()
+        let recorder = UsageLogRecorder(
+            remoteRepository: remote,
+            preferenceStore: FixedUsagePreferenceStore(isOptedOut: true),
+            idProvider: { "log-1" },
+            now: { Date(timeIntervalSince1970: 1_786_680_000) }
+        )
+
+        let sent = try await recorder.record(
+            userId: "member-1",
+            idToken: "token",
+            eventType: .radioPlayed,
+            targetId: "radio-1"
+        )
+
+        XCTAssertFalse(sent)
+        let savedCount = await remote.savedCount
+        XCTAssertEqual(savedCount, 0)
+    }
+
+    func testUsageLogRecorderSendsOnlyAllowedMetadataWhenEnabled() async throws {
+        let remote = UsageLogRemoteSpy()
+        let recorder = UsageLogRecorder(
+            remoteRepository: remote,
+            preferenceStore: FixedUsagePreferenceStore(isOptedOut: false),
+            idProvider: { "log-1" },
+            now: { Date(timeIntervalSince1970: 1_786_680_000) }
+        )
+
+        let sent = try await recorder.record(
+            userId: "member-1",
+            idToken: "token",
+            eventType: .videoPlaybackStarted,
+            targetId: "video-1",
+            positionSeconds: 12
+        )
+        XCTAssertTrue(sent)
+        let saved = await remote.savedLog
+        XCTAssertEqual(saved?.id, "log-1")
+        XCTAssertEqual(saved?.targetId, "video-1")
+        XCTAssertEqual(saved?.positionSeconds, 12)
+    }
+
     func testSaveVideoQuestionUsesClientRequestIdAsIdempotentDocumentId() async throws {
         MockFirestoreProtocol.reset()
         let session = URLSession(configuration: mockSessionConfiguration())
@@ -188,6 +258,25 @@ final class FirebaseRESTCommunityRepositoryVideoQuestionTests: XCTestCase {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockFirestoreProtocol.self]
         return configuration
+    }
+}
+
+private struct FixedUsagePreferenceStore: UsageAnalyticsPreferenceStore {
+    let isOptedOutValue: Bool
+
+    init(isOptedOut: Bool) {
+        isOptedOutValue = isOptedOut
+    }
+
+    func isOptedOut() async -> Bool { isOptedOutValue }
+}
+
+private actor UsageLogRemoteSpy: UsageLogRemoteRepository {
+    private(set) var savedLog: UsageLog?
+    var savedCount: Int { savedLog == nil ? 0 : 1 }
+
+    func saveUsageLog(_ log: UsageLog, idToken: String) async throws {
+        savedLog = log
     }
 }
 

@@ -112,6 +112,43 @@ service cloud.firestore {
       allow read, write: if isSelf(userId);
     }
 
+    match /memberPrivate/{userId}/usageLogs/{logId} {
+      allow read, delete: if isSelf(userId);
+      allow create, update: if isSelf(userId)
+        && request.resource.data.keys().hasOnly([
+          'id',
+          'userId',
+          'eventType',
+          'targetId',
+          'positionSeconds',
+          'occurredAt',
+          'expiresAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'id',
+          'userId',
+          'eventType',
+          'targetId',
+          'positionSeconds',
+          'occurredAt',
+          'expiresAt'
+        ])
+        && request.resource.data.id == logId
+        && request.resource.data.userId == userId
+        && request.resource.data.eventType in [
+          'video_detail_opened',
+          'video_playback_started',
+          'video_position',
+          'video_completed',
+          'radio_played'
+        ]
+        && request.resource.data.targetId is string
+        && request.resource.data.positionSeconds is number
+        && request.resource.data.positionSeconds >= 0
+        && request.resource.data.occurredAt is timestamp
+        && request.resource.data.expiresAt is timestamp;
+    }
+
     match /memberPrivate/{uid}/budgetSettlementReports/{reportId} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
 

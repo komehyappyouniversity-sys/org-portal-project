@@ -347,6 +347,61 @@ public struct DistributedVideo: Identifiable, Equatable, Codable, Sendable {
     }
 }
 
+public enum UsageLogEventType: String, Codable, CaseIterable, Sendable {
+    case videoDetailOpened = "video_detail_opened"
+    case videoPlaybackStarted = "video_playback_started"
+    case videoPosition = "video_position"
+    case videoCompleted = "video_completed"
+    case radioPlayed = "radio_played"
+}
+
+public enum UsageLogValidationError: Error, Equatable, Sendable {
+    case missingID
+    case missingUserID
+    case missingTargetID
+    case invalidPositionSeconds
+}
+
+public struct UsageLog: Identifiable, Equatable, Codable, Sendable {
+    public let id: String
+    public let userId: String
+    public let eventType: UsageLogEventType
+    public let targetId: String
+    public let positionSeconds: Double
+    public let occurredAt: Date
+
+    public init(
+        id: String,
+        userId: String,
+        eventType: UsageLogEventType,
+        targetId: String,
+        positionSeconds: Double = 0,
+        occurredAt: Date
+    ) {
+        self.id = id
+        self.userId = userId
+        self.eventType = eventType
+        self.targetId = targetId
+        self.positionSeconds = positionSeconds
+        self.occurredAt = occurredAt
+    }
+
+    public func validate() throws {
+        if id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw UsageLogValidationError.missingID
+        }
+        if userId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw UsageLogValidationError.missingUserID
+        }
+        if targetId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw UsageLogValidationError.missingTargetID
+        }
+        if !positionSeconds.isFinite || positionSeconds < 0 {
+            throw UsageLogValidationError.invalidPositionSeconds
+        }
+    }
+}
+
 public struct BookingEvent: Identifiable, Equatable, Codable, Sendable {
     public let id: String
     public let communityId: String

@@ -169,6 +169,7 @@ fun ToolsHubRoot(
             DistributedVideoListRoot(
                 model = distributedVideoModel,
                 onSelect = { selected ->
+                    distributedVideoModel.recordVideoDetailOpened(selected)
                     destination = ToolsDestination.DistributedVideoPlayer(selected)
                 },
                 onOpenQuestions = { destination = ToolsDestination.VideoQuestions },
@@ -670,7 +671,16 @@ private fun DistributedVideoPlayer(
                 initialPlaybackSeconds = playbackSeconds,
                 command = playbackCommand,
                 isRepeatEnabled = model.isRepeatEnabled(video.id),
-                onPlaybackTimeChanged = { playbackSeconds = it },
+                onPlaybackTimeChanged = {
+                    playbackSeconds = it
+                    model.recordVideoPosition(video, it)
+                },
+                onPlaybackStarted = {
+                    model.recordVideoPlaybackStarted(video, playbackSeconds)
+                },
+                onPlaybackCompleted = {
+                    model.recordVideoCompleted(video, playbackSeconds)
+                },
             )
 
             Button(onClick = { showRepeatSettingPanel = true }) {
@@ -962,12 +972,18 @@ private fun DistributedVimeoVideoPlayerView(
     command: VimeoPlaybackCommand?,
     isRepeatEnabled: Boolean,
     onPlaybackTimeChanged: (Double) -> Unit,
+    onPlaybackStarted: () -> Unit,
+    onPlaybackCompleted: () -> Unit,
 ) {
     val state = remember {
         DistributedVimeoPlayerState()
     }
     val bridge: DistributedVimeoPlayerBridge = remember {
-        DistributedVimeoPlayerBridge(onPlaybackTimeChanged)
+        DistributedVimeoPlayerBridge(
+            onPlaybackTimeChanged,
+            onPlaybackStarted,
+            onPlaybackCompleted,
+        )
     }
 
     @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
@@ -1103,7 +1119,17 @@ private fun distributedVimeoPlayerHTML(
             postError(error && error.message ? error.message : 'Vimeoプレーヤーを準備できませんでした。');
         });
 
-        player.on('ended', function() {
+        player.on('play', function() {
+            if (bridge && bridge.onPlaybackStarted) bridge.onPlaybackStarted();
+        });
+
+        player.on('timeupdate', function(data) {
+            postTime(data.seconds || 0);
+        });
+
+        player.on('ended', function(data) {
+            postTime(data && data.seconds ? data.seconds : 0);
+            if (bridge && bridge.onPlaybackCompleted) bridge.onPlaybackCompleted();
             if (!repeatEnabled) return;
             player.setCurrentTime(0).then(function() {
                 return player.play();
@@ -1167,11 +1193,19 @@ private class DistributedVimeoPlayerState {
 
 private class DistributedVimeoPlayerBridge(
     private var onPlaybackTimeChanged: (Double) -> Unit,
+    private val onPlaybackStarted: () -> Unit,
+    private val onPlaybackCompleted: () -> Unit,
 ) {
     @JavascriptInterface
     fun onCurrentTime(value: Double) {
         onPlaybackTimeChanged(value)
     }
+
+    @JavascriptInterface
+    fun onPlaybackStarted() = onPlaybackStarted.invoke()
+
+    @JavascriptInterface
+    fun onPlaybackCompleted() = onPlaybackCompleted.invoke()
 
     @JavascriptInterface
     fun onError(value: String?) {

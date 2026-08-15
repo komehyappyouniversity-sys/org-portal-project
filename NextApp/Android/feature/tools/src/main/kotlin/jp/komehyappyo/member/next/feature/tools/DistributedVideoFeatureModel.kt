@@ -6,12 +6,14 @@ import androidx.lifecycle.viewModelScope
 import jp.komehyappyo.member.next.core.data.CommunityRepository
 import jp.komehyappyo.member.next.core.data.GuestUserIdProvider
 import jp.komehyappyo.member.next.core.data.VideoRepeatSettingRepository
+import jp.komehyappyo.member.next.core.data.UsageLogRecorder
 import jp.komehyappyo.member.next.core.model.DistributedVideo
 import jp.komehyappyo.member.next.core.model.VideoRepeatMode
 import jp.komehyappyo.member.next.core.model.VideoRepeatSetting
 import jp.komehyappyo.member.next.core.model.VideoQuestion
 import jp.komehyappyo.member.next.core.model.VideoQuestionSyncStatus
 import jp.komehyappyo.member.next.core.model.VimeoVideoMemoSyncStatus
+import jp.komehyappyo.member.next.core.model.UsageLogEventType
 import jp.komehyappyo.member.next.core.session.AppSession
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,10 +44,54 @@ class DistributedVideoFeatureModel(
     private val questionStore: VideoQuestionStoreProtocol = InMemoryVideoQuestionStore(),
     private val repeatSettingRepository: VideoRepeatSettingRepository? = null,
     private val guestUserIdProvider: GuestUserIdProvider? = null,
+    private val usageLogRecorder: UsageLogRecorder? = null,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(DistributedVideosUiState())
     val state: StateFlow<DistributedVideosUiState> = mutableState.asStateFlow()
     private val syncingVideoQuestionRequestIds = mutableSetOf<String>()
+    private val lastRecordedPositionBucket = mutableMapOf<String, Int>()
+
+    fun recordVideoDetailOpened(video: DistributedVideo) {
+        recordUsage(UsageLogEventType.VideoDetailOpened, video.id)
+    }
+
+    fun recordVideoPlaybackStarted(video: DistributedVideo, positionSeconds: Double) {
+        recordUsage(UsageLogEventType.VideoPlaybackStarted, video.id, positionSeconds)
+    }
+
+    fun recordVideoPosition(video: DistributedVideo, positionSeconds: Double) {
+        if (!positionSeconds.isFinite() || positionSeconds < 30.0) return
+        val bucket = (positionSeconds / 30.0).toInt()
+        if (bucket <= 0 || lastRecordedPositionBucket[video.id] == bucket) return
+        lastRecordedPositionBucket[video.id] = bucket
+        recordUsage(UsageLogEventType.VideoPosition, video.id, positionSeconds)
+    }
+
+    fun recordVideoCompleted(video: DistributedVideo, positionSeconds: Double) {
+        lastRecordedPositionBucket.remove(video.id)
+        recordUsage(UsageLogEventType.VideoCompleted, video.id, positionSeconds)
+    }
+
+    private fun recordUsage(
+        eventType: UsageLogEventType,
+        targetId: String,
+        positionSeconds: Double = 0.0,
+    ) {
+        val recorder = usageLogRecorder ?: return
+        val current = session.state.value
+        val idToken = current.authenticationToken ?: return
+        viewModelScope.launch {
+            runCatching {
+                recorder.record(
+                    userId = current.userId,
+                    idToken = idToken,
+                    eventType = eventType,
+                    targetId = targetId,
+                    positionSeconds = positionSeconds,
+                )
+            }
+        }
+    }
 
     fun loadRepeatSetting(videoId: String) {
         val localRepository = repeatSettingRepository ?: return
@@ -579,6 +625,7 @@ class DistributedVideoFeatureModel(
         private val questionStore: VideoQuestionStoreProtocol,
         private val repeatSettingRepository: VideoRepeatSettingRepository,
         private val guestUserIdProvider: GuestUserIdProvider,
+        private val usageLogRecorder: UsageLogRecorder? = null,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
@@ -590,6 +637,7 @@ class DistributedVideoFeatureModel(
                 questionStore = questionStore,
                 repeatSettingRepository = repeatSettingRepository,
                 guestUserIdProvider = guestUserIdProvider,
+                usageLogRecorder = usageLogRecorder,
             ) as T
         }
     }

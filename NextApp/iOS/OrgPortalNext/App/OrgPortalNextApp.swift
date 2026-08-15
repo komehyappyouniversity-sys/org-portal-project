@@ -97,9 +97,14 @@ private struct AppBootstrapView: View {
             forInfoDictionaryKey: "FirebaseProjectID"
         ) as? String ?? ""
         let communityRepository = FirebaseRESTCommunityRepository(projectId: firebaseProjectID)
+        let usageLogRecorder = UsageLogRecorder(
+            remoteRepository: communityRepository,
+            preferenceStore: UserDefaultsUsageAnalyticsPreferenceStore()
+        )
         let community = CommunityFeatureModel(
             repository: communityRepository,
-            session: session
+            session: session,
+            usageLogRecorder: usageLogRecorder
         )
         _communityModel = StateObject(wrappedValue: community)
         _distributedVideoModel = StateObject(
@@ -116,7 +121,8 @@ private struct AppBootstrapView: View {
                 repeatSettingRepository: SwiftDataVideoRepeatSettingRepository(
                     modelContainer: modelContainer
                 ),
-                guestUserIdProvider: KeychainGuestUserIdProvider()
+                guestUserIdProvider: KeychainGuestUserIdProvider(),
+                usageLogRecorder: usageLogRecorder
             )
         )
         _announcementModel = StateObject(
@@ -356,9 +362,16 @@ private struct VimeoPlayerView: UIViewRepresentable {
     let initialPlaybackSeconds: Double
     let onTimeChanged: (Double) -> Void
     let onDurationChanged: (Double) -> Void
+    let onPlaybackStarted: () -> Void
+    let onPlaybackCompleted: () -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onTimeChanged: onTimeChanged, onDurationChanged: onDurationChanged)
+        Coordinator(
+            onTimeChanged: onTimeChanged,
+            onDurationChanged: onDurationChanged,
+            onPlaybackStarted: onPlaybackStarted,
+            onPlaybackCompleted: onPlaybackCompleted
+        )
     }
 
     func makeUIView(context: Context) -> WKWebView {
@@ -380,6 +393,8 @@ private struct VimeoPlayerView: UIViewRepresentable {
               const vimeoPlayer = new Vimeo.Player(vimeoFrame);
               window.vimeoPlaybackSeconds = 0;
               window.vimeoDurationSeconds = 0;
+              window.vimeoPlaySequence = 0;
+              window.vimeoEndedSequence = 0;
               const initialPlaybackSeconds = \(initialPlaybackSeconds);
               const updateDuration = () => {
                 vimeoPlayer.getDuration().then((seconds) => {
@@ -411,6 +426,8 @@ private struct VimeoPlayerView: UIViewRepresentable {
                 window.vimeoPlaybackSeconds = data.seconds || 0;
                 window.vimeoDurationSeconds = data.duration || window.vimeoDurationSeconds;
               });
+              vimeoPlayer.on('play', () => { window.vimeoPlaySequence += 1; });
+              vimeoPlayer.on('ended', () => { window.vimeoEndedSequence += 1; });
               window.vimeoCurrentTime = () => window.vimeoPlaybackSeconds;
               window.vimeoDuration = () => window.vimeoDurationSeconds;
               window.vimeoPlay = () => vimeoPlayer.play();
@@ -438,12 +455,23 @@ private struct VimeoPlayerView: UIViewRepresentable {
     final class Coordinator {
         private let onTimeChanged: (Double) -> Void
         private let onDurationChanged: (Double) -> Void
+        private let onPlaybackStarted: () -> Void
+        private let onPlaybackCompleted: () -> Void
         private var timer: Timer?
         private var lastCommandToken: UUID?
+        private var lastPlaySequence = 0
+        private var lastEndedSequence = 0
 
-        init(onTimeChanged: @escaping (Double) -> Void, onDurationChanged: @escaping (Double) -> Void) {
+        init(
+            onTimeChanged: @escaping (Double) -> Void,
+            onDurationChanged: @escaping (Double) -> Void,
+            onPlaybackStarted: @escaping () -> Void,
+            onPlaybackCompleted: @escaping () -> Void
+        ) {
             self.onTimeChanged = onTimeChanged
             self.onDurationChanged = onDurationChanged
+            self.onPlaybackStarted = onPlaybackStarted
+            self.onPlaybackCompleted = onPlaybackCompleted
         }
 
         func start(_ webView: WKWebView) {
@@ -466,6 +494,24 @@ private struct VimeoPlayerView: UIViewRepresentable {
                 if let seconds = value as? Double, seconds > 0 {
                     self?.onDurationChanged(seconds)
                 }
+            }
+            webView.evaluateJavaScript("window.vimeoPlaySequence || 0") { [weak self] value, _ in
+                guard let self,
+                      let sequence = (value as? NSNumber)?.intValue,
+                      sequence > self.lastPlaySequence else {
+                    return
+                }
+                self.lastPlaySequence = sequence
+                self.onPlaybackStarted()
+            }
+            webView.evaluateJavaScript("window.vimeoEndedSequence || 0") { [weak self] value, _ in
+                guard let self,
+                      let sequence = (value as? NSNumber)?.intValue,
+                      sequence > self.lastEndedSequence else {
+                    return
+                }
+                self.lastEndedSequence = sequence
+                self.onPlaybackCompleted()
             }
         }
 
@@ -652,18 +698,62 @@ private final class CommunityFeatureModel: ObservableObject {
 
     private let repository: any CommunityRepository
     let session: AppSession
+    private let usageLogRecorder: UsageLogRecorder?
     private var radioPlayer: AVPlayer?
     private var radioPlaybackEndObserver: NSObjectProtocol?
     private var membershipsUserID: String?
+    private var lastRecordedVideoPositionBucket: [String: Int] = [:]
 
     init(
         repository: any CommunityRepository,
         session: AppSession,
-        memoStore: VimeoMemoStore = VimeoMemoStore()
+        memoStore: VimeoMemoStore = VimeoMemoStore(),
+        usageLogRecorder: UsageLogRecorder? = nil
     ) {
         self.repository = repository
         self.session = session
         self.memoStore = memoStore
+        self.usageLogRecorder = usageLogRecorder
+    }
+
+    func recordVideoDetailOpened(_ video: DistributedVideo) {
+        recordUsage(.videoDetailOpened, targetId: video.id)
+    }
+
+    func recordVideoPlaybackStarted(_ video: DistributedVideo, positionSeconds: Double) {
+        recordUsage(.videoPlaybackStarted, targetId: video.id, positionSeconds: positionSeconds)
+    }
+
+    func recordVideoPosition(_ video: DistributedVideo, positionSeconds: Double) {
+        guard positionSeconds.isFinite, positionSeconds >= 30 else { return }
+        let bucket = Int(positionSeconds / 30)
+        guard bucket > 0, lastRecordedVideoPositionBucket[video.id] != bucket else { return }
+        lastRecordedVideoPositionBucket[video.id] = bucket
+        recordUsage(.videoPosition, targetId: video.id, positionSeconds: positionSeconds)
+    }
+
+    func recordVideoCompleted(_ video: DistributedVideo, positionSeconds: Double) {
+        lastRecordedVideoPositionBucket[video.id] = nil
+        recordUsage(.videoCompleted, targetId: video.id, positionSeconds: positionSeconds)
+    }
+
+    private func recordUsage(
+        _ eventType: UsageLogEventType,
+        targetId: String,
+        positionSeconds: Double = 0
+    ) {
+        guard let usageLogRecorder,
+              let userId = session.authenticatedUserId,
+              let idToken = session.authenticationToken else { return }
+        Task {
+            _ = try? await usageLogRecorder.record(
+                userId: userId,
+                idToken: idToken,
+                eventType: eventType,
+                targetId: targetId,
+                positionSeconds: positionSeconds
+            )
+        }
     }
 
     func memos(for video: DistributedVideo) -> [VimeoVideoMemo] {
@@ -1032,6 +1122,7 @@ private final class CommunityFeatureModel: ObservableObject {
             }
             player.play()
             recordRadioPlayback(program.id)
+            recordUsage(.radioPlayed, targetId: program.id)
         } catch {
             stopRadioPlayback()
             message = "再生できませんでした。ネットワーク接続と音声URLをご確認ください。"
@@ -1946,8 +2037,21 @@ private struct VimeoVideoDetailView: View {
                             onTimeChanged: { seconds in
                                 playbackSeconds = seconds
                                 onPlaybackChanged(seconds)
+                                model.recordVideoPosition(video, positionSeconds: seconds)
                             },
-                            onDurationChanged: { playbackDuration = $0 }
+                            onDurationChanged: { playbackDuration = $0 },
+                            onPlaybackStarted: {
+                                model.recordVideoPlaybackStarted(
+                                    video,
+                                    positionSeconds: playbackSeconds
+                                )
+                            },
+                            onPlaybackCompleted: {
+                                model.recordVideoCompleted(
+                                    video,
+                                    positionSeconds: max(playbackSeconds, playbackDuration)
+                                )
+                            }
                         )
                         .frame(maxWidth: .infinity)
                         .frame(height: verticalSizeClass == .compact
@@ -2000,7 +2104,10 @@ private struct VimeoVideoDetailView: View {
             }
         }
         .statusBarHidden(verticalSizeClass == .compact)
-        .onAppear { onPlaybackChanged(playbackSeconds) }
+        .onAppear {
+            model.recordVideoDetailOpened(video)
+            onPlaybackChanged(playbackSeconds)
+        }
         .onDisappear { onPlaybackChanged(playbackSeconds) }
     }
 
@@ -3522,6 +3629,7 @@ private struct AccountRootView: View {
     @ObservedObject var model: AccountFeatureModel
     @ObservedObject var communityModel: CommunityFeatureModel
     @ObservedObject var postModel: PostFeatureModel
+    @AppStorage(UsageAnalyticsPreferenceKey.optOut) private var usageAnalyticsOptOut = false
 
     var body: some View {
         NavigationStack {
@@ -3592,6 +3700,13 @@ private struct AccountRootView: View {
                 Button("ログアウト") { model.logout() }
                     .buttonStyle(.bordered)
             }
+            Divider()
+            Text("アプリ設定")
+                .font(.headline)
+            Toggle("任意の利用状況記録を停止", isOn: $usageAnalyticsOptOut)
+            Text("ONにすると、機能改善のための動画・ラジオ利用イベントを送信しません。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             status
         }
     }

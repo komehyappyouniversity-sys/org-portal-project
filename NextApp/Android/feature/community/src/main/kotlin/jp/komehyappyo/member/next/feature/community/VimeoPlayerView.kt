@@ -43,6 +43,8 @@ fun VimeoPlayerView(
     playbackCommand: VimeoPlaybackCommand?,
     initialPlaybackSeconds: Double,
     onTimeChanged: (Double) -> Unit,
+    onPlaybackStarted: () -> Unit = {},
+    onPlaybackCompleted: () -> Unit = {},
     isLandscape: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -98,6 +100,12 @@ fun VimeoPlayerView(
                             },
                             onTimeChanged = { seconds ->
                                 post { onTimeChanged(seconds) }
+                            },
+                            onPlaybackStarted = {
+                                post { onPlaybackStarted() }
+                            },
+                            onPlaybackCompleted = {
+                                post { onPlaybackCompleted() }
                             },
                             onError = { message ->
                                 post {
@@ -174,6 +182,8 @@ fun VimeoPlayerView(
 private class VimeoJavascriptBridge(
     private val onReady: () -> Unit,
     private val onTimeChanged: (Double) -> Unit,
+    private val onPlaybackStarted: () -> Unit,
+    private val onPlaybackCompleted: () -> Unit,
     private val onError: (String) -> Unit,
 ) {
     @JavascriptInterface
@@ -181,6 +191,12 @@ private class VimeoJavascriptBridge(
 
     @JavascriptInterface
     fun timeChanged(seconds: Double) = onTimeChanged(seconds)
+
+    @JavascriptInterface
+    fun playbackStarted() = onPlaybackStarted()
+
+    @JavascriptInterface
+    fun playbackCompleted() = onPlaybackCompleted()
 
     @JavascriptInterface
     fun error(message: String) = onError(message)
@@ -208,6 +224,12 @@ private fun vimeoPlayerHtml(videoId: String, initialPlaybackSeconds: Double): St
           player.on('timeupdate', function(data) {
             lastTime = data.seconds || 0;
             AndroidVimeo.timeChanged(lastTime);
+          });
+          player.on('play', function() { AndroidVimeo.playbackStarted(); });
+          player.on('ended', function(data) {
+            lastTime = (data && data.seconds) || lastTime;
+            AndroidVimeo.timeChanged(lastTime);
+            AndroidVimeo.playbackCompleted();
           });
           player.on('error', function(error) { AndroidVimeo.error(error.message || 'Vimeoの再生に失敗しました。'); });
           window.vimeoReportTime = function() { AndroidVimeo.timeChanged(lastTime); };
