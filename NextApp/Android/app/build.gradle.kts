@@ -4,6 +4,19 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val firebaseAndroidAppId = providers.gradleProperty("NEXT_FIREBASE_ANDROID_APP_ID")
+    .orElse(System.getenv("NEXT_FIREBASE_ANDROID_APP_ID") ?: "")
+val firebaseSenderId = providers.gradleProperty("NEXT_FIREBASE_GCM_SENDER_ID")
+    .orElse(System.getenv("NEXT_FIREBASE_GCM_SENDER_ID") ?: "")
+val productionFirebaseProjectId = providers.gradleProperty("NEXT_FIREBASE_PRODUCTION_PROJECT_ID")
+    .orElse(System.getenv("NEXT_FIREBASE_PRODUCTION_PROJECT_ID") ?: "ictnagaoka-member")
+val productionFirebaseWebApiKey = providers.gradleProperty("NEXT_FIREBASE_PRODUCTION_WEB_API_KEY")
+    .orElse(System.getenv("NEXT_FIREBASE_PRODUCTION_WEB_API_KEY") ?: "")
+val productionFirebaseAndroidAppId = providers.gradleProperty("NEXT_FIREBASE_PRODUCTION_ANDROID_APP_ID")
+    .orElse(System.getenv("NEXT_FIREBASE_PRODUCTION_ANDROID_APP_ID") ?: "")
+val productionFirebaseSenderId = providers.gradleProperty("NEXT_FIREBASE_PRODUCTION_GCM_SENDER_ID")
+    .orElse(System.getenv("NEXT_FIREBASE_PRODUCTION_GCM_SENDER_ID") ?: "")
+
 android {
     namespace = "jp.komehyappyo.member.next"
     compileSdk = 36
@@ -20,6 +33,8 @@ android {
             "FIREBASE_WEB_API_KEY",
             "\"AIzaSyDiVMzyOYl143PI43c6GwWPAQLXHEC9pIU\"",
         )
+        buildConfigField("String", "FIREBASE_ANDROID_APP_ID", "\"${firebaseAndroidAppId.get()}\"")
+        buildConfigField("String", "FIREBASE_GCM_SENDER_ID", "\"${firebaseSenderId.get()}\"")
     }
 
     buildTypes {
@@ -28,6 +43,26 @@ android {
         }
         release {
             isMinifyEnabled = false
+            buildConfigField(
+                "String",
+                "FIREBASE_PROJECT_ID",
+                "\"${productionFirebaseProjectId.get()}\"",
+            )
+            buildConfigField(
+                "String",
+                "FIREBASE_WEB_API_KEY",
+                "\"${productionFirebaseWebApiKey.get()}\"",
+            )
+            buildConfigField(
+                "String",
+                "FIREBASE_ANDROID_APP_ID",
+                "\"${productionFirebaseAndroidAppId.get()}\"",
+            )
+            buildConfigField(
+                "String",
+                "FIREBASE_GCM_SENDER_ID",
+                "\"${productionFirebaseSenderId.get()}\"",
+            )
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

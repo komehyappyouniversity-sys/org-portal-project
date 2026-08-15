@@ -1,6 +1,7 @@
 package jp.komehyappyo.member.next
 
 import android.Manifest
+import android.content.Intent
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
@@ -12,10 +13,13 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -25,7 +29,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.fragment.app.FragmentActivity
 import jp.komehyappyo.member.next.core.data.FirebaseRestAnnouncementRepository
 import jp.komehyappyo.member.next.core.data.FirebaseRestPostRepository
-import jp.komehyappyo.member.next.core.data.FirebaseEnvironmentGuard
 import jp.komehyappyo.member.next.core.data.FirebaseRestAccountAuthRepository
 import jp.komehyappyo.member.next.core.data.FirebaseRestCommunityRepository
 import jp.komehyappyo.member.next.core.data.AppBackupService
@@ -49,6 +52,15 @@ import jp.komehyappyo.member.next.core.data.DataStoreBudgetMigrationStateStore
 import jp.komehyappyo.member.next.core.model.CommunityMembershipStatus
 import jp.komehyappyo.member.next.core.designsystem.OrgPortalTheme
 import jp.komehyappyo.member.next.core.navigation.AppShell
+import jp.komehyappyo.member.next.core.navigation.AppTab
+import jp.komehyappyo.member.next.core.notifications.FcmTokenRefreshBus
+import jp.komehyappyo.member.next.core.notifications.FcmTokenRegistrationManager
+import jp.komehyappyo.member.next.core.notifications.FirebaseRegistrationTokenProvider
+import jp.komehyappyo.member.next.core.notifications.FirestoreFcmTokenStore
+import jp.komehyappyo.member.next.core.notifications.NotificationNavigationDecision
+import jp.komehyappyo.member.next.core.notifications.NotificationRoute
+import jp.komehyappyo.member.next.core.notifications.NotificationRouteParser
+import jp.komehyappyo.member.next.core.notifications.NotificationType
 import jp.komehyappyo.member.next.core.notifications.NotificationService
 import jp.komehyappyo.member.next.feature.tools.DiaryFeatureModel
 import jp.komehyappyo.member.next.feature.tools.AppBackupFeatureModel
@@ -77,17 +89,18 @@ import jp.komehyappyo.member.next.feature.messages.AnnouncementRoot
 import jp.komehyappyo.member.next.feature.messages.MemberPostReplySection
 import jp.komehyappyo.member.next.feature.messages.PostFeatureModel
 import jp.komehyappyo.member.next.feature.messages.PostRoot
+import kotlinx.coroutines.launch
 
 class MainActivity : FragmentActivity() {
+    private data class NavigationTarget(val route: NotificationRoute, val requestId: Long)
+    private val notificationTarget = mutableStateOf<NavigationTarget?>(null)
+    private var notificationSequence = 0L
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        FirebaseEnvironmentGuard.requireSafeDebugProject(
-            isDebug = BuildConfig.DEBUG,
-            configuredProjectId = BuildConfig.FIREBASE_PROJECT_ID,
-        )
+        updateNotificationTarget(intent)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
@@ -99,9 +112,53 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        updateNotificationTarget(intent)
+    }
+
+    private fun updateNotificationTarget(intent: Intent?) {
+        val route = NotificationRouteParser.route(intent) ?: return
+        notificationSequence += 1
+        notificationTarget.value = NavigationTarget(route, notificationSequence)
+    }
+
     @Composable
     private fun NextApp() {
         val appSession = remember { AppSession() }
+        val target = notificationTarget.value
+        var navigableTarget by remember { mutableStateOf<NavigationTarget?>(null) }
+        LaunchedEffect(target?.requestId) {
+            val current = target
+            if (current == null) {
+                navigableTarget = null
+                return@LaunchedEffect
+            }
+            val route = current.route
+            NotificationNavigationDecision.resolve(
+                route,
+                appSession.state.value.selectedCommunityId,
+            ).communityIdToSelect?.let(appSession::selectCommunity)
+            navigableTarget = current
+        }
+        val fcmManager = remember {
+            FcmTokenRegistrationManager(
+                store = FirestoreFcmTokenStore(BuildConfig.FIREBASE_PROJECT_ID),
+                tokenProvider = FirebaseRegistrationTokenProvider(),
+                environment = if (
+                    BuildConfig.FIREBASE_PROJECT_ID == FirebaseEnvironmentGuard.PRODUCTION_PROJECT_ID
+                ) "production" else "development",
+            )
+        }
+        val tokenScope = rememberCoroutineScope()
+        val refreshListener: (String) -> Unit = remember(fcmManager) {
+            { token -> tokenScope.launch { runCatching { fcmManager.tokenRefreshed(token) } } }
+        }
+        DisposableEffect(fcmManager) {
+            FcmTokenRefreshBus.add(refreshListener)
+            onDispose { FcmTokenRefreshBus.remove(refreshListener) }
+        }
         val accountFactory = remember {
             AccountFeatureModel.Factory(
                 FirebaseRestAccountAuthRepository(
@@ -146,6 +203,11 @@ class MainActivity : FragmentActivity() {
             factory = distributedVideoFactory,
         )
         val sessionState by appSession.state.collectAsStateWithLifecycle()
+        LaunchedEffect(sessionState.userId, sessionState.authenticationToken) {
+            runCatching {
+                fcmManager.synchronize(sessionState.userId, sessionState.authenticationToken)
+            }
+        }
         LaunchedEffect(
             sessionState.userId,
             sessionState.selectedCommunityId,
@@ -293,6 +355,15 @@ class MainActivity : FragmentActivity() {
         val appBackupModel: AppBackupFeatureModel = viewModel(factory = appBackupFactory)
 
         AppShell(
+            requestedTab = when (navigableTarget?.route?.type) {
+                NotificationType.VideoQuestionAnswer -> AppTab.Tools
+                NotificationType.SupportMessage -> AppTab.MyPage
+                NotificationType.Announcement,
+                NotificationType.AdminReply,
+                NotificationType.Event -> AppTab.Connect
+                null -> null
+            },
+            navigationRequestKey = target?.requestId ?: 0,
             home = {
                 GuestHomeView(
                     scheduleModel,
@@ -314,10 +385,20 @@ class MainActivity : FragmentActivity() {
                     friendExchangeModel,
                     distributedVideoModel,
                     budgetSettlementModel,
+                    notificationQuestionId = navigableTarget?.route
+                        ?.takeIf { it.type == NotificationType.VideoQuestionAnswer }
+                        ?.targetId,
+                    navigationRequestKey = navigableTarget?.requestId ?: 0,
                 )
             },
             connect = {
-                ConnectedRoot(communityModel, postModel, announcementModel)
+                ConnectedRoot(
+                    communityModel,
+                    postModel,
+                    announcementModel,
+                    navigableTarget?.route,
+                    navigableTarget?.requestId ?: 0,
+                )
             },
             myPage = {
                 val communityState by communityModel.state.collectAsStateWithLifecycle()
@@ -342,8 +423,24 @@ class MainActivity : FragmentActivity() {
         communityModel: CommunityFeatureModel,
         postModel: PostFeatureModel,
         announcementModel: AnnouncementFeatureModel,
+        notificationRoute: NotificationRoute?,
+        navigationRequestKey: Long,
     ) {
         var selectedSection by rememberSaveable { mutableIntStateOf(0) }
+        LaunchedEffect(navigationRequestKey) {
+            when (notificationRoute?.type) {
+                NotificationType.Announcement -> {
+                    selectedSection = 2
+                    announcementModel.openFromNotification(notificationRoute.targetId)
+                }
+                NotificationType.AdminReply -> {
+                    selectedSection = 1
+                    postModel.openFromNotification(notificationRoute.targetId)
+                }
+                NotificationType.Event -> selectedSection = 0
+                else -> Unit
+            }
+        }
         val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
         Column(modifier = Modifier.fillMaxSize()) {
             if (!isLandscape) {
@@ -362,6 +459,10 @@ class MainActivity : FragmentActivity() {
                     model = communityModel,
                     onRefreshManagementPosts = postModel::refreshManagementMemberPosts,
                     memberPostReplyContent = { MemberPostReplySection(postModel) },
+                    notificationEventId = notificationRoute
+                        ?.takeIf { it.type == NotificationType.Event }
+                        ?.targetId,
+                    navigationRequestKey = navigationRequestKey,
                 )
                 1 -> PostRoot(postModel)
                 else -> AnnouncementRoot(announcementModel)

@@ -57,6 +57,8 @@ fun CommunityRoot(
     model: CommunityFeatureModel,
     onRefreshManagementPosts: () -> Unit,
     memberPostReplyContent: @Composable () -> Unit,
+    notificationEventId: String? = null,
+    navigationRequestKey: Long = 0,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
     val sessionState by model.session.state.collectAsStateWithLifecycle()
@@ -89,6 +91,14 @@ fun CommunityRoot(
             onRefreshManagementPosts()
         }
         model.refreshRadioPrograms()
+    }
+    LaunchedEffect(navigationRequestKey, state.bookingEvents) {
+        val targetId = notificationEventId ?: return@LaunchedEffect
+        if (state.bookingEvents.any { it.id == targetId }) {
+            model.selectBookingEvent(targetId)
+        } else {
+            model.refresh()
+        }
     }
 
     if (selectedVideo != null) {

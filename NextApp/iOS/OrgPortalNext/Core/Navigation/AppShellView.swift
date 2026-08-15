@@ -21,17 +21,23 @@ public struct AppShellView<
     private let tools: Tools
     private let community: Community
     private let profile: Profile
+    private let requestedTab: AppTab?
+    private let navigationRequestKey: Int
 
     public init(
         home: Home,
         tools: Tools,
         community: Community,
-        profile: Profile
+        profile: Profile,
+        requestedTab: AppTab? = nil,
+        navigationRequestKey: Int = 0
     ) {
         self.home = home
         self.tools = tools
         self.community = community
         self.profile = profile
+        self.requestedTab = requestedTab
+        self.navigationRequestKey = navigationRequestKey
     }
 
     public var body: some View {
@@ -51,6 +57,9 @@ public struct AppShellView<
         }
         .tint(DesignTokens.brandGreen)
         .toolbar(verticalSizeClass == .compact ? .hidden : .visible, for: .tabBar)
+        .onChange(of: navigationRequestKey, initial: true) { _, _ in
+            if let requestedTab { selection = requestedTab }
+        }
     }
 }
 
