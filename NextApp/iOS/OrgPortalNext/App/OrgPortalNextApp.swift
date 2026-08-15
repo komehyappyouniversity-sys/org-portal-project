@@ -647,6 +647,9 @@ private final class CommunityFeatureModel: ObservableObject {
     private let memoStore: VimeoMemoStore
     @Published private(set) var reviewingUserId: String?
     @Published private(set) var isLoading = false
+    @Published private(set) var editingAdministratorUserID: String?
+    @Published private(set) var editingAdministratorRole = "admin"
+    @Published private(set) var administratorPermissionSelection: Set<String> = []
     @Published var message: String?
     @Published var showsScanner = false
 
@@ -1585,15 +1588,49 @@ private final class CommunityFeatureModel: ObservableObject {
         }
     }
 
-    func saveAdministrator(_ adminUserId: String) {
+    func beginAdministratorAdd(_ adminUserId: String) {
+        guard isOwner else { return }
+        editingAdministratorUserID = adminUserId
+        editingAdministratorRole = "admin"
+        administratorPermissionSelection = [CommunityAdminAccess.memberReviewPermission]
+        message = nil
+    }
+
+    func beginAdministratorEdit(_ admin: CommunityAdmin) {
+        guard isOwner else { return }
+        editingAdministratorUserID = admin.userId
+        editingAdministratorRole = admin.role
+        administratorPermissionSelection = CommunityAdminAccess.editablePermissions(admin.permissions)
+        message = nil
+    }
+
+    func toggleAdministratorPermission(_ permissionKey: String) {
+        guard CommunityAdminAccess.delegablePermissions.contains(where: { $0.key == permissionKey }) else {
+            return
+        }
+        if administratorPermissionSelection.contains(permissionKey) {
+            administratorPermissionSelection.remove(permissionKey)
+        } else {
+            administratorPermissionSelection.insert(permissionKey)
+        }
+    }
+
+    func cancelAdministratorEdit() {
+        editingAdministratorUserID = nil
+        editingAdministratorRole = "admin"
+        administratorPermissionSelection = []
+    }
+
+    func saveAdministrator() {
         guard let communityId = session.selectedCommunityId,
               let actorUserId = session.authenticatedUserId,
               let token = session.authenticationToken else { return }
         guard isOwner else {
-            message = "管理者の追加はOwnerのみが操作できます。"
+            message = "管理者の追加・編集はOwnerのみが操作できます。"
             return
         }
-        let normalized = adminUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = editingAdministratorUserID?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !normalized.isEmpty else {
             message = "管理者のユーザーIDを入力してください。"
             return
@@ -1604,13 +1641,14 @@ private final class CommunityFeatureModel: ObservableObject {
                 try await repository.saveAdministrator(
                     communityId: communityId,
                     adminUserId: normalized,
-                    role: "admin",
-                    permissions: [CommunityAdminAccess.memberReviewPermission],
+                    role: editingAdministratorRole,
+                    permissions: administratorPermissionSelection,
                     isActive: true,
                     actorUserId: actorUserId,
                     idToken: token
                 )
-                message = "管理者を追加しました。"
+                cancelAdministratorEdit()
+                message = "管理者権限を保存しました。"
                 await refreshManagement()
                 isLoading = false
             } catch {
@@ -2701,22 +2739,62 @@ private struct CommunityRootView: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button("管理者に追加") {
-                            model.saveAdministrator(member.userId)
+                        Button("権限を設定") {
+                            model.beginAdministratorAdd(member.userId)
                         }
                         .buttonStyle(.borderedProminent)
                         .disabled(model.isLoading)
                     }
                 }
+                if let adminUserID = model.editingAdministratorUserID {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("権限設定: \(adminUserID)")
+                            .font(.headline)
+                        ForEach(CommunityAdminAccess.delegablePermissions, id: \.key) { permission in
+                            Button {
+                                model.toggleAdministratorPermission(permission.key)
+                            } label: {
+                                HStack {
+                                    Image(systemName: model.administratorPermissionSelection.contains(permission.key)
+                                        ? "checkmark.square.fill"
+                                        : "square")
+                                    Text(permission.label)
+                                    Spacer()
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        HStack {
+                            Button("キャンセル") { model.cancelAdministratorEdit() }
+                                .buttonStyle(.bordered)
+                            Button("権限を保存") { model.saveAdministrator() }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(model.isLoading)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                }
                 ForEach(model.administrators) { admin in
                     HStack {
-                        Text("\(admin.userId) (\(admin.role))")
-                            .font(.footnote)
-                            .textSelection(.enabled)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("\(admin.userId) (\(admin.role))")
+                                .font(.footnote)
+                                .textSelection(.enabled)
+                            Text("付与権限: \(admin.permissionLabels.isEmpty ? "なし" : admin.permissionLabels.joined(separator: "／"))")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                         Spacer()
                         if admin.isActive {
-                            Button("無効化") { model.deactivateAdministrator(admin) }
-                                .buttonStyle(.bordered)
+                            VStack {
+                                Button("権限編集") { model.beginAdministratorEdit(admin) }
+                                    .buttonStyle(.bordered)
+                                Button("無効化") { model.deactivateAdministrator(admin) }
+                                    .buttonStyle(.bordered)
+                            }
                         } else {
                             Text("無効").foregroundStyle(.secondary)
                         }
