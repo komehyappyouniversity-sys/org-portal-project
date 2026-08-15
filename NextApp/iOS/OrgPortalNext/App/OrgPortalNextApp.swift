@@ -1,5 +1,6 @@
 import LocalAuthentication
 import AVFoundation
+import MediaPlayer
 import Security
 import SwiftData
 import SwiftUI
@@ -643,6 +644,7 @@ private final class CommunityFeatureModel: ObservableObject {
     @Published private(set) var radioPrograms: [RadioProgram] = []
     @Published private(set) var radioPlaybackRecords: [RadioPlaybackRecord] = []
     @Published private(set) var radioPlayingProgramID: String?
+    @Published private(set) var radioIsPlaying = false
     @Published private(set) var radioIsLoading = false
     private let memoStore: VimeoMemoStore
     @Published private(set) var reviewingUserId: String?
@@ -654,6 +656,10 @@ private final class CommunityFeatureModel: ObservableObject {
     let session: AppSession
     private var radioPlayer: AVPlayer?
     private var radioPlaybackEndObserver: NSObjectProtocol?
+    private var radioPeriodicTimeObserver: Any?
+    private var radioSessionObservers: [NSObjectProtocol] = []
+    private var radioSaveTask: Task<Void, Never>?
+    private var radioWasPlayingBeforeInterruption = false
     private var membershipsUserID: String?
 
     init(
@@ -664,6 +670,8 @@ private final class CommunityFeatureModel: ObservableObject {
         self.repository = repository
         self.session = session
         self.memoStore = memoStore
+        configureRadioRemoteCommands()
+        observeRadioAudioSession()
     }
 
     func memos(for video: DistributedVideo) -> [VimeoVideoMemo] {
@@ -975,22 +983,40 @@ private final class CommunityFeatureModel: ObservableObject {
     func refreshRadioPrograms() async {
         guard canAccessRadio,
               let communityId = session.selectedCommunityId,
+              let userId = session.authenticatedUserId,
               let token = session.authenticationToken else {
             clearRadioState()
             return
         }
         radioIsLoading = true
         do {
-            let programs = try await repository.radioPrograms(
+            async let programsRequest = repository.radioPrograms(
                 communityId: communityId,
                 idToken: token
             )
+            async let recordsRequest = repository.radioPlaybackRecords(
+                userId: userId,
+                idToken: token
+            )
+            let (programs, records) = try await (programsRequest, recordsRequest)
             guard session.selectedCommunityId == communityId, canAccessRadio else { return }
             if let playingID = radioPlayingProgramID,
                !programs.contains(where: { $0.id == playingID }) {
                 stopRadioPlayback()
             }
             radioPrograms = programs
+            var refreshedRecords = records
+            if let playingID = radioPlayingProgramID,
+               let activeRecord = playbackRecord(for: playingID) {
+                if let index = refreshedRecords.firstIndex(where: {
+                    $0.userId == userId && $0.programId == playingID
+                }) {
+                    refreshedRecords[index] = activeRecord
+                } else {
+                    refreshedRecords.append(activeRecord)
+                }
+            }
+            radioPlaybackRecords = refreshedRecords
             radioIsLoading = false
         } catch {
             guard session.selectedCommunityId == communityId else { return }
@@ -1010,7 +1036,7 @@ private final class CommunityFeatureModel: ObservableObject {
             return
         }
         if radioPlayingProgramID == program.id {
-            stopRadioPlayback()
+            radioIsPlaying ? pauseRadioPlayback() : resumeRadioPlayback()
             return
         }
 
@@ -1020,18 +1046,30 @@ private final class CommunityFeatureModel: ObservableObject {
             try audioSession.setCategory(.playback, mode: .default)
             try audioSession.setActive(true)
             let player = AVPlayer(url: program.audioUrl)
+            let resumePosition = playbackRecord(for: program.id)?.lastPositionSeconds ?? 0
             radioPlayer = player
             radioPlayingProgramID = program.id
+            radioIsPlaying = true
             message = nil
             radioPlaybackEndObserver = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,
                 object: player.currentItem,
                 queue: .main
             ) { [weak self] _ in
-                Task { @MainActor in self?.stopRadioPlayback() }
+                Task { @MainActor in self?.finishRadioPlayback() }
+            }
+            radioPeriodicTimeObserver = player.addPeriodicTimeObserver(
+                forInterval: CMTime(seconds: 30, preferredTimescale: 1),
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in self?.persistRadioPosition() }
+            }
+            if resumePosition > 0 {
+                player.seek(to: CMTime(seconds: resumePosition, preferredTimescale: 600))
             }
             player.play()
             recordRadioPlayback(program.id)
+            updateNowPlayingInfo(program: program)
         } catch {
             stopRadioPlayback()
             message = "再生できませんでした。ネットワーク接続と音声URLをご確認ください。"
@@ -1048,36 +1086,217 @@ private final class CommunityFeatureModel: ObservableObject {
     private func recordRadioPlayback(_ programID: String) {
         guard let userID = session.authenticatedUserId else { return }
         let now = Date()
-        if let index = radioPlaybackRecords.firstIndex(where: {
+        let index = radioPlaybackRecords.firstIndex(where: {
             $0.userId == userID && $0.programId == programID
-        }) {
-            let old = radioPlaybackRecords[index]
-            radioPlaybackRecords[index] = RadioPlaybackRecord(
-                id: old.id,
-                userId: old.userId,
-                programId: old.programId,
-                lastPositionSeconds: old.lastPositionSeconds,
-                playCount: old.playCount + 1,
-                lastPlayedAt: now
-            )
+        })
+        let record = RadioPlaybackRecordPolicy.started(
+            existing: index.map { radioPlaybackRecords[$0] },
+            userId: userID,
+            programId: programID,
+            at: now
+        )
+        if let index {
+            radioPlaybackRecords[index] = record
         } else {
-            radioPlaybackRecords.append(RadioPlaybackRecord(
-                userId: userID,
-                programId: programID,
-                playCount: 1,
-                lastPlayedAt: now
-            ))
+            radioPlaybackRecords.append(record)
         }
+        saveRadioPlaybackRecord(record)
     }
 
-    private func stopRadioPlayback() {
+    func stopRadioPlayback() {
+        persistRadioPosition()
         radioPlayer?.pause()
+        if let timeObserver = radioPeriodicTimeObserver, let player = radioPlayer {
+            player.removeTimeObserver(timeObserver)
+        }
+        radioPeriodicTimeObserver = nil
         radioPlayer = nil
         radioPlayingProgramID = nil
+        radioIsPlaying = false
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         if let observer = radioPlaybackEndObserver {
             NotificationCenter.default.removeObserver(observer)
             radioPlaybackEndObserver = nil
         }
+        try? AVAudioSession.sharedInstance().setActive(
+            false,
+            options: .notifyOthersOnDeactivation
+        )
+    }
+
+    private func pauseRadioPlayback() {
+        guard radioPlayingProgramID != nil else { return }
+        radioPlayer?.pause()
+        radioIsPlaying = false
+        persistRadioPosition()
+        updateNowPlayingInfo()
+    }
+
+    private func resumeRadioPlayback() {
+        guard radioPlayer != nil else { return }
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+            radioPlayer?.play()
+            radioIsPlaying = true
+            updateNowPlayingInfo()
+        } catch {
+            message = "再生を再開できませんでした。"
+        }
+    }
+
+    private func finishRadioPlayback() {
+        persistRadioPosition(positionOverride: 0)
+        stopRadioPlaybackWithoutSaving()
+    }
+
+    private func stopRadioPlaybackWithoutSaving() {
+        radioPlayer?.pause()
+        if let timeObserver = radioPeriodicTimeObserver, let player = radioPlayer {
+            player.removeTimeObserver(timeObserver)
+        }
+        radioPeriodicTimeObserver = nil
+        radioPlayer = nil
+        radioPlayingProgramID = nil
+        radioIsPlaying = false
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        if let observer = radioPlaybackEndObserver {
+            NotificationCenter.default.removeObserver(observer)
+            radioPlaybackEndObserver = nil
+        }
+        try? AVAudioSession.sharedInstance().setActive(
+            false,
+            options: .notifyOthersOnDeactivation
+        )
+    }
+
+    private func persistRadioPosition(positionOverride: Double? = nil) {
+        guard let programID = radioPlayingProgramID,
+              let userID = session.authenticatedUserId,
+              let index = radioPlaybackRecords.firstIndex(where: {
+                  $0.userId == userID && $0.programId == programID
+              }) else { return }
+        let rawPosition = positionOverride ?? radioPlayer?.currentTime().seconds ?? 0
+        let record = RadioPlaybackRecordPolicy.updatingPosition(
+            radioPlaybackRecords[index],
+            positionSeconds: rawPosition,
+            at: Date()
+        )
+        radioPlaybackRecords[index] = record
+        saveRadioPlaybackRecord(record)
+        updateNowPlayingInfo()
+    }
+
+    private func saveRadioPlaybackRecord(_ record: RadioPlaybackRecord) {
+        guard let token = session.authenticationToken else { return }
+        let previousTask = radioSaveTask
+        radioSaveTask = Task {
+            _ = await previousTask?.result
+            try? await repository.saveRadioPlaybackRecord(record, idToken: token)
+        }
+    }
+
+    private func configureRadioRemoteCommands() {
+        let commands = MPRemoteCommandCenter.shared()
+        commands.playCommand.isEnabled = true
+        commands.pauseCommand.isEnabled = true
+        commands.stopCommand.isEnabled = true
+        commands.togglePlayPauseCommand.isEnabled = true
+        commands.playCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.resumeRadioPlayback() }
+            return .success
+        }
+        commands.pauseCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.pauseRadioPlayback() }
+            return .success
+        }
+        commands.stopCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.stopRadioPlayback() }
+            return .success
+        }
+        commands.togglePlayPauseCommand.addTarget { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.radioIsPlaying ? self.pauseRadioPlayback() : self.resumeRadioPlayback()
+            }
+            return .success
+        }
+    }
+
+    private func observeRadioAudioSession() {
+        let center = NotificationCenter.default
+        radioSessionObservers.append(center.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] notification in
+            let rawType = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+            let rawOptions = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt
+            Task { @MainActor in
+                self?.handleRadioInterruption(rawType: rawType, rawOptions: rawOptions)
+            }
+        })
+        radioSessionObservers.append(center.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] notification in
+            let rawReason = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
+            Task { @MainActor in self?.handleRadioRouteChange(rawReason: rawReason) }
+        })
+    }
+
+    private func handleRadioInterruption(rawType: UInt?, rawOptions: UInt?) {
+        guard let rawType,
+              let type = AVAudioSession.InterruptionType(rawValue: rawType) else { return }
+        switch type {
+        case .began:
+            radioWasPlayingBeforeInterruption = radioIsPlaying
+            if radioIsPlaying { pauseRadioPlayback() }
+        case .ended:
+            let systemAllowsResume = AVAudioSession.InterruptionOptions(rawValue: rawOptions ?? 0)
+                .contains(.shouldResume)
+            if RadioPlaybackInterruptionPolicy.shouldResume(
+                wasPlayingBeforeInterruption: radioWasPlayingBeforeInterruption,
+                systemAllowsResume: systemAllowsResume
+            ) {
+                resumeRadioPlayback()
+            }
+            radioWasPlayingBeforeInterruption = false
+        @unknown default:
+            break
+        }
+    }
+
+    private func handleRadioRouteChange(rawReason: UInt?) {
+        guard let rawReason,
+              AVAudioSession.RouteChangeReason(rawValue: rawReason) == .oldDeviceUnavailable else {
+            return
+        }
+        radioWasPlayingBeforeInterruption = false
+        if radioIsPlaying { pauseRadioPlayback() }
+    }
+
+    private func updateNowPlayingInfo(program: RadioProgram? = nil) {
+        let resolvedProgram = program ?? radioPlayingProgramID.flatMap { id in
+            radioPrograms.first { $0.id == id }
+        }
+        guard let resolvedProgram else { return }
+        var info: [String: Any] = [
+            MPMediaItemPropertyTitle: resolvedProgram.title,
+            MPMediaItemPropertyArtist: "インターネットラジオ",
+            MPNowPlayingInfoPropertyElapsedPlaybackTime: max(
+                0,
+                radioPlayer?.currentTime().seconds.isFinite == true
+                    ? radioPlayer?.currentTime().seconds ?? 0
+                    : 0
+            ),
+            MPNowPlayingInfoPropertyPlaybackRate: radioIsPlaying ? 1.0 : 0.0,
+            MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue
+        ]
+        if let duration = radioPlayer?.currentItem?.duration.seconds, duration.isFinite {
+            info[MPMediaItemPropertyPlaybackDuration] = duration
+        }
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
 
     private func clearRadioState() {
@@ -2149,6 +2368,7 @@ private struct RadioSectionView: View {
                                 "再生回数: \(record.playCount) 回 / 最終再生: "
                                     + (record.lastPlayedAt.map { formatter.string(from: $0) } ?? "未再生")
                             )
+                            Text("再生位置: \(formatPosition(record.lastPositionSeconds))")
                         }
                         HStack(spacing: 8) {
                             Button(buttonTitle(for: program)) {
@@ -2157,7 +2377,13 @@ private struct RadioSectionView: View {
                             .buttonStyle(.borderedProminent)
                             .disabled(model.radioIsLoading)
                             if model.radioPlayingProgramID == program.id {
-                                Text("再生中")
+                                Button(RadioPlaybackPresentation.stopAction) {
+                                    model.stopRadioPlayback()
+                                }
+                                .buttonStyle(.bordered)
+                                Text(RadioPlaybackPresentation.status(
+                                    isPlaying: model.radioIsPlaying
+                                ))
                             }
                         }
                     }
@@ -2170,9 +2396,16 @@ private struct RadioSectionView: View {
     }
 
     private func buttonTitle(for program: RadioProgram) -> String {
-        if !model.isRadioPlayable(program) { return "配信前" }
-        if model.radioPlayingProgramID == program.id { return "停止" }
-        return "再生"
+        RadioPlaybackPresentation.primaryAction(
+            isPlayable: model.isRadioPlayable(program),
+            isActive: model.radioPlayingProgramID == program.id,
+            isPlaying: model.radioIsPlaying
+        )
+    }
+
+    private func formatPosition(_ seconds: Double) -> String {
+        let total = max(0, Int(seconds))
+        return String(format: "%d:%02d", total / 60, total % 60)
     }
 }
 

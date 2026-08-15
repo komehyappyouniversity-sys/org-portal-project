@@ -9,6 +9,7 @@ import jp.komehyappyo.member.next.core.model.BookingReservation
 import jp.komehyappyo.member.next.core.model.BookingSlot
 import jp.komehyappyo.member.next.core.model.DistributedVideo
 import jp.komehyappyo.member.next.core.model.RadioProgram
+import jp.komehyappyo.member.next.core.model.RadioPlaybackRecord
 import jp.komehyappyo.member.next.core.model.VideoQuestion
 import jp.komehyappyo.member.next.core.model.VideoQuestionSyncStatus
 import jp.komehyappyo.member.next.core.model.CommunityCodeParser
@@ -140,6 +141,14 @@ interface CommunityRepository {
         communityId: String,
         idToken: String,
     ): Result<List<RadioProgram>>
+    suspend fun radioPlaybackRecords(
+        userId: String,
+        idToken: String,
+    ): Result<List<RadioPlaybackRecord>>
+    suspend fun saveRadioPlaybackRecord(
+        record: RadioPlaybackRecord,
+        idToken: String,
+    ): Result<Unit>
     suspend fun videoMemos(userId: String, idToken: String): Result<Map<String, String>>
     suspend fun saveVideoMemo(
         userId: String,
@@ -1026,6 +1035,67 @@ class FirebaseRestCommunityRepository(
                 add(parseRadioProgram(document, communityId))
             }
         }
+    }
+
+    override suspend fun radioPlaybackRecords(
+        userId: String,
+        idToken: String,
+    ): Result<List<RadioPlaybackRecord>> = runCatching {
+        val response = request(
+            "documents/memberPrivate/$userId/radioPlaybackRecords?pageSize=1000",
+            "GET",
+            idToken,
+            null,
+        ) as JSONObject
+        val documents = response.optJSONArray("documents") ?: JSONArray()
+        buildList {
+            for (index in 0 until documents.length()) {
+                val fields = documents.optJSONObject(index)?.optJSONObject("fields") ?: continue
+                val programId = string(fields, "programId") ?: continue
+                add(
+                    RadioPlaybackRecord(
+                        userId = string(fields, "userId") ?: userId,
+                        programId = programId,
+                        lastPositionSeconds = maxOf(
+                            0,
+                            (number(fields, "lastPositionSeconds") ?: 0.0).toLong(),
+                        ),
+                        playCount = maxOf(0, (number(fields, "playCount") ?: 0.0).toInt()),
+                        lastPlayedAt = timestamp(fields, "lastPlayedAt")
+                            ?.let { runCatching { Instant.parse(it) }.getOrNull() },
+                    ),
+                )
+            }
+        }
+    }
+
+    override suspend fun saveRadioPlaybackRecord(
+        record: RadioPlaybackRecord,
+        idToken: String,
+    ): Result<Unit> = runCatching {
+        val documentId = record.programId.replace(Regex("[^A-Za-z0-9_-]"), "_")
+        val fields = JSONObject()
+            .put("userId", stringValue(record.userId))
+            .put("programId", stringValue(record.programId))
+            .put(
+                "lastPositionSeconds",
+                JSONObject().put("integerValue", maxOf(0, record.lastPositionSeconds).toString()),
+            )
+            .put(
+                "playCount",
+                JSONObject().put("integerValue", maxOf(0, record.playCount).toString()),
+            )
+            .put(
+                "lastPlayedAt",
+                timestampValue((record.lastPlayedAt ?: Instant.now()).toString()),
+            )
+        request(
+            "documents/memberPrivate/${record.userId}/radioPlaybackRecords/$documentId",
+            "PATCH",
+            idToken,
+            JSONObject().put("fields", fields),
+        )
+        Unit
     }
 
     override suspend fun videoMemos(

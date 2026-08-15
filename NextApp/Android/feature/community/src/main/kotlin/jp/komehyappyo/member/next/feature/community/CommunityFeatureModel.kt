@@ -3,8 +3,9 @@ package jp.komehyappyo.member.next.feature.community
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import android.media.MediaPlayer
-import android.media.MediaPlayer.OnCompletionListener
+import android.content.Context
+import android.content.Intent
+import androidx.core.content.ContextCompat
 import jp.komehyappyo.member.next.core.data.CommunityRepository
 import jp.komehyappyo.member.next.core.data.VimeoConfiguration
 import jp.komehyappyo.member.next.core.data.VimeoFolder
@@ -25,6 +26,7 @@ import jp.komehyappyo.member.next.core.model.UserStage
 import jp.komehyappyo.member.next.core.model.RadioPlaybackRecord
 import jp.komehyappyo.member.next.core.model.RadioProgram
 import jp.komehyappyo.member.next.core.model.RadioPlaybackPolicy
+import jp.komehyappyo.member.next.core.model.RadioPlaybackRecordPolicy
 import jp.komehyappyo.member.next.core.session.AppSession
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -70,6 +72,7 @@ data class CommunityUiState(
     val radioPrograms: List<RadioProgram> = emptyList(),
     val radioPlaybackRecords: List<RadioPlaybackRecord> = emptyList(),
     val radioPlayingProgramId: String? = null,
+    val radioIsPlaying: Boolean = false,
     val radioIsLoading: Boolean = false,
     val hasPendingVideoMemoSync: Boolean = false,
 )
@@ -78,16 +81,33 @@ class CommunityFeatureModel(
     private val repository: CommunityRepository,
     val session: AppSession,
     private val memoStore: VimeoMemoStore,
+    private val applicationContext: Context,
+    private val firebaseProjectId: String,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(CommunityUiState())
     val state: StateFlow<CommunityUiState> = mutableState.asStateFlow()
-    private var mediaPlayer: MediaPlayer? = null
     private var membershipsUserId: String? = null
     private val currentUserId: String
         get() = session.state.value.userId
 
     init {
-        refreshRadioPrograms()
+        viewModelScope.launch {
+            RadioPlaybackServiceStateStore.state.collect { playback ->
+                val records = mutableState.value.radioPlaybackRecords.map { record ->
+                    if (record.userId == currentUserId && record.programId == playback.programId) {
+                        record.copy(lastPositionSeconds = playback.positionSeconds)
+                    } else {
+                        record
+                    }
+                }
+                mutableState.value = mutableState.value.copy(
+                    radioPlayingProgramId = playback.programId,
+                    radioIsPlaying = playback.isPlaying,
+                    radioPlaybackRecords = records,
+                    message = playback.errorMessage ?: mutableState.value.message,
+                )
+            }
+        }
     }
 
     fun updateCode(value: String) {
@@ -149,7 +169,6 @@ class CommunityFeatureModel(
             mutableState.value = mutableState.value.copy(
                 radioPrograms = emptyList(),
                 radioPlaybackRecords = emptyList(),
-                radioPlayingProgramId = null,
                 radioIsLoading = false,
             )
             return
@@ -158,32 +177,47 @@ class CommunityFeatureModel(
             radioIsLoading = true,
         )
         viewModelScope.launch {
-            repository.radioPrograms(communityId, token)
-                .onSuccess { programs ->
-                    val stillAuthorized = session.state.value.selectedCommunityId == communityId &&
-                        canAccessRadio()
-                    if (!stillAuthorized) return@onSuccess
-                    if (state.value.radioPlayingProgramId != null && programs.none {
-                            it.id == state.value.radioPlayingProgramId
-                        }
-                    ) {
-                        stopRadioPlayback()
-                    }
-                    mutableState.value = mutableState.value.copy(
-                        radioPrograms = programs,
-                        radioIsLoading = false,
-                    )
+            val programsResult = repository.radioPrograms(communityId, token)
+            val recordsResult = repository.radioPlaybackRecords(current.userId, token)
+            val stillAuthorized = session.state.value.selectedCommunityId == communityId &&
+                canAccessRadio()
+            if (!stillAuthorized) return@launch
+            val failure = programsResult.exceptionOrNull() ?: recordsResult.exceptionOrNull()
+            if (failure != null) {
+                mutableState.value = mutableState.value.copy(
+                    radioPrograms = emptyList(),
+                    radioIsLoading = false,
+                )
+                showError(failure, clearCandidate = false)
+                return@launch
+            }
+            val programs = programsResult.getOrThrow()
+            if (state.value.radioPlayingProgramId != null && programs.none {
+                    it.id == state.value.radioPlayingProgramId
                 }
-                .onFailure {
-                    if (session.state.value.selectedCommunityId != communityId || !canAccessRadio()) {
-                        return@onFailure
+            ) {
+                stopRadioPlayback()
+            }
+            val refreshedRecords = recordsResult.getOrThrow().toMutableList()
+            state.value.radioPlayingProgramId?.let { activeProgramId ->
+                state.value.radioPlaybackRecords.firstOrNull {
+                    it.userId == current.userId && it.programId == activeProgramId
+                }?.let { activeRecord ->
+                    val index = refreshedRecords.indexOfFirst {
+                        it.userId == current.userId && it.programId == activeProgramId
                     }
-                    mutableState.value = mutableState.value.copy(
-                        radioPrograms = emptyList(),
-                        radioIsLoading = false,
-                    )
-                    showError(it, clearCandidate = false)
+                    if (index >= 0) {
+                        refreshedRecords[index] = activeRecord
+                    } else {
+                        refreshedRecords.add(activeRecord)
+                    }
                 }
+            }
+            mutableState.value = mutableState.value.copy(
+                radioPrograms = programs,
+                radioPlaybackRecords = refreshedRecords,
+                radioIsLoading = false,
+            )
         }
     }
 
@@ -468,67 +502,74 @@ class CommunityFeatureModel(
         }
 
         if (state.value.radioPlayingProgramId == program.id) {
-            stopRadioPlayback()
+            sendRadioAction(
+                if (state.value.radioIsPlaying) {
+                    RadioPlaybackService.ACTION_PAUSE
+                } else {
+                    RadioPlaybackService.ACTION_PLAY
+                },
+            )
             return
         }
 
-        stopRadioPlayback()
+        val current = session.state.value
+        val token = current.authenticationToken ?: return
+        val existing = playbackRecord(program.id)
+        val record = RadioPlaybackRecordPolicy.started(
+            existing = existing,
+            userId = current.userId,
+            programId = program.id,
+            at = Instant.now(),
+        )
+        val records = state.value.radioPlaybackRecords.toMutableList()
+        val recordIndex = records.indexOfFirst {
+            it.userId == current.userId && it.programId == program.id
+        }
+        if (recordIndex >= 0) records[recordIndex] = record else records.add(record)
         mutableState.value = mutableState.value.copy(
             radioPlayingProgramId = program.id,
+            radioIsPlaying = false,
+            radioPlaybackRecords = records,
             message = null,
         )
-
-        val player = MediaPlayer()
-        mediaPlayer = player
-        viewModelScope.launch {
-            try {
-                player.setDataSource(program.audioUrl)
-                player.setOnCompletionListener(OnCompletionListener {
-                    mutableState.value = mutableState.value.copy(radioPlayingProgramId = null)
-                })
-                player.prepare()
-                player.start()
-                recordRadioPlayback(program.id)
-            } catch (_: Throwable) {
-                stopRadioPlayback()
+        val intent = Intent(applicationContext, RadioPlaybackService::class.java)
+            .setAction(RadioPlaybackService.ACTION_START)
+            .putExtra(RadioPlaybackService.EXTRA_PROGRAM_ID, program.id)
+            .putExtra(RadioPlaybackService.EXTRA_TITLE, program.title)
+            .putExtra(RadioPlaybackService.EXTRA_AUDIO_URL, program.audioUrl)
+            .putExtra(RadioPlaybackService.EXTRA_POSITION_SECONDS, record.lastPositionSeconds)
+            .putExtra(RadioPlaybackService.EXTRA_PLAY_COUNT, record.playCount)
+            .putExtra(RadioPlaybackService.EXTRA_USER_ID, current.userId)
+            .putExtra(RadioPlaybackService.EXTRA_ID_TOKEN, token)
+            .putExtra(RadioPlaybackService.EXTRA_PROJECT_ID, firebaseProjectId)
+        runCatching { ContextCompat.startForegroundService(applicationContext, intent) }
+            .onFailure {
                 mutableState.value = mutableState.value.copy(
-                    message = "再生できませんでした。ネットワーク接続と音声URLをご確認ください。"
+                    radioPlayingProgramId = null,
+                    radioIsPlaying = false,
+                    message = "再生できませんでした。ネットワーク接続と音声URLをご確認ください。",
                 )
             }
-        }
     }
 
-    private fun stopRadioPlayback() {
-        mediaPlayer?.setOnCompletionListener(null)
-        mediaPlayer?.stop()
-        mediaPlayer?.release()
-        mediaPlayer = null
-        mutableState.value = mutableState.value.copy(radioPlayingProgramId = null)
+    fun stopRadioPlayback() {
+        if (state.value.radioPlayingProgramId != null ||
+            RadioPlaybackServiceStateStore.state.value.programId != null
+        ) {
+            sendRadioAction(RadioPlaybackService.ACTION_STOP)
+        }
+        mutableState.value = mutableState.value.copy(
+            radioPlayingProgramId = null,
+            radioIsPlaying = false,
+        )
     }
 
-    private fun recordRadioPlayback(programId: String) {
-        val now = Instant.now()
-        val records = state.value.radioPlaybackRecords.toMutableList()
-        val index = records.indexOfFirst {
-            it.userId == currentUserId && it.programId == programId
-        }
-        if (index >= 0) {
-            val old = records[index]
-            records[index] = old.copy(
-                playCount = old.playCount + 1,
-                lastPlayedAt = now,
-            )
-        } else {
-            records.add(
-                RadioPlaybackRecord(
-                    userId = currentUserId,
-                    programId = programId,
-                    playCount = 1,
-                    lastPlayedAt = now,
-                ),
+    private fun sendRadioAction(action: String) {
+        runCatching {
+            applicationContext.startService(
+                Intent(applicationContext, RadioPlaybackService::class.java).setAction(action),
             )
         }
-        mutableState.value = mutableState.value.copy(radioPlaybackRecords = records)
     }
 
     fun prepareApplication(community: Community) {
@@ -1216,11 +1257,6 @@ class CommunityFeatureModel(
         )
     }
 
-    override fun onCleared() {
-        stopRadioPlayback()
-        super.onCleared()
-    }
-
     private fun showError(error: Throwable, clearCandidate: Boolean = true) {
         mutableState.value = mutableState.value.copy(
             candidate = if (clearCandidate) null else mutableState.value.candidate,
@@ -1233,9 +1269,17 @@ class CommunityFeatureModel(
         private val repository: CommunityRepository,
         private val session: AppSession,
         private val memoStore: VimeoMemoStore,
+        private val applicationContext: Context,
+        private val firebaseProjectId: String,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            CommunityFeatureModel(repository, session, memoStore) as T
+            CommunityFeatureModel(
+                repository,
+                session,
+                memoStore,
+                applicationContext,
+                firebaseProjectId,
+            ) as T
     }
 }

@@ -551,6 +551,17 @@ private class FakeCommunityRepository(
         idToken: String,
     ): Result<List<jp.komehyappyo.member.next.core.model.RadioProgram>> = Result.success(emptyList())
 
+    override suspend fun radioPlaybackRecords(
+        userId: String,
+        idToken: String,
+    ): Result<List<jp.komehyappyo.member.next.core.model.RadioPlaybackRecord>> =
+        Result.success(emptyList())
+
+    override suspend fun saveRadioPlaybackRecord(
+        record: jp.komehyappyo.member.next.core.model.RadioPlaybackRecord,
+        idToken: String,
+    ): Result<Unit> = Result.success(Unit)
+
     override suspend fun videoMemos(userId: String, idToken: String): Result<Map<String, String>> =
         Result.success(memoValues)
 

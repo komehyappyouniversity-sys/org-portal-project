@@ -818,6 +818,14 @@ public protocol CommunityRepository: Sendable {
         communityId: String,
         idToken: String
     ) async throws -> [RadioProgram]
+    func radioPlaybackRecords(
+        userId: String,
+        idToken: String
+    ) async throws -> [RadioPlaybackRecord]
+    func saveRadioPlaybackRecord(
+        _ record: RadioPlaybackRecord,
+        idToken: String
+    ) async throws
     func videoMemos(userId: String, idToken: String) async throws -> [String: String]
     func saveVideoMemo(
         userId: String,
@@ -1672,6 +1680,55 @@ public struct FirebaseRESTCommunityRepository: CommunityRepository {
                 communityId: communityId
             )
         }
+    }
+
+    public func radioPlaybackRecords(
+        userId: String,
+        idToken: String
+    ) async throws -> [RadioPlaybackRecord] {
+        let response = try await requestJSON(
+            path: "documents/memberPrivate/\(userId)/radioPlaybackRecords?pageSize=1000",
+            method: "GET",
+            idToken: idToken
+        ) as? [String: Any]
+        let documents = response?["documents"] as? [[String: Any]] ?? []
+        return documents.compactMap { document in
+            let fields = document["fields"] as? [String: Any] ?? [:]
+            guard let programId = string(fields, "programId") else { return nil }
+            let documentId = (document["name"] as? String)?.split(separator: "/").last
+                .map(String.init) ?? UUID().uuidString
+            return RadioPlaybackRecord(
+                id: documentId,
+                userId: string(fields, "userId") ?? userId,
+                programId: programId,
+                lastPositionSeconds: max(0, number(fields, "lastPositionSeconds") ?? 0),
+                playCount: max(0, Int(number(fields, "playCount") ?? 0)),
+                lastPlayedAt: timestamp(fields, "lastPlayedAt")
+            )
+        }
+    }
+
+    public func saveRadioPlaybackRecord(
+        _ record: RadioPlaybackRecord,
+        idToken: String
+    ) async throws {
+        let documentId = record.programId
+            .replacingOccurrences(of: "[^A-Za-z0-9_-]", with: "_", options: .regularExpression)
+        let fields: [String: Any] = [
+            "userId": stringValue(record.userId),
+            "programId": stringValue(record.programId),
+            "lastPositionSeconds": ["doubleValue": max(0, record.lastPositionSeconds)],
+            "playCount": ["integerValue": String(max(0, record.playCount))],
+            "lastPlayedAt": [
+                "timestampValue": ISO8601DateFormatter().string(from: record.lastPlayedAt ?? Date())
+            ]
+        ]
+        _ = try await requestJSON(
+            path: "documents/memberPrivate/\(record.userId)/radioPlaybackRecords/\(documentId)",
+            method: "PATCH",
+            idToken: idToken,
+            body: ["fields": fields]
+        )
     }
 
     public func videoMemos(
