@@ -70,6 +70,7 @@ public struct GuestHomeView: View {
     @ObservedObject private var meetingMinutesModel: MeetingMinutesFeatureModel
     @ObservedObject private var favoriteBookmarkModel: FavoriteBookmarkFeatureModel
     @ObservedObject private var appBackupModel: AppBackupFeatureModel
+    @ObservedObject private var manualModel: ManualFeatureModel
     @State private var isShowingTodaySchedule = false
     @State private var isShowingDiary = false
     @State private var isShowingDenomination = false
@@ -84,7 +85,8 @@ public struct GuestHomeView: View {
         cashDistributionModel: CashDistributionFeatureModel,
         meetingMinutesModel: MeetingMinutesFeatureModel,
         favoriteBookmarkModel: FavoriteBookmarkFeatureModel,
-        appBackupModel: AppBackupFeatureModel
+        appBackupModel: AppBackupFeatureModel,
+        manualModel: ManualFeatureModel
     ) {
         self.scheduleModel = scheduleModel
         self.diaryModel = diaryModel
@@ -92,6 +94,7 @@ public struct GuestHomeView: View {
         self.meetingMinutesModel = meetingMinutesModel
         self.favoriteBookmarkModel = favoriteBookmarkModel
         self.appBackupModel = appBackupModel
+        self.manualModel = manualModel
     }
 
     public var body: some View {
@@ -212,7 +215,7 @@ public struct GuestHomeView: View {
             FavoriteBookmarksView(model: favoriteBookmarkModel)
         }
         .sheet(isPresented: $isShowingManual) {
-            ManualListView()
+            ManualListView(model: manualModel)
         }
         .sheet(isPresented: $isShowingAppBackup) {
             AppBackupView(model: appBackupModel)

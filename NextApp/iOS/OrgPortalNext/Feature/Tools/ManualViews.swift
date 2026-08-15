@@ -1,32 +1,64 @@
+import DataLayer
 import DesignSystem
+import Model
 import SwiftUI
 
-public struct AppManual: Identifiable, Sendable, Equatable {
-    public let id: String
-    public let title: String
-    public let description: String
-    public let detail: String
-    public let externalURL: String?
+@MainActor
+public final class ManualFeatureModel: ObservableObject {
+    @Published public private(set) var manuals: [Manual] = []
+    @Published public private(set) var isLoading = false
+    @Published public private(set) var hasLoaded = false
+    @Published public private(set) var errorMessage: String?
 
-    public init(
-        id: String,
-        title: String,
-        description: String,
-        detail: String,
-        externalURL: String? = nil,
-    ) {
-        self.id = id
-        self.title = title
-        self.description = description
-        self.detail = detail
-        self.externalURL = externalURL
+    private let repository: any ManualRepository
+    private var communityId: String?
+    private var idToken: String?
+    private var requestID = UUID()
+
+    public init(repository: any ManualRepository) {
+        self.repository = repository
+    }
+
+    public func load(communityId: String?, idToken: String?) async {
+        self.communityId = communityId
+        self.idToken = idToken
+        let currentRequestID = UUID()
+        requestID = currentRequestID
+        isLoading = true
+        errorMessage = nil
+        do {
+            let loaded = try await repository.manuals(
+                communityId: communityId,
+                idToken: idToken
+            )
+            guard requestID == currentRequestID else { return }
+            manuals = loaded
+            hasLoaded = true
+            isLoading = false
+        } catch is CancellationError {
+            guard requestID == currentRequestID else { return }
+            isLoading = false
+        } catch {
+            guard requestID == currentRequestID else { return }
+            manuals = []
+            hasLoaded = true
+            isLoading = false
+            errorMessage = "マニュアルを読み込めませんでした。"
+        }
+    }
+
+    public func retry() async {
+        await load(communityId: communityId, idToken: idToken)
     }
 }
 
 public struct ManualListView: View {
-    @State private var selectedManual: AppManual?
+    @ObservedObject private var model: ManualFeatureModel
+    @State private var selectedManual: Manual?
 
-    public init() {}
+    public init(model: ManualFeatureModel) {
+        self.model = model
+    }
 
     public var body: some View {
         NavigationStack {
@@ -35,131 +67,186 @@ public struct ManualListView: View {
                     self.selectedManual = nil
                 }
             } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 16) {
-                        Text("使い方マニュアル")
-                            .font(.title3.bold())
-                        Text("ログイン、コミュニティ参加、主要機能の使い方をまとめています。")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-
-                        ForEach(availableManuals) { manual in
-                            Button {
-                                selectedManual = manual
-                            } label: {
-                                FeatureCard(
-                                    LocalizedStringKey(manual.title),
-                                    subtitle: LocalizedStringKey(manual.description),
-                                    systemImage: "book"
-                                )
-                            }
-                            .buttonStyle(.plain)
+                Group {
+                    if model.isLoading && !model.hasLoaded {
+                        VStack(spacing: 12) {
+                            LoadingState()
+                            Text("読み込み中")
                         }
+                    } else if let errorMessage = model.errorMessage {
+                        ErrorState(message: errorMessage) {
+                            Task { await model.retry() }
+                        }
+                    } else if model.manuals.isEmpty {
+                        EmptyState(
+                            "表示可能なマニュアルがありません。",
+                            description: "公開中のマニュアルが追加されると、ここに表示されます。",
+                            systemImage: "book.closed"
+                        )
+                    } else {
+                        manualList
                     }
-                    .padding()
                 }
                 .navigationTitle("使い方マニュアル")
             }
         }
         .background(Color(uiColor: .systemBackground))
+        .onChange(of: model.manuals) { _, manuals in
+            guard let selectedManual else { return }
+            if !manuals.contains(where: { $0.listIdentity == selectedManual.listIdentity }) {
+                self.selectedManual = nil
+            }
+        }
+    }
+
+    private var manualList: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 16) {
+                Text("使い方マニュアル")
+                    .font(.title3.bold())
+                Text("アプリ共通と、選択中のコミュニティ専用マニュアルを表示します。")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                ForEach(model.manuals, id: \.listIdentity) { manual in
+                    Button {
+                        selectedManual = manual
+                    } label: {
+                        FeatureCard(
+                            LocalizedStringKey(manual.title),
+                            subtitle: LocalizedStringKey(
+                                manual.communityId == nil
+                                    ? "アプリ共通マニュアル"
+                                    : "コミュニティ専用マニュアル"
+                            ),
+                            systemImage: "book"
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding()
+        }
     }
 }
 
 public struct ManualDetailView: View {
-    private let manual: AppManual
+    private struct SelectedImage: Identifiable {
+        let id = UUID()
+        let url: URL
+    }
+
+    private let manual: Manual
     private let onClose: () -> Void
     @Environment(\.openURL) private var openURL
+    @State private var selectedImage: SelectedImage?
 
-    fileprivate init(manual: AppManual, onClose: @escaping () -> Void) {
+    fileprivate init(manual: Manual, onClose: @escaping () -> Void) {
         self.manual = manual
         self.onClose = onClose
     }
 
     public var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(manual.title)
-                        .font(.title3.bold())
-                    Text(manual.detail)
-                        .font(.body)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let externalURL = manual.externalURL, let url = URL(string: externalURL) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(manual.title)
+                    .font(.title3.bold())
+                Text(manual.body)
+                    .font(.body)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                ForEach(Array(manual.imageUrls.enumerated()), id: \.offset) { index, value in
+                    if let url = URL(string: value) {
                         Button {
-                            openURL(url)
+                            selectedImage = SelectedImage(url: url)
                         } label: {
-                            FeatureCard(
-                                "外部参照を開く",
-                                subtitle: LocalizedStringKey(externalURL),
-                                systemImage: "arrow.up.right.square"
-                            )
+                            AsyncImage(url: url) { phase in
+                                switch phase {
+                                case let .success(image):
+                                    image
+                                        .resizable()
+                                        .scaledToFit()
+                                case .failure:
+                                    Label("画像を読み込めませんでした。", systemImage: "photo")
+                                        .frame(maxWidth: .infinity, minHeight: 120)
+                                default:
+                                    ProgressView()
+                                        .frame(maxWidth: .infinity, minHeight: 120)
+                                }
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("画像 \(index + 1) を拡大")
                     }
                 }
-                .padding()
+
+                if let pdfUrl = validURL(manual.pdfUrl) {
+                    linkButton(title: "PDFを開く", url: pdfUrl, systemImage: "doc.richtext")
+                }
+                if let externalUrl = validURL(manual.externalUrl) {
+                    linkButton(
+                        title: "外部リンクを開く",
+                        url: externalUrl,
+                        systemImage: "arrow.up.right.square"
+                    )
+                }
             }
-            .navigationTitle(manual.title)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("閉じる", action: onClose)
+            .padding()
+        }
+        .navigationTitle(manual.title)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("閉じる", action: onClose)
+            }
+        }
+        .sheet(item: $selectedImage) { image in
+            NavigationStack {
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    AsyncImage(url: image.url) { phase in
+                        if let loadedImage = phase.image {
+                            loadedImage
+                                .resizable()
+                                .scaledToFit()
+                        } else if phase.error != nil {
+                            Text("画像を読み込めませんでした。")
+                                .foregroundStyle(.white)
+                        } else {
+                            ProgressView().tint(.white)
+                        }
+                    }
+                    .padding()
+                }
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("閉じる") { selectedImage = nil }
+                            .foregroundStyle(.white)
+                    }
                 }
             }
         }
     }
-}
 
-public let availableManuals: [AppManual] = [
-    AppManual(
-        id: "quick-start",
-        title: "1. アカウントと開始の流れ",
-        description: "Guestで始めて、会員登録するまで。",
-        detail:
-        """
-        1) アプリを開くとホームと便利機能が表示されます。  
-        2) 会員登録はマイページからメールアドレスで行います。  
-        3) コミュニティへ参加するには、コミュニティコードまたはQRコードを使います。  
-        4) 承認後、コミュニティ機能（投稿・お知らせなど）が利用できます。
-        """,
-        externalURL: nil
-    ),
-    AppManual(
-        id: "tools-start",
-        title: "2. 便利機能の使い方",
-        description: "予定、日記、金種計算、会議録音など。",
-        detail:
-        """
-        ホーム・便利タブから各機能画面を開けます。  
-        - 予定: 今日の予定を入力し、繰り返しやリマインダーを設定します。  
-        - 日記・写真日記: 写真付きで自分用の記録を残します。  
-        - 金種計算: 配布金額を入力して、必要な紙幣・硬貨を整理できます。  
-        - 会議録音: 文章化は端末内で保存し、後で確認できるようにします。
-        """,
-        externalURL: nil
-    ),
-    AppManual(
-        id: "sns-favorites",
-        title: "3. SNS補助・お気に入りの使い方",
-        description: "投稿補助やリンク保存の流れを確認。",
-        detail:
-        """
-        SNS投稿補助では、文章を1タップで外部SNSへコピーできます。  
-        お気に入りは、タイトル・URL・メモを保存し、アプリ削除前にバックアップも可能です。  
-        共有URLは同じ機能内でワンタップで開けるため、後から見返しやすいです。
-        """,
-        externalURL: nil
-    ),
-    AppManual(
-        id: "troubleshoot",
-        title: "4. よくあるトラブル",
-        description: "音声・写真・同期で困ったときの確認ポイント。",
-        detail:
-        """
-        - 録音が再生されない: 権限（マイク）と保存先の空き容量を確認します。  
-        - カメラや写真が保存されない: 端末内保存の許可、またはアプリ更新後の再起動で解消する場合があります。  
-        - ログインできない: メールアドレスとパスワード、再度パスワードリセットを確認します。  
-        - コミュニティ参加できない: 正しいコミュニティコードか、承認待ち状態かを確認します。
-        """,
-        externalURL: nil
-    ),
-]
+    private func validURL(_ value: String?) -> URL? {
+        guard let value, let url = URL(string: value),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "https" || scheme == "http" else {
+            return nil
+        }
+        return url
+    }
+
+    private func linkButton(title: String, url: URL, systemImage: String) -> some View {
+        Button {
+            openURL(url)
+        } label: {
+            FeatureCard(
+                LocalizedStringKey(title),
+                subtitle: LocalizedStringKey(url.absoluteString),
+                systemImage: systemImage
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}

@@ -120,6 +120,7 @@ fun ToolsHubRoot(
     friendExchangeModel: FriendExchangeFeatureModel,
     distributedVideoModel: DistributedVideoFeatureModel,
     budgetSettlementModel: BudgetSettlementFeatureModel,
+    manualModel: ManualFeatureModel,
 ) {
     var destination by remember { mutableStateOf<ToolsDestination?>(null) }
     when (val current = destination) {
@@ -161,7 +162,7 @@ fun ToolsHubRoot(
         ToolsDestination.Manual -> ToolDestinationContainer(
             onBack = { destination = null },
         ) {
-            ManualListRoot()
+            ManualListRoot(manualModel)
         }
         ToolsDestination.DistributedVideos -> ToolDestinationContainer(
             onBack = { destination = null },

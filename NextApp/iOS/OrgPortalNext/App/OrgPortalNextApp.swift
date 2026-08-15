@@ -71,6 +71,7 @@ private struct AppBootstrapView: View {
     @StateObject private var accountModel: AccountFeatureModel
     @StateObject private var communityModel: CommunityFeatureModel
     @StateObject private var distributedVideoModel: DistributedVideoFeatureModel
+    @StateObject private var manualModel: ManualFeatureModel
     @StateObject private var announcementModel: AnnouncementFeatureModel
     @StateObject private var postModel: PostFeatureModel
     @StateObject private var budgetSettlementModel: BudgetSettlementFeatureModel
@@ -97,6 +98,11 @@ private struct AppBootstrapView: View {
             forInfoDictionaryKey: "FirebaseProjectID"
         ) as? String ?? ""
         let communityRepository = FirebaseRESTCommunityRepository(projectId: firebaseProjectID)
+        _manualModel = StateObject(
+            wrappedValue: ManualFeatureModel(
+                repository: FirebaseRESTManualRepository(projectId: firebaseProjectID)
+            )
+        )
         let community = CommunityFeatureModel(
             repository: communityRepository,
             session: session
@@ -245,7 +251,8 @@ private struct AppBootstrapView: View {
                 cashDistributionModel: cashDistributionModel,
                 meetingMinutesModel: meetingMinutesModel,
                 favoriteBookmarkModel: favoriteBookmarkModel,
-                appBackupModel: appBackupModel
+                appBackupModel: appBackupModel,
+                manualModel: manualModel
             ),
             tools: ToolsHubView(
                 scheduleModel: scheduleModel,
@@ -256,7 +263,8 @@ private struct AppBootstrapView: View {
                 favoriteBookmarkModel: favoriteBookmarkModel,
                 friendExchangeModel: friendExchangeModel,
                 distributedVideoModel: distributedVideoModel,
-                budgetSettlementModel: budgetSettlementModel
+                budgetSettlementModel: budgetSettlementModel,
+                manualModel: manualModel
             ),
             community: ConnectedRootView(
                 communityModel: communityModel,
@@ -270,7 +278,12 @@ private struct AppBootstrapView: View {
             )
         )
         .task(id: "\(appSession.authenticatedUserId ?? ""):\(appSession.selectedCommunityId ?? "")") {
-            await distributedVideoModel.load()
+            async let videoLoad: Void = distributedVideoModel.load()
+            async let manualLoad: Void = manualModel.load(
+                communityId: appSession.selectedCommunityId,
+                idToken: appSession.authenticationToken
+            )
+            _ = await (videoLoad, manualLoad)
         }
     }
 }

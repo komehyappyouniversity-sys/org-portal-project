@@ -48,6 +48,7 @@ public struct ToolsHubView: View {
     @ObservedObject private var friendExchangeModel: FriendExchangeFeatureModel
     @ObservedObject private var distributedVideoModel: DistributedVideoFeatureModel
     @ObservedObject private var budgetSettlementModel: BudgetSettlementFeatureModel
+    @ObservedObject private var manualModel: ManualFeatureModel
     @State private var destination: Destination?
     public init(
         scheduleModel: ScheduleFeatureModel,
@@ -58,7 +59,8 @@ public struct ToolsHubView: View {
         favoriteBookmarkModel: FavoriteBookmarkFeatureModel,
         friendExchangeModel: FriendExchangeFeatureModel,
         distributedVideoModel: DistributedVideoFeatureModel,
-        budgetSettlementModel: BudgetSettlementFeatureModel
+        budgetSettlementModel: BudgetSettlementFeatureModel,
+        manualModel: ManualFeatureModel
     ) {
         self.scheduleModel = scheduleModel
         self.diaryModel = diaryModel
@@ -69,6 +71,7 @@ public struct ToolsHubView: View {
         self.friendExchangeModel = friendExchangeModel
         self.distributedVideoModel = distributedVideoModel
         self.budgetSettlementModel = budgetSettlementModel
+        self.manualModel = manualModel
     }
 
     public var body: some View {
@@ -220,7 +223,7 @@ public struct ToolsHubView: View {
                 case .friends:
                     FriendExchangeRootView(model: friendExchangeModel)
                 case .manual:
-                    ManualListView()
+                    ManualListView(model: manualModel)
                 case .distributedVideos:
                     DistributedVideoListRoot(
                         model: distributedVideoModel,

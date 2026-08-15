@@ -108,6 +108,7 @@ fun GuestHomeView(
     meetingMinutesModel: MeetingMinutesFeatureModel,
     favoriteBookmarkModel: FavoriteBookmarkFeatureModel,
     appBackupModel: AppBackupFeatureModel,
+    manualModel: ManualFeatureModel,
 ) {
     var destination by rememberSaveable { mutableStateOf<GuestHomeDestination?>(null) }
 
@@ -127,7 +128,7 @@ fun GuestHomeView(
                     GuestHomeDestination.Favorites ->
                         FavoriteBookmarksRoot(favoriteBookmarkModel)
                     GuestHomeDestination.Manual ->
-                        ManualListRoot()
+                        ManualListRoot(manualModel)
                     GuestHomeDestination.AppBackup ->
                         AppBackupRoot(appBackupModel)
                     null -> Unit

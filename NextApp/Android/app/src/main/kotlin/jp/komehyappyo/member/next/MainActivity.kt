@@ -28,6 +28,7 @@ import jp.komehyappyo.member.next.core.data.FirebaseRestPostRepository
 import jp.komehyappyo.member.next.core.data.FirebaseEnvironmentGuard
 import jp.komehyappyo.member.next.core.data.FirebaseRestAccountAuthRepository
 import jp.komehyappyo.member.next.core.data.FirebaseRestCommunityRepository
+import jp.komehyappyo.member.next.core.data.FirebaseRestManualRepository
 import jp.komehyappyo.member.next.core.data.AppBackupService
 import jp.komehyappyo.member.next.core.data.LocalDiaryPhotoStore
 import jp.komehyappyo.member.next.core.data.OrgPortalDatabase
@@ -58,6 +59,7 @@ import jp.komehyappyo.member.next.feature.tools.ScheduleFeatureModel
 import jp.komehyappyo.member.next.feature.tools.DistributedVideoFeatureModel
 import jp.komehyappyo.member.next.feature.tools.ToolsHubRoot
 import jp.komehyappyo.member.next.feature.tools.MeetingMinutesFeatureModel
+import jp.komehyappyo.member.next.feature.tools.ManualFeatureModel
 import jp.komehyappyo.member.next.feature.tools.MeetingRecordingService
 import jp.komehyappyo.member.next.feature.tools.SnsPostingAssistantFeatureModel
 import jp.komehyappyo.member.next.feature.tools.FavoriteBookmarkFeatureModel
@@ -124,6 +126,13 @@ class MainActivity : FragmentActivity() {
             )
         }
         val communityModel: CommunityFeatureModel = viewModel(factory = communityFactory)
+        val manualFactory = remember {
+            ManualFeatureModel.Factory(
+                FirebaseRestManualRepository(BuildConfig.FIREBASE_PROJECT_ID),
+                appSession,
+            )
+        }
+        val manualModel: ManualFeatureModel = viewModel(factory = manualFactory)
         val database = remember { OrgPortalDatabase.create(applicationContext) }
         val distributedVideoFactory = remember {
             DistributedVideoFeatureModel.Factory(
@@ -152,6 +161,7 @@ class MainActivity : FragmentActivity() {
             sessionState.authenticationToken,
         ) {
             distributedVideoModel.load()
+            manualModel.load()
         }
         val announcementFactory = remember {
             AnnouncementFeatureModel.Factory(
@@ -301,6 +311,7 @@ class MainActivity : FragmentActivity() {
                     meetingMinutesModel,
                     favoriteBookmarkModel,
                     appBackupModel,
+                    manualModel,
                 )
             },
             tools = {
@@ -314,6 +325,7 @@ class MainActivity : FragmentActivity() {
                     friendExchangeModel,
                     distributedVideoModel,
                     budgetSettlementModel,
+                    manualModel,
                 )
             },
             connect = {
