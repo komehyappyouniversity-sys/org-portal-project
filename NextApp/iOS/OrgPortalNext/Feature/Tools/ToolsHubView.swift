@@ -48,7 +48,10 @@ public struct ToolsHubView: View {
     @ObservedObject private var friendExchangeModel: FriendExchangeFeatureModel
     @ObservedObject private var distributedVideoModel: DistributedVideoFeatureModel
     @ObservedObject private var budgetSettlementModel: BudgetSettlementFeatureModel
+    @ObservedObject private var manualModel: ManualFeatureModel
     @State private var destination: Destination?
+    private let notificationQuestionId: String?
+    private let navigationRequestKey: Int
     public init(
         scheduleModel: ScheduleFeatureModel,
         diaryModel: DiaryFeatureModel,
@@ -58,7 +61,10 @@ public struct ToolsHubView: View {
         favoriteBookmarkModel: FavoriteBookmarkFeatureModel,
         friendExchangeModel: FriendExchangeFeatureModel,
         distributedVideoModel: DistributedVideoFeatureModel,
-        budgetSettlementModel: BudgetSettlementFeatureModel
+        budgetSettlementModel: BudgetSettlementFeatureModel,
+        manualModel: ManualFeatureModel,
+        notificationQuestionId: String? = nil,
+        navigationRequestKey: Int = 0
     ) {
         self.scheduleModel = scheduleModel
         self.diaryModel = diaryModel
@@ -69,6 +75,9 @@ public struct ToolsHubView: View {
         self.friendExchangeModel = friendExchangeModel
         self.distributedVideoModel = distributedVideoModel
         self.budgetSettlementModel = budgetSettlementModel
+        self.manualModel = manualModel
+        self.notificationQuestionId = notificationQuestionId
+        self.navigationRequestKey = navigationRequestKey
     }
 
     public var body: some View {
@@ -220,7 +229,7 @@ public struct ToolsHubView: View {
                 case .friends:
                     FriendExchangeRootView(model: friendExchangeModel)
                 case .manual:
-                    ManualListView()
+                    ManualListView(model: manualModel)
                 case .distributedVideos:
                     DistributedVideoListRoot(
                         model: distributedVideoModel,
@@ -255,6 +264,21 @@ public struct ToolsHubView: View {
                 }
             }
         }
+        .task(id: notificationQuestionIdentity) {
+            guard let notificationQuestionId else { return }
+            if let question = distributedVideoModel.videoQuestions.first(where: {
+                $0.id == notificationQuestionId
+            }) {
+                destination = .videoQuestionDetail(question)
+            } else {
+                await distributedVideoModel.load()
+            }
+        }
+    }
+
+    private var notificationQuestionIdentity: String {
+        "\(navigationRequestKey):"
+            + distributedVideoModel.videoQuestions.map(\.id).joined(separator: ",")
     }
 }
 

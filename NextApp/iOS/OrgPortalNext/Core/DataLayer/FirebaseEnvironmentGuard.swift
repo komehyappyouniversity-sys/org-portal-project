@@ -315,29 +315,39 @@ public struct FirebaseRuntimeConfiguration: Sendable {
     public let projectId: String
     public let isDebugBuild: Bool
     public let productionProjectId: String
+    public let developmentProjectId: String
 
     public init(
         environment: FirebaseEnvironment,
         projectId: String,
         isDebugBuild: Bool,
-        productionProjectId: String
+        productionProjectId: String,
+        developmentProjectId: String = "kome-org-portal-next-dev"
     ) {
         self.environment = environment
         self.projectId = projectId
         self.isDebugBuild = isDebugBuild
         self.productionProjectId = productionProjectId
+        self.developmentProjectId = developmentProjectId
     }
 
     public func validate() throws {
-        if isDebugBuild,
-           environment == .production || projectId == productionProjectId {
+        guard isDebugBuild else { return }
+        if environment == .production || projectId == productionProjectId {
             throw FirebaseEnvironmentError.debugBuildReferencesProduction
+        }
+        if environment == .development && projectId != developmentProjectId {
+            throw FirebaseEnvironmentError.debugBuildReferencesUnexpectedProject
+        }
+        if environment == .emulator && projectId != "demo-org-portal-next" {
+            throw FirebaseEnvironmentError.debugBuildReferencesUnexpectedProject
         }
     }
 }
 
 public enum FirebaseEnvironmentError: Error, Equatable {
     case debugBuildReferencesProduction
+    case debugBuildReferencesUnexpectedProject
 }
 
 public enum LegacyAdapterNamespace {

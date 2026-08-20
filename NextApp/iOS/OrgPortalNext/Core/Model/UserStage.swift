@@ -217,9 +217,41 @@ public struct AnnouncementReadState: Equatable, Codable, Sendable {
     }
 }
 
+public struct CommunityAdminPermission: Equatable, Codable, Sendable {
+    public let key: String
+    public let label: String
+
+    public init(key: String, label: String) {
+        self.key = key
+        self.label = label
+    }
+}
+
 public struct CommunityAdminAccess: Equatable, Codable, Sendable {
     public static let memberReviewPermission = "memberReview"
+    public static let announcementPublishPermission = "announcementPublish"
+    public static let postCommentManagementPermission = "postCommentManagement"
+    public static let videoManualManagementPermission = "videoManualManagement"
+    public static let eventReservationManagementPermission = "eventReservationManagement"
+    public static let questionAnswerPermission = "questionAnswer"
+    public static let reportResponsePermission = "reportResponse"
+    public static let accountingReadPermission = "accountingRead"
+    public static let accountingEditApprovePermission = "accountingEditApprove"
+    public static let usageAnalyticsReadPermission = "usageAnalyticsRead"
     public static let legacyMemberReviewPermission = "メンバー閲覧・承認"
+
+    public static let delegablePermissions = [
+        CommunityAdminPermission(key: memberReviewPermission, label: "メンバー閲覧・承認"),
+        CommunityAdminPermission(key: announcementPublishPermission, label: "お知らせ作成・公開"),
+        CommunityAdminPermission(key: postCommentManagementPermission, label: "投稿・コメントの管理"),
+        CommunityAdminPermission(key: videoManualManagementPermission, label: "動画・マニュアル管理"),
+        CommunityAdminPermission(key: eventReservationManagementPermission, label: "イベント・予約管理"),
+        CommunityAdminPermission(key: questionAnswerPermission, label: "質問への回答"),
+        CommunityAdminPermission(key: reportResponsePermission, label: "通報対応"),
+        CommunityAdminPermission(key: accountingReadPermission, label: "会計の閲覧"),
+        CommunityAdminPermission(key: accountingEditApprovePermission, label: "会計の編集・承認"),
+        CommunityAdminPermission(key: usageAnalyticsReadPermission, label: "利用状況の閲覧")
+    ]
 
     public let communityId: String
     public let userId: String
@@ -247,10 +279,35 @@ public struct CommunityAdminAccess: Equatable, Codable, Sendable {
             || permissions.contains(Self.memberReviewPermission)
             || permissions.contains(Self.legacyMemberReviewPermission)
     }
+
+    public static func editablePermissions(_ permissions: Set<String>) -> Set<String> {
+        var editable = permissions
+        if editable.remove(legacyMemberReviewPermission) != nil {
+            editable.insert(memberReviewPermission)
+        }
+        return editable
+    }
+
+    public static func permissionLabels(_ permissions: Set<String>) -> [String] {
+        var remaining = permissions
+        var labels: [String] = []
+        for permission in delegablePermissions {
+            let hasCanonicalPermission = remaining.remove(permission.key) != nil
+            let hasLegacyPermission = permission.key == memberReviewPermission
+                && remaining.remove(legacyMemberReviewPermission) != nil
+            if hasCanonicalPermission || hasLegacyPermission {
+                labels.append(permission.label)
+            }
+        }
+        return labels + remaining.sorted()
+    }
 }
 
 public struct CommunityAdmin: Identifiable, Equatable, Codable, Sendable {
     public var id: String { userId }
+    public var permissionLabels: [String] {
+        CommunityAdminAccess.permissionLabels(permissions)
+    }
     public let userId: String
     public let role: String
     public let permissions: Set<String>

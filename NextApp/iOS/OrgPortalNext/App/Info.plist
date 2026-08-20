@@ -24,6 +24,29 @@
     <string>$(FIREBASE_PROJECT_ID)</string>
     <key>FirebaseWebAPIKey</key>
     <string>$(FIREBASE_WEB_API_KEY)</string>
+    <key>FirebaseAppID</key>
+    <string>$(FIREBASE_APP_ID)</string>
+    <key>FirebaseGCMSenderID</key>
+    <string>$(FIREBASE_GCM_SENDER_ID)</string>
+    <key>FirebaseAppDelegateProxyEnabled</key>
+    <false/>
+    <key>FirebaseMessagingAutoInitEnabled</key>
+    <true/>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>orgportalnext</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>orgportalnext</string>
+            </array>
+        </dict>
+    </array>
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>remote-notification</string>
+    </array>
     <key>LSRequiresIPhoneOS</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>

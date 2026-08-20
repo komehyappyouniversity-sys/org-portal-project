@@ -66,6 +66,9 @@ data class CommunityUiState(
     val myBookingSlots: Map<String, BookingSlot> = emptyMap(),
     val bookingProcessingSlotId: String? = null,
     val adminQuery: String = "",
+    val editingAdministratorUserId: String? = null,
+    val editingAdministratorRole: String = "admin",
+    val administratorPermissionSelection: Set<String> = emptySet(),
     val reviewingUserId: String? = null,
     val isLoading: Boolean = false,
     val message: String? = null,
@@ -1209,22 +1212,70 @@ class CommunityFeatureModel(
         }
     }
 
-    fun saveAdministrator(adminUserId: String) {
+    fun beginAdministratorAdd(adminUserId: String) {
+        if (state.value.adminAccess?.role != "owner") return
+        mutableState.value = mutableState.value.copy(
+            editingAdministratorUserId = adminUserId,
+            editingAdministratorRole = "admin",
+            administratorPermissionSelection = setOf(CommunityAdminAccess.MEMBER_REVIEW_PERMISSION),
+            message = null,
+        )
+    }
+
+    fun beginAdministratorEdit(admin: CommunityAdmin) {
+        if (state.value.adminAccess?.role != "owner") return
+        mutableState.value = mutableState.value.copy(
+            editingAdministratorUserId = admin.userId,
+            editingAdministratorRole = admin.role,
+            administratorPermissionSelection = CommunityAdminAccess.editablePermissions(admin.permissions),
+            message = null,
+        )
+    }
+
+    fun toggleAdministratorPermission(permissionKey: String) {
+        if (CommunityAdminAccess.DELEGABLE_PERMISSIONS.none { it.key == permissionKey }) return
+        val selected = state.value.administratorPermissionSelection.toMutableSet()
+        if (!selected.add(permissionKey)) selected.remove(permissionKey)
+        mutableState.value = mutableState.value.copy(administratorPermissionSelection = selected)
+    }
+
+    fun cancelAdministratorEdit() {
+        mutableState.value = mutableState.value.copy(
+            editingAdministratorUserId = null,
+            editingAdministratorRole = "admin",
+            administratorPermissionSelection = emptySet(),
+        )
+    }
+
+    fun saveAdministrator() {
         val current = session.state.value
         val communityId = current.selectedCommunityId ?: return
         val token = current.authenticationToken ?: return
+        if (state.value.adminAccess?.role != "owner") {
+            mutableState.value = mutableState.value.copy(message = "管理者の追加・編集はOwnerのみが操作できます。")
+            return
+        }
+        val adminUserId = state.value.editingAdministratorUserId ?: return
+        val role = state.value.editingAdministratorRole
+        val permissions = state.value.administratorPermissionSelection
         mutableState.value = mutableState.value.copy(isLoading = true, message = null)
         viewModelScope.launch {
             repository.saveAdministrator(
                 communityId = communityId,
                 adminUserId = adminUserId,
-                role = "admin",
-                permissions = setOf(CommunityAdminAccess.MEMBER_REVIEW_PERMISSION),
+                role = role,
+                permissions = permissions,
                 isActive = true,
                 actorUserId = current.userId,
                 idToken = token,
             ).onSuccess {
-                mutableState.value = mutableState.value.copy(message = "管理者を追加しました。")
+                mutableState.value = mutableState.value.copy(
+                    editingAdministratorUserId = null,
+                    editingAdministratorRole = "admin",
+                    administratorPermissionSelection = emptySet(),
+                    isLoading = false,
+                    message = "管理者権限を保存しました。",
+                )
                 refreshManagement()
             }.onFailure(::showError)
         }

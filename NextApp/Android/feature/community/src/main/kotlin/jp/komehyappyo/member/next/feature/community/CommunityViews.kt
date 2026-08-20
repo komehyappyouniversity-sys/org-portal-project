@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
@@ -46,6 +47,7 @@ import jp.komehyappyo.member.next.core.model.RadioProgram
 import jp.komehyappyo.member.next.core.model.BookingEvent
 import jp.komehyappyo.member.next.core.model.BookingSlot
 import jp.komehyappyo.member.next.core.model.CommunityAuditLog
+import jp.komehyappyo.member.next.core.model.CommunityAdminAccess
 import jp.komehyappyo.member.next.core.model.CommunityMembershipStatus
 import java.time.Instant
 import java.time.ZoneId
@@ -57,6 +59,8 @@ fun CommunityRoot(
     model: CommunityFeatureModel,
     onRefreshManagementPosts: () -> Unit,
     memberPostReplyContent: @Composable () -> Unit,
+    notificationEventId: String? = null,
+    navigationRequestKey: Long = 0,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
     val sessionState by model.session.state.collectAsStateWithLifecycle()
@@ -89,6 +93,14 @@ fun CommunityRoot(
             onRefreshManagementPosts()
         }
         model.refreshRadioPrograms()
+    }
+    LaunchedEffect(navigationRequestKey, state.bookingEvents) {
+        val targetId = notificationEventId ?: return@LaunchedEffect
+        if (state.bookingEvents.any { it.id == targetId }) {
+            model.selectBookingEvent(targetId)
+        } else {
+            model.refresh()
+        }
     }
 
     if (selectedVideo != null) {
@@ -493,9 +505,44 @@ fun CommunityRoot(
                                 Text(member.applicantEmail ?: member.userId)
                             }
                             Button(
-                                onClick = { model.saveAdministrator(member.userId) },
+                                onClick = { model.beginAdministratorAdd(member.userId) },
                                 enabled = !state.isLoading,
-                            ) { Text("管理者に追加") }
+                            ) { Text("権限を設定") }
+                        }
+                    }
+                    state.editingAdministratorUserId?.let { adminUserId ->
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text("権限設定: $adminUserId")
+                            CommunityAdminAccess.DELEGABLE_PERMISSIONS.forEach { permission ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { model.toggleAdministratorPermission(permission.key) },
+                                ) {
+                                    Checkbox(
+                                        checked = permission.key in state.administratorPermissionSelection,
+                                        onCheckedChange = {
+                                            model.toggleAdministratorPermission(permission.key)
+                                        },
+                                    )
+                                    Text(
+                                        permission.label,
+                                        modifier = Modifier.padding(top = 12.dp),
+                                    )
+                                }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = model::cancelAdministratorEdit) {
+                                    Text("キャンセル")
+                                }
+                                Button(
+                                    onClick = model::saveAdministrator,
+                                    enabled = !state.isLoading,
+                                ) { Text("権限を保存") }
+                            }
                         }
                     }
                     state.administrators.forEach { admin ->
@@ -503,13 +550,23 @@ fun CommunityRoot(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Text("${admin.userId} (${admin.role})")
-                            if (admin.isActive) {
-                                TextButton(onClick = { model.deactivateAdministrator(admin) }) {
-                                    Text("無効化")
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("${admin.userId} (${admin.role})")
+                                Text(
+                                    "付与権限: ${admin.permissionLabels.ifEmpty { listOf("なし") }.joinToString("／")}",
+                                )
+                            }
+                            Column {
+                                if (admin.isActive) {
+                                    TextButton(onClick = { model.beginAdministratorEdit(admin) }) {
+                                        Text("権限編集")
+                                    }
+                                    TextButton(onClick = { model.deactivateAdministrator(admin) }) {
+                                        Text("無効化")
+                                    }
+                                } else {
+                                    Text("無効")
                                 }
-                            } else {
-                                Text("無効")
                             }
                         }
                     }

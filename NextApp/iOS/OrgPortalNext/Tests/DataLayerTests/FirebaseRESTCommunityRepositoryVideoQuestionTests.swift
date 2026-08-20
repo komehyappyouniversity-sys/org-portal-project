@@ -254,6 +254,63 @@ final class FirebaseRESTCommunityRepositoryVideoQuestionTests: XCTestCase {
         XCTAssertEqual(answeredAt, updatedAt)
     }
 
+    func testSaveAdministratorPersistsSelectedPermissionSetAndAuditLog() async throws {
+        MockFirestoreProtocol.reset()
+        let session = URLSession(configuration: mockSessionConfiguration())
+        let repository = FirebaseRESTCommunityRepository(projectId: "test-project", session: session)
+        MockFirestoreProtocol.responses[requestKey(
+            path: "/v1/projects/test-project/databases/(default)/documents:commit",
+            method: "POST"
+        )] = FakeResponse(
+            statusCode: 200,
+            body: ["commitTime": "2026-08-15T00:00:00Z"]
+        )
+
+        try await repository.saveAdministrator(
+            communityId: "org-1",
+            adminUserId: " manager-1 ",
+            role: "manager",
+            permissions: [
+                CommunityAdminAccess.usageAnalyticsReadPermission,
+                CommunityAdminAccess.announcementPublishPermission
+            ],
+            isActive: true,
+            actorUserId: "owner-1",
+            idToken: "id-token"
+        )
+
+        let request = try XCTUnwrap(MockFirestoreProtocol.requests.first)
+        XCTAssertEqual(MockFirestoreProtocol.requests.count, 1)
+        XCTAssertEqual(request.method, "POST")
+        let payload = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: request.body) as? [String: Any]
+        )
+        let writes = try XCTUnwrap(payload["writes"] as? [[String: Any]])
+        let administratorUpdate = try XCTUnwrap(writes.first?["update"] as? [String: Any])
+        XCTAssertEqual(
+            administratorUpdate["name"] as? String,
+            "projects/test-project/databases/(default)/documents/organizations/org-1/admins/manager-1"
+        )
+        let administratorFields = try XCTUnwrap(administratorUpdate["fields"] as? [String: Any])
+        let permissionsField = try XCTUnwrap(administratorFields["permissions"] as? [String: Any])
+        let arrayValue = try XCTUnwrap(permissionsField["arrayValue"] as? [String: Any])
+        let permissionValues = try XCTUnwrap(arrayValue["values"] as? [[String: Any]])
+        XCTAssertEqual(
+            permissionValues.compactMap { $0["stringValue"] as? String },
+            ["announcementPublish", "usageAnalyticsRead"]
+        )
+        let auditUpdate = try XCTUnwrap(writes.last?["update"] as? [String: Any])
+        let auditFields = try XCTUnwrap(auditUpdate["fields"] as? [String: Any])
+        XCTAssertEqual(
+            (auditFields["action"] as? [String: Any])?["stringValue"] as? String,
+            "administrator.added"
+        )
+        XCTAssertEqual(
+            (auditFields["targetUserId"] as? [String: Any])?["stringValue"] as? String,
+            "manager-1"
+        )
+    }
+
     private func mockSessionConfiguration() -> URLSessionConfiguration {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockFirestoreProtocol.self]

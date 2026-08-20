@@ -7,22 +7,80 @@ import WebKit
 import VisionKit
 import DataLayer
 import DesignSystem
+import FirebaseCore
+import FirebaseMessaging
 import FeatureTools
 import Navigation
 import Notifications
 import Model
 import Session
 
+private final class NextAppDelegate: NSObject, UIApplicationDelegate, MessagingDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        let bundle = Bundle.main
+        let projectId = bundle.object(forInfoDictionaryKey: "FirebaseProjectID") as? String ?? ""
+        let apiKey = bundle.object(forInfoDictionaryKey: "FirebaseWebAPIKey") as? String ?? ""
+        let appId = bundle.object(forInfoDictionaryKey: "FirebaseAppID") as? String ?? ""
+        let senderId = bundle.object(forInfoDictionaryKey: "FirebaseGCMSenderID") as? String ?? ""
+        if FirebaseApp.app() == nil, !appId.isEmpty, !senderId.isEmpty {
+            let options = FirebaseOptions(googleAppID: appId, gcmSenderID: senderId)
+            options.projectID = projectId
+            options.apiKey = apiKey
+            options.bundleID = bundle.bundleIdentifier ?? ""
+            FirebaseApp.configure(options: options)
+        }
+        if FirebaseApp.app() != nil { Messaging.messaging().delegate = self }
+        return true
+    }
+
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        guard FirebaseApp.app() != nil else { return }
+        Messaging.messaging().apnsToken = deviceToken
+    }
+
+    nonisolated func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+        guard let fcmToken, !fcmToken.isEmpty else { return }
+        NotificationCenter.default.post(name: .fcmTokenRefreshed, object: fcmToken)
+    }
+}
+
+private struct FirebaseMessagingTokenProvider: FcmRegistrationTokenProviding {
+    func currentToken() async throws -> String {
+        guard FirebaseApp.app() != nil else { throw URLError(.notConnectedToInternet) }
+        return try await withCheckedThrowingContinuation { continuation in
+            Messaging.messaging().token { token, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let token {
+                    continuation.resume(returning: token)
+                } else {
+                    continuation.resume(throwing: URLError(.badServerResponse))
+                }
+            }
+        }
+    }
+}
+
 @main
 struct OrgPortalNextApp: App {
+    @UIApplicationDelegateAdaptor(NextAppDelegate.self) private var appDelegate
     private let modelContainer: ModelContainer
 
     init() {
         let projectId = Bundle.main.object(forInfoDictionaryKey: "FirebaseProjectID") as? String ?? ""
+        let environment: FirebaseEnvironment = projectId == "demo-org-portal-next"
+            ? .emulator
+            : projectId == "kome-org-portal-next-dev" ? .development : .production
         let firebaseConfiguration = FirebaseRuntimeConfiguration(
-            environment: .development,
+            environment: environment,
             projectId: projectId,
-            isDebugBuild: true,
+            isDebugBuild: _isDebugAssertConfiguration(),
             productionProjectId: "ictnagaoka-member"
         )
         do {
@@ -71,9 +129,14 @@ private struct AppBootstrapView: View {
     @StateObject private var accountModel: AccountFeatureModel
     @StateObject private var communityModel: CommunityFeatureModel
     @StateObject private var distributedVideoModel: DistributedVideoFeatureModel
+    @StateObject private var manualModel: ManualFeatureModel
     @StateObject private var announcementModel: AnnouncementFeatureModel
     @StateObject private var postModel: PostFeatureModel
     @StateObject private var budgetSettlementModel: BudgetSettlementFeatureModel
+    @StateObject private var notificationRouter: NotificationRouter
+    @State private var navigableNotificationRoute: NotificationRoute?
+    @State private var navigableNotificationSequence = 0
+    private let fcmTokenManager: FcmTokenRegistrationManager
 
     init(modelContainer: ModelContainer) {
         let session = AppSession()
@@ -96,10 +159,23 @@ private struct AppBootstrapView: View {
         let firebaseProjectID = Bundle.main.object(
             forInfoDictionaryKey: "FirebaseProjectID"
         ) as? String ?? ""
+        _notificationRouter = StateObject(wrappedValue: NotificationRouter())
+        fcmTokenManager = FcmTokenRegistrationManager(
+            store: FirestoreFcmTokenStore(projectId: firebaseProjectID),
+            tokenProvider: FirebaseMessagingTokenProvider(),
+            environment: firebaseProjectID == "ictnagaoka-member"
+                ? .production
+                : .development
+        )
         let communityRepository = FirebaseRESTCommunityRepository(projectId: firebaseProjectID)
         let usageLogRecorder = UsageLogRecorder(
             remoteRepository: communityRepository,
             preferenceStore: UserDefaultsUsageAnalyticsPreferenceStore()
+        )
+        _manualModel = StateObject(
+            wrappedValue: ManualFeatureModel(
+                repository: FirebaseRESTManualRepository(projectId: firebaseProjectID)
+            )
         )
         let community = CommunityFeatureModel(
             repository: communityRepository,
@@ -251,7 +327,8 @@ private struct AppBootstrapView: View {
                 cashDistributionModel: cashDistributionModel,
                 meetingMinutesModel: meetingMinutesModel,
                 favoriteBookmarkModel: favoriteBookmarkModel,
-                appBackupModel: appBackupModel
+                appBackupModel: appBackupModel,
+                manualModel: manualModel
             ),
             tools: ToolsHubView(
                 scheduleModel: scheduleModel,
@@ -262,21 +339,67 @@ private struct AppBootstrapView: View {
                 favoriteBookmarkModel: favoriteBookmarkModel,
                 friendExchangeModel: friendExchangeModel,
                 distributedVideoModel: distributedVideoModel,
-                budgetSettlementModel: budgetSettlementModel
+                budgetSettlementModel: budgetSettlementModel,
+                manualModel: manualModel,
+                notificationQuestionId: navigableNotificationRoute?.type == .videoQuestionAnswer
+                    ? navigableNotificationRoute?.targetId
+                    : nil,
+                navigationRequestKey: navigableNotificationSequence
             ),
             community: ConnectedRootView(
                 communityModel: communityModel,
                 postModel: postModel,
-                announcementModel: announcementModel
+                announcementModel: announcementModel,
+                notificationRoute: navigableNotificationRoute,
+                navigationRequestKey: navigableNotificationSequence
             ),
             profile: AccountRootView(
                 model: accountModel,
                 communityModel: communityModel,
                 postModel: postModel
-            )
+            ),
+            requestedTab: requestedTab,
+            navigationRequestKey: navigableNotificationSequence
         )
+        .task(id: notificationRouter.routeSequence) {
+            guard let route = notificationRouter.route else { return }
+            let decision = NotificationNavigationDecision.resolve(
+                route: route,
+                selectedCommunityId: appSession.selectedCommunityId
+            )
+            if let communityId = decision.communityIdToSelect {
+                appSession.selectCommunity(communityId)
+            }
+            navigableNotificationRoute = route
+            navigableNotificationSequence = notificationRouter.routeSequence
+        }
+        .task(id: "\(appSession.authenticatedUserId ?? ""):\(appSession.authenticationToken ?? "")") {
+            try? await fcmTokenManager.synchronize(
+                userId: appSession.authenticatedUserId,
+                idToken: appSession.authenticationToken
+            )
+        }
         .task(id: "\(appSession.authenticatedUserId ?? ""):\(appSession.selectedCommunityId ?? "")") {
-            await distributedVideoModel.load()
+            async let videoLoad: Void = distributedVideoModel.load()
+            async let manualLoad: Void = manualModel.load(
+                communityId: appSession.selectedCommunityId,
+                idToken: appSession.authenticationToken
+            )
+            _ = await (videoLoad, manualLoad)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .fcmTokenRefreshed)) { event in
+            guard let token = event.object as? String else { return }
+            Task { try? await fcmTokenManager.tokenRefreshed(token) }
+        }
+        .onOpenURL { notificationRouter.open(url: $0) }
+    }
+
+    private var requestedTab: AppTab? {
+        switch navigableNotificationRoute?.type {
+        case .videoQuestionAnswer: .tools
+        case .supportMessage: .profile
+        case .announcement, .adminReply, .event: .community
+        case nil: nil
         }
     }
 }
@@ -693,6 +816,9 @@ private final class CommunityFeatureModel: ObservableObject {
     private let memoStore: VimeoMemoStore
     @Published private(set) var reviewingUserId: String?
     @Published private(set) var isLoading = false
+    @Published private(set) var editingAdministratorUserID: String?
+    @Published private(set) var editingAdministratorRole = "admin"
+    @Published private(set) var administratorPermissionSelection: Set<String> = []
     @Published var message: String?
     @Published var showsScanner = false
 
@@ -1676,15 +1802,49 @@ private final class CommunityFeatureModel: ObservableObject {
         }
     }
 
-    func saveAdministrator(_ adminUserId: String) {
+    func beginAdministratorAdd(_ adminUserId: String) {
+        guard isOwner else { return }
+        editingAdministratorUserID = adminUserId
+        editingAdministratorRole = "admin"
+        administratorPermissionSelection = [CommunityAdminAccess.memberReviewPermission]
+        message = nil
+    }
+
+    func beginAdministratorEdit(_ admin: CommunityAdmin) {
+        guard isOwner else { return }
+        editingAdministratorUserID = admin.userId
+        editingAdministratorRole = admin.role
+        administratorPermissionSelection = CommunityAdminAccess.editablePermissions(admin.permissions)
+        message = nil
+    }
+
+    func toggleAdministratorPermission(_ permissionKey: String) {
+        guard CommunityAdminAccess.delegablePermissions.contains(where: { $0.key == permissionKey }) else {
+            return
+        }
+        if administratorPermissionSelection.contains(permissionKey) {
+            administratorPermissionSelection.remove(permissionKey)
+        } else {
+            administratorPermissionSelection.insert(permissionKey)
+        }
+    }
+
+    func cancelAdministratorEdit() {
+        editingAdministratorUserID = nil
+        editingAdministratorRole = "admin"
+        administratorPermissionSelection = []
+    }
+
+    func saveAdministrator() {
         guard let communityId = session.selectedCommunityId,
               let actorUserId = session.authenticatedUserId,
               let token = session.authenticationToken else { return }
         guard isOwner else {
-            message = "管理者の追加はOwnerのみが操作できます。"
+            message = "管理者の追加・編集はOwnerのみが操作できます。"
             return
         }
-        let normalized = adminUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = editingAdministratorUserID?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !normalized.isEmpty else {
             message = "管理者のユーザーIDを入力してください。"
             return
@@ -1695,13 +1855,14 @@ private final class CommunityFeatureModel: ObservableObject {
                 try await repository.saveAdministrator(
                     communityId: communityId,
                     adminUserId: normalized,
-                    role: "admin",
-                    permissions: [CommunityAdminAccess.memberReviewPermission],
+                    role: editingAdministratorRole,
+                    permissions: administratorPermissionSelection,
                     isActive: true,
                     actorUserId: actorUserId,
                     idToken: token
                 )
-                message = "管理者を追加しました。"
+                cancelAdministratorEdit()
+                message = "管理者権限を保存しました。"
                 await refreshManagement()
                 isLoading = false
             } catch {
@@ -1763,6 +1924,7 @@ private final class AnnouncementFeatureModel: ObservableObject {
     private let repository: any AnnouncementRepository
     let session: AppSession
     private let memberships: () -> [CommunityMembership]
+    private var pendingNotificationID: String?
 
     init(
         repository: any AnnouncementRepository,
@@ -1791,6 +1953,11 @@ private final class AnnouncementFeatureModel: ObservableObject {
                     userId: userID,
                     idToken: token
                 )
+                if let pendingNotificationID,
+                   let announcement = announcements.first(where: { $0.id == pendingNotificationID }) {
+                    self.pendingNotificationID = nil
+                    open(announcement)
+                }
                 if let userID, let token {
                     readIDs = try await repository.readAnnouncementIDs(
                         userId: userID,
@@ -1825,12 +1992,24 @@ private final class AnnouncementFeatureModel: ObservableObject {
             }
         }
     }
+
+    func openFromNotification(_ announcementID: String) {
+        pendingNotificationID = announcementID
+        if let announcement = announcements.first(where: { $0.id == announcementID }) {
+            pendingNotificationID = nil
+            open(announcement)
+        } else {
+            refresh()
+        }
+    }
 }
 
 private struct ConnectedRootView: View {
     @ObservedObject var communityModel: CommunityFeatureModel
     @ObservedObject var postModel: PostFeatureModel
     @ObservedObject var announcementModel: AnnouncementFeatureModel
+    let notificationRoute: NotificationRoute?
+    let navigationRequestKey: Int
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var selection = 0
 
@@ -1848,11 +2027,33 @@ private struct ConnectedRootView: View {
                 .padding(.top, 12)
             }
             if selection == 0 {
-                CommunityRootView(model: communityModel, postModel: postModel)
+                CommunityRootView(
+                    model: communityModel,
+                    postModel: postModel,
+                    notificationEventID: notificationRoute?.type == .event
+                        ? notificationRoute?.targetId
+                        : nil,
+                    navigationRequestKey: navigationRequestKey
+                )
             } else if selection == 1 {
                 PostRootView(model: postModel)
             } else if selection == 2 {
                 AnnouncementRootView(model: announcementModel)
+            }
+        }
+        .task(id: navigationRequestKey) {
+            guard let notificationRoute else { return }
+            switch notificationRoute.type {
+            case .announcement:
+                selection = 2
+                announcementModel.openFromNotification(notificationRoute.targetId)
+            case .adminReply:
+                selection = 1
+                postModel.openFromNotification(notificationRoute.targetId)
+            case .event:
+                selection = 0
+            case .videoQuestionAnswer, .supportMessage:
+                break
             }
         }
     }
@@ -2287,15 +2488,21 @@ private struct CommunityRootView: View {
     @ObservedObject var model: CommunityFeatureModel
     @ObservedObject var postModel: PostFeatureModel
     let isManagementMode: Bool
+    let notificationEventID: String?
+    let navigationRequestKey: Int
 
     init(
         model: CommunityFeatureModel,
         postModel: PostFeatureModel,
-        isManagementMode: Bool = false
+        isManagementMode: Bool = false,
+        notificationEventID: String? = nil,
+        navigationRequestKey: Int = 0
     ) {
         self.model = model
         self.postModel = postModel
         self.isManagementMode = isManagementMode
+        self.notificationEventID = notificationEventID
+        self.navigationRequestKey = navigationRequestKey
     }
 
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -2412,6 +2619,14 @@ private struct CommunityRootView: View {
                     await model.refresh()
                     if isManagementMode {
                         postModel.refreshManagementMemberPosts()
+                    }
+                }
+                .task(id: "\(navigationRequestKey):\(model.bookingEvents.map(\.id).joined(separator: ","))") {
+                    guard let notificationEventID else { return }
+                    if model.bookingEvents.contains(where: { $0.id == notificationEventID }) {
+                        await model.selectBookingEvent(notificationEventID)
+                    } else {
+                        await model.refresh()
                     }
                 }
                 .sheet(isPresented: $model.showsScanner) {
@@ -2808,22 +3023,62 @@ private struct CommunityRootView: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button("管理者に追加") {
-                            model.saveAdministrator(member.userId)
+                        Button("権限を設定") {
+                            model.beginAdministratorAdd(member.userId)
                         }
                         .buttonStyle(.borderedProminent)
                         .disabled(model.isLoading)
                     }
                 }
+                if let adminUserID = model.editingAdministratorUserID {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("権限設定: \(adminUserID)")
+                            .font(.headline)
+                        ForEach(CommunityAdminAccess.delegablePermissions, id: \.key) { permission in
+                            Button {
+                                model.toggleAdministratorPermission(permission.key)
+                            } label: {
+                                HStack {
+                                    Image(systemName: model.administratorPermissionSelection.contains(permission.key)
+                                        ? "checkmark.square.fill"
+                                        : "square")
+                                    Text(permission.label)
+                                    Spacer()
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        HStack {
+                            Button("キャンセル") { model.cancelAdministratorEdit() }
+                                .buttonStyle(.bordered)
+                            Button("権限を保存") { model.saveAdministrator() }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(model.isLoading)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                }
                 ForEach(model.administrators) { admin in
                     HStack {
-                        Text("\(admin.userId) (\(admin.role))")
-                            .font(.footnote)
-                            .textSelection(.enabled)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("\(admin.userId) (\(admin.role))")
+                                .font(.footnote)
+                                .textSelection(.enabled)
+                            Text("付与権限: \(admin.permissionLabels.isEmpty ? "なし" : admin.permissionLabels.joined(separator: "／"))")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                         Spacer()
                         if admin.isActive {
-                            Button("無効化") { model.deactivateAdministrator(admin) }
-                                .buttonStyle(.bordered)
+                            VStack {
+                                Button("権限編集") { model.beginAdministratorEdit(admin) }
+                                    .buttonStyle(.bordered)
+                                Button("無効化") { model.deactivateAdministrator(admin) }
+                                    .buttonStyle(.bordered)
+                            }
                         } else {
                             Text("無効").foregroundStyle(.secondary)
                         }
