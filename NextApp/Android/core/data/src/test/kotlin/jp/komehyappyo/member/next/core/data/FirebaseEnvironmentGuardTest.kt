@@ -15,10 +15,20 @@ class FirebaseEnvironmentGuardTest {
     }
 
     @Test
-    fun debugBuildAcceptsDemoProject() {
+    fun debugBuildAcceptsOnlyDevelopmentOrDemoProject() {
         FirebaseEnvironmentGuard.requireSafeDebugProject(
             isDebug = true,
             configuredProjectId = "demo-org-portal-next",
         )
+        FirebaseEnvironmentGuard.requireSafeDebugProject(
+            isDebug = true,
+            configuredProjectId = FirebaseEnvironmentGuard.DEVELOPMENT_PROJECT_ID,
+        )
+        assertThrows(IllegalStateException::class.java) {
+            FirebaseEnvironmentGuard.requireSafeDebugProject(
+                isDebug = true,
+                configuredProjectId = "unexpected-project",
+            )
+        }
     }
 }

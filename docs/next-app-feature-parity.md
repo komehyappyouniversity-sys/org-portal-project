@@ -25,6 +25,7 @@
 | コミュニティ運営 | Ownerにのみ「複数管理者の設定」を表示し、Managerの新規追加・権限編集で、メンバー閲覧・承認／お知らせ作成・公開／投稿・コメントの管理／動画・マニュアル管理／イベント・予約管理／質問への回答／通報対応／会計の閲覧／会計の編集・承認／利用状況の閲覧を複数選択できること。選択した共通権限キーのセットがRepository経由で保存され、一覧に同じ日本語ラベルで表示されること。Owner専用の有料プラン・請求管理／Manager管理／コミュニティ削除／全データ出力／セキュリティ設定は選択肢に表示しないこと |
 | 投稿管理（運営） | 会員投稿の未返信一覧表示、返信入力・保存、返信済み一覧、保存結果反映、`memberHasReadReply` による未読表示反映 |
 | 配信動画（Vimeo） | 配信動画一覧をコミュニティ選択時に0件/エラー/ローディング状態で表示、タイトル・サムネイル付き、再生URL優先順位 `embedHtml` → `vimeoUrl` → `videoUrl`。再生画面で、再生位置取得（分:秒表示）、メモの追加・編集・削除・保存、メモ由来の質問送信、質問一覧（未回答/回答済み）の表示が iOS と Android で同等であること。動画メモは端末内保存と同時同期（成功で`syncStatus=synced`、通信失敗で`syncStatus=pendingSync`）し、起動時/再表示時に自動再送する。動画質問は両OS共通で`draft`→`sending`→`synced`/`failed`の状態遷移、端末内下書き保持、起動時/再表示時の未送信質問自動再送、`clientRequestId`をFirestoreドキュメントIDに用いた二重送信防止に対応し、送信中・送信失敗（オフライン保持中）を質問一覧とOfflineBannerで表示する。リピート再生設定は動画全体のON/OFFのみを提供し、`videoId` 単位で端末内保存され、Guestを含む利用者が保存済みON設定で動画を開いた場合も再生終了後に先頭から再生を再開すること |
+| プッシュ通知 | Firebase Messagingで端末トークンを取得し、ログイン時・更新時に`memberPrivate/{uid}/fcmTokens/{tokenId}`へ登録／更新、ログアウト時に削除すること。お知らせ→M03、会員投稿への返信→M05、動画質問への回答→V14、イベント→M09の4種類と既存サポートメッセージを`orgportalnext://`で同じように解析し、別コミュニティの通知はSessionで自動切り替え後に対象詳細を開くこと。Debugは`kome-org-portal-next-dev`またはEmulator以外への接続時に起動停止すること |
 
 ## 共通の状態
 
@@ -36,6 +37,7 @@
 - 権限不足
 - 処理中と多重操作防止
 - 重要操作の確認と成功・失敗メッセージ
+- プッシュ通知は、登録・更新・削除、4種類のディープリンク、コミュニティ自動切り替えをAndroid/iPhoneの両方で確認する
 
 ## CI の確認
 
@@ -44,3 +46,5 @@
 - Android `build-test-lint`
 - iPhone `build-test`
 - Firebase Emulator `smoke`
+
+実機FCM確認では、開発用Firebaseアプリの公開設定値をiPhoneの`NEXT_FIREBASE_IOS_APP_ID`、Androidの`NEXT_FIREBASE_ANDROID_APP_ID`、両OSの`NEXT_FIREBASE_GCM_SENDER_ID`へ設定する。これらは`kome-org-portal-next-dev`のアプリ設定値だけを使用し、本番値と混在させない。
