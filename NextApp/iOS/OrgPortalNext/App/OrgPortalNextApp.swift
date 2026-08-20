@@ -29,7 +29,7 @@ private final class NextAppDelegate: NSObject, UIApplicationDelegate, MessagingD
             let options = FirebaseOptions(googleAppID: appId, gcmSenderID: senderId)
             options.projectID = projectId
             options.apiKey = apiKey
-            options.bundleID = bundle.bundleIdentifier
+            options.bundleID = bundle.bundleIdentifier ?? ""
             FirebaseApp.configure(options: options)
         }
         if FirebaseApp.app() != nil { Messaging.messaging().delegate = self }
@@ -44,7 +44,7 @@ private final class NextAppDelegate: NSObject, UIApplicationDelegate, MessagingD
         Messaging.messaging().apnsToken = deviceToken
     }
 
-    func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
+    nonisolated func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
         guard let fcmToken, !fcmToken.isEmpty else { return }
         NotificationCenter.default.post(name: .fcmTokenRefreshed, object: fcmToken)
     }
@@ -53,7 +53,7 @@ private final class NextAppDelegate: NSObject, UIApplicationDelegate, MessagingD
 private struct FirebaseMessagingTokenProvider: FcmRegistrationTokenProviding {
     func currentToken() async throws -> String {
         guard FirebaseApp.app() != nil else { throw URLError(.notConnectedToInternet) }
-        try await withCheckedThrowingContinuation { continuation in
+        return try await withCheckedThrowingContinuation { continuation in
             Messaging.messaging().token { token, error in
                 if let error {
                     continuation.resume(throwing: error)

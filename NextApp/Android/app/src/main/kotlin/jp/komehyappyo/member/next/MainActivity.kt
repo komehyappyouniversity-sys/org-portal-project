@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.fragment.app.FragmentActivity
+import jp.komehyappyo.member.next.core.data.FirebaseEnvironmentGuard
 import jp.komehyappyo.member.next.core.data.FirebaseRestAnnouncementRepository
 import jp.komehyappyo.member.next.core.data.FirebaseRestPostRepository
 import jp.komehyappyo.member.next.core.data.FirebaseRestAccountAuthRepository

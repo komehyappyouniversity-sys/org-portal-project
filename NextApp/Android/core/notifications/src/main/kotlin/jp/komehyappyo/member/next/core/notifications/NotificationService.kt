@@ -182,6 +182,10 @@ object FirebaseMessagingRuntime {
         FirebaseApp.initializeApp(context, options)
         return true
     }
+
+    fun setAutoInitEnabled(enabled: Boolean) {
+        FirebaseMessaging.getInstance().isAutoInitEnabled = enabled
+    }
 }
 
 class FirebaseRegistrationTokenProvider : FcmRegistrationTokenProvider {
@@ -348,6 +352,7 @@ class NotificationService(private val context: Context) {
         alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
     }
 
+    @android.annotation.SuppressLint("MissingPermission")
     fun showRemoteNotification(route: NotificationRoute, title: String, body: String) {
         if (!hasPermission()) return
         val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
