@@ -26,6 +26,7 @@ class AnnouncementFeatureModel(
     val session: AppSession,
     private val memberships: () -> List<CommunityMembership>,
 ) : ViewModel() {
+    private var pendingNotificationId: String? = null
     private val mutableState = MutableStateFlow(AnnouncementUiState())
     val state: StateFlow<AnnouncementUiState> = mutableState.asStateFlow()
 
@@ -47,6 +48,12 @@ class AnnouncementFeatureModel(
                     announcements = announcements,
                     isLoading = false,
                 )
+                pendingNotificationId?.let { targetId ->
+                    announcements.firstOrNull { it.id == targetId }?.let {
+                        pendingNotificationId = null
+                        open(it)
+                    }
+                }
             }.onFailure(::showError)
             val userId = current.userId.takeUnless { it == "guest" }
             val token = current.authenticationToken
@@ -70,6 +77,14 @@ class AnnouncementFeatureModel(
                 )
             }
         }
+    }
+
+    fun openFromNotification(announcementId: String) {
+        pendingNotificationId = announcementId
+        mutableState.value.announcements.firstOrNull { it.id == announcementId }?.let {
+            pendingNotificationId = null
+            open(it)
+        } ?: refresh()
     }
 
     fun closeDetail() {
