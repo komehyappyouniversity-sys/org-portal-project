@@ -9,6 +9,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -31,6 +32,8 @@ enum class AppTab(val label: String, val icon: ImageVector) {
 
 @Composable
 fun AppShell(
+    requestedTab: AppTab? = null,
+    navigationRequestKey: Long = 0,
     home: @Composable () -> Unit,
     tools: @Composable () -> Unit,
     connect: @Composable () -> Unit,
@@ -38,6 +41,9 @@ fun AppShell(
 ) {
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     var selected by rememberSaveable { mutableStateOf(AppTab.Home) }
+    LaunchedEffect(navigationRequestKey) {
+        requestedTab?.let { selected = it }
+    }
     Scaffold(
         bottomBar = {
             if (!isLandscape) {

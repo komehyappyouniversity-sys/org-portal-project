@@ -121,8 +121,17 @@ fun ToolsHubRoot(
     distributedVideoModel: DistributedVideoFeatureModel,
     budgetSettlementModel: BudgetSettlementFeatureModel,
     manualModel: ManualFeatureModel,
+    notificationQuestionId: String? = null,
+    navigationRequestKey: Long = 0,
 ) {
     var destination by remember { mutableStateOf<ToolsDestination?>(null) }
+    val videoState by distributedVideoModel.state.collectAsStateWithLifecycle()
+    LaunchedEffect(navigationRequestKey, videoState.videoQuestions) {
+        val targetId = notificationQuestionId ?: return@LaunchedEffect
+        videoState.videoQuestions.firstOrNull { it.id == targetId }?.let {
+            destination = ToolsDestination.VideoQuestionDetail(it)
+        } ?: distributedVideoModel.load()
+    }
     when (val current = destination) {
         ToolsDestination.Schedule -> ToolDestinationContainer(
             onBack = { destination = null },

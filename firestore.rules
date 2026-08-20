@@ -253,6 +253,37 @@ service cloud.firestore {
         }
       }
 
+      match /fcmTokens/{tokenId} {
+        allow read: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.keys().hasOnly([
+            "id",
+            "userId",
+            "token",
+            "appVariant",
+            "os",
+            "environment",
+            "updatedAt"
+          ])
+          && request.resource.data.keys().hasAll([
+            "id",
+            "userId",
+            "token",
+            "appVariant",
+            "os",
+            "environment",
+            "updatedAt"
+          ])
+          && request.resource.data.id == tokenId
+          && request.resource.data.userId == uid
+          && request.resource.data.token is string
+          && request.resource.data.appVariant == "next"
+          && request.resource.data.os in ["iOS", "Android"]
+          && request.resource.data.environment in ["development", "production"]
+          && request.resource.data.updatedAt is timestamp;
+        allow delete: if isOwner(uid);
+      }
+
       match /{document=**} {
         allow read, write: if isOwner(uid);
       }

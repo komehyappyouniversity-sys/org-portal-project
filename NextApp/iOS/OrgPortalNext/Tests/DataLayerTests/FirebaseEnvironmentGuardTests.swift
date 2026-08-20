@@ -28,4 +28,20 @@ final class FirebaseEnvironmentGuardTests: XCTestCase {
 
         XCTAssertNoThrow(try configuration.validate())
     }
+
+    func testDebugDevelopmentBuildRejectsUnexpectedProject() {
+        let configuration = FirebaseRuntimeConfiguration(
+            environment: .development,
+            projectId: "unexpected-project",
+            isDebugBuild: true,
+            productionProjectId: "ictnagaoka-member"
+        )
+
+        XCTAssertThrowsError(try configuration.validate()) { error in
+            XCTAssertEqual(
+                error as? FirebaseEnvironmentError,
+                .debugBuildReferencesUnexpectedProject
+            )
+        }
+    }
 }
