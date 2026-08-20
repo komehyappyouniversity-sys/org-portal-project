@@ -234,6 +234,11 @@ data class AnnouncementReadState(
     val readAt: String,
 )
 
+data class CommunityAdminPermission(
+    val key: String,
+    val label: String,
+)
+
 data class CommunityAdminAccess(
     val communityId: String,
     val userId: String,
@@ -249,7 +254,50 @@ data class CommunityAdminAccess(
 
     companion object {
         const val MEMBER_REVIEW_PERMISSION = "memberReview"
+        const val ANNOUNCEMENT_PUBLISH_PERMISSION = "announcementPublish"
+        const val POST_COMMENT_MANAGEMENT_PERMISSION = "postCommentManagement"
+        const val VIDEO_MANUAL_MANAGEMENT_PERMISSION = "videoManualManagement"
+        const val EVENT_RESERVATION_MANAGEMENT_PERMISSION = "eventReservationManagement"
+        const val QUESTION_ANSWER_PERMISSION = "questionAnswer"
+        const val REPORT_RESPONSE_PERMISSION = "reportResponse"
+        const val ACCOUNTING_READ_PERMISSION = "accountingRead"
+        const val ACCOUNTING_EDIT_APPROVE_PERMISSION = "accountingEditApprove"
+        const val USAGE_ANALYTICS_READ_PERMISSION = "usageAnalyticsRead"
         const val LEGACY_MEMBER_REVIEW_PERMISSION = "メンバー閲覧・承認"
+
+        val DELEGABLE_PERMISSIONS = listOf(
+            CommunityAdminPermission(MEMBER_REVIEW_PERMISSION, "メンバー閲覧・承認"),
+            CommunityAdminPermission(ANNOUNCEMENT_PUBLISH_PERMISSION, "お知らせ作成・公開"),
+            CommunityAdminPermission(POST_COMMENT_MANAGEMENT_PERMISSION, "投稿・コメントの管理"),
+            CommunityAdminPermission(VIDEO_MANUAL_MANAGEMENT_PERMISSION, "動画・マニュアル管理"),
+            CommunityAdminPermission(EVENT_RESERVATION_MANAGEMENT_PERMISSION, "イベント・予約管理"),
+            CommunityAdminPermission(QUESTION_ANSWER_PERMISSION, "質問への回答"),
+            CommunityAdminPermission(REPORT_RESPONSE_PERMISSION, "通報対応"),
+            CommunityAdminPermission(ACCOUNTING_READ_PERMISSION, "会計の閲覧"),
+            CommunityAdminPermission(ACCOUNTING_EDIT_APPROVE_PERMISSION, "会計の編集・承認"),
+            CommunityAdminPermission(USAGE_ANALYTICS_READ_PERMISSION, "利用状況の閲覧"),
+        )
+
+        fun editablePermissions(permissions: Set<String>): Set<String> = buildSet {
+            addAll(permissions)
+            if (remove(LEGACY_MEMBER_REVIEW_PERMISSION)) {
+                add(MEMBER_REVIEW_PERMISSION)
+            }
+        }
+
+        fun permissionLabels(permissions: Set<String>): List<String> {
+            val remaining = permissions.toMutableSet()
+            return buildList {
+                DELEGABLE_PERMISSIONS.forEach { permission ->
+                    val hasCanonicalPermission = remaining.remove(permission.key)
+                    val hasLegacyPermission = permission.key == MEMBER_REVIEW_PERMISSION &&
+                        remaining.remove(LEGACY_MEMBER_REVIEW_PERMISSION)
+                    val hasPermission = hasCanonicalPermission || hasLegacyPermission
+                    if (hasPermission) add(permission.label)
+                }
+                addAll(remaining.sorted())
+            }
+        }
     }
 }
 
@@ -258,7 +306,10 @@ data class CommunityAdmin(
     val role: String = "admin",
     val permissions: Set<String> = emptySet(),
     val isActive: Boolean = true,
-)
+) {
+    val permissionLabels: List<String>
+        get() = CommunityAdminAccess.permissionLabels(permissions)
+}
 
 object CommunityCodeParser {
     fun parse(value: String): String? {

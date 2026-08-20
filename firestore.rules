@@ -142,11 +142,14 @@ service cloud.firestore {
 
     function isSharedManualData(data) {
       return data.keys().hasOnly([
+          "communityId",
           "title",
           "body",
           "sortOrder",
           "isPublished",
-          "attachments",
+          "imageUrls",
+          "pdfUrl",
+          "externalUrl",
           "createdAt",
           "updatedAt"
         ])
@@ -155,13 +158,28 @@ service cloud.firestore {
           "body",
           "sortOrder",
           "isPublished",
-          "attachments"
+          "imageUrls"
         ])
         && data.title is string
         && data.body is string
         && data.sortOrder is int
         && data.isPublished is bool
-        && data.attachments is list;
+        && data.imageUrls is list
+        && (
+          !data.keys().hasAny(["communityId"])
+          || data.communityId == null
+          || data.communityId is string
+        )
+        && (
+          !data.keys().hasAny(["pdfUrl"])
+          || data.pdfUrl == null
+          || data.pdfUrl is string
+        )
+        && (
+          !data.keys().hasAny(["externalUrl"])
+          || data.externalUrl == null
+          || data.externalUrl is string
+        );
     }
 
     match /superAdmins/{uid} {
@@ -169,10 +187,13 @@ service cloud.firestore {
     }
 
     match /sharedManuals/{manualId} {
-      allow read: if isSignedIn()
-        && (resource.data.isPublished == true || isSuperAdmin());
+      allow read: if resource.data.isPublished == true || isSuperAdmin();
       allow create, update: if isSuperAdmin()
-        && isSharedManualData(request.resource.data);
+        && isSharedManualData(request.resource.data)
+        && (
+          !request.resource.data.keys().hasAny(["communityId"])
+          || request.resource.data.communityId == null
+        );
       allow delete: if isSuperAdmin();
     }
 
@@ -230,6 +251,37 @@ service cloud.firestore {
         match /entries/{entryId} {
           allow read, write: if request.auth != null && request.auth.uid == uid;
         }
+      }
+
+      match /fcmTokens/{tokenId} {
+        allow read: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.keys().hasOnly([
+            "id",
+            "userId",
+            "token",
+            "appVariant",
+            "os",
+            "environment",
+            "updatedAt"
+          ])
+          && request.resource.data.keys().hasAll([
+            "id",
+            "userId",
+            "token",
+            "appVariant",
+            "os",
+            "environment",
+            "updatedAt"
+          ])
+          && request.resource.data.id == tokenId
+          && request.resource.data.userId == uid
+          && request.resource.data.token is string
+          && request.resource.data.appVariant == "next"
+          && request.resource.data.os in ["iOS", "Android"]
+          && request.resource.data.environment in ["development", "production"]
+          && request.resource.data.updatedAt is timestamp;
+        allow delete: if isOwner(uid);
       }
 
       match /{document=**} {
@@ -400,6 +452,16 @@ service cloud.firestore {
       match /videos/{videoId} {
         allow read: if isSignedIn() && isOrgActive(organizationId);
         allow create, update, delete: if isOrgStaff(organizationId);
+      }
+
+      match /manuals/{manualId} {
+        allow read: if resource.data.isPublished == true
+          && (isApprovedMember(organizationId) || isOrgStaff(organizationId));
+        allow create, update: if isOrgStaff(organizationId)
+          && isSharedManualData(request.resource.data)
+          && request.resource.data.keys().hasAny(["communityId"])
+          && request.resource.data.communityId == organizationId;
+        allow delete: if isOrgStaff(organizationId);
       }
 
       match /bookingEvents/{eventId} {

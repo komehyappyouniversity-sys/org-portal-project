@@ -146,4 +146,48 @@ class AccountCredentialsTest {
             ).canReviewMembers,
         )
     }
+
+    @Test
+    fun communityAdminPermissionsExposeSharedKeysAndJapaneseLabels() {
+        assertEquals(
+            listOf(
+                "memberReview" to "メンバー閲覧・承認",
+                "announcementPublish" to "お知らせ作成・公開",
+                "postCommentManagement" to "投稿・コメントの管理",
+                "videoManualManagement" to "動画・マニュアル管理",
+                "eventReservationManagement" to "イベント・予約管理",
+                "questionAnswer" to "質問への回答",
+                "reportResponse" to "通報対応",
+                "accountingRead" to "会計の閲覧",
+                "accountingEditApprove" to "会計の編集・承認",
+                "usageAnalyticsRead" to "利用状況の閲覧",
+            ),
+            CommunityAdminAccess.DELEGABLE_PERMISSIONS.map { it.key to it.label },
+        )
+    }
+
+    @Test
+    fun communityAdminDisplaysKnownLabelsAndPreservesUnknownPermissionsForEditing() {
+        val admin = CommunityAdmin(
+            userId = "manager",
+            permissions = setOf(
+                CommunityAdminAccess.LEGACY_MEMBER_REVIEW_PERMISSION,
+                CommunityAdminAccess.ACCOUNTING_READ_PERMISSION,
+                "futurePermission",
+            ),
+        )
+
+        assertEquals(
+            listOf("メンバー閲覧・承認", "会計の閲覧", "futurePermission"),
+            admin.permissionLabels,
+        )
+        assertEquals(
+            setOf(
+                CommunityAdminAccess.MEMBER_REVIEW_PERMISSION,
+                CommunityAdminAccess.ACCOUNTING_READ_PERMISSION,
+                "futurePermission",
+            ),
+            CommunityAdminAccess.editablePermissions(admin.permissions),
+        )
+    }
 }

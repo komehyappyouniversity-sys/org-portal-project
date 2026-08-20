@@ -24,6 +24,7 @@ final class PostFeatureModel: ObservableObject {
     let session: AppSession
     private let repository: any PostRepository
     private let memberships: () -> [CommunityMembership]
+    private var pendingNotificationID: String?
 
     init(
         repository: any PostRepository,
@@ -60,6 +61,11 @@ final class PostFeatureModel: ObservableObject {
                 userId: userID,
                 idToken: token
             )
+            if let pendingNotificationID = self.pendingNotificationID,
+               let post = self.memberPosts.first(where: { $0.id == pendingNotificationID }) {
+                self.pendingNotificationID = nil
+                self.open(post)
+            }
         }
     }
 
@@ -98,6 +104,16 @@ final class PostFeatureModel: ObservableObject {
             } catch {
                 message = "返信を読み込めませんでした。"
             }
+        }
+    }
+
+    func openFromNotification(_ postID: String) {
+        pendingNotificationID = postID
+        if let post = memberPosts.first(where: { $0.id == postID }) {
+            pendingNotificationID = nil
+            open(post)
+        } else {
+            refreshMember()
         }
     }
 

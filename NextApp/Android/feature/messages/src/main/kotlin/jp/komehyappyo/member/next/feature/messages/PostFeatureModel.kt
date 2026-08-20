@@ -37,6 +37,7 @@ class PostFeatureModel(
     val session: AppSession,
     private val memberships: () -> List<CommunityMembership>,
 ) : ViewModel() {
+    private var pendingNotificationId: String? = null
     private val mutableState = MutableStateFlow(PostUiState())
     val state: StateFlow<PostUiState> = mutableState.asStateFlow()
 
@@ -91,6 +92,12 @@ class PostFeatureModel(
                 token,
             ).onSuccess {
                 mutableState.value = mutableState.value.copy(memberPosts = it, isLoading = false)
+                pendingNotificationId?.let { targetId ->
+                    it.firstOrNull { post -> post.id == targetId }?.let { post ->
+                        pendingNotificationId = null
+                        open(post)
+                    }
+                }
             }.onFailure(::showError)
         }
     }
@@ -108,6 +115,14 @@ class PostFeatureModel(
             }
             if (post.hasUnreadReply) repository.markReplyRead(post.communityId, post.id, token)
         }
+    }
+
+    fun openFromNotification(postId: String) {
+        pendingNotificationId = postId
+        mutableState.value.memberPosts.firstOrNull { it.id == postId }?.let {
+            pendingNotificationId = null
+            open(it)
+        } ?: refreshMember()
     }
 
     fun closeDetail() {

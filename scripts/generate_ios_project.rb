@@ -86,7 +86,22 @@ app.build_configurations.each do |configuration|
   settings["MARKETING_VERSION"] = "1.0"
   settings["CURRENT_PROJECT_VERSION"] = "1"
   settings["ASSETCATALOG_COMPILER_APPICON_NAME"] = ""
-  settings["FIREBASE_PROJECT_ID"] = "demo-org-portal-next"
+  settings["CODE_SIGN_ENTITLEMENTS"] = "App/OrgPortalNext.entitlements"
+  if configuration.name == "Debug"
+    settings["FIREBASE_PROJECT_ID"] = "kome-org-portal-next-dev"
+    settings["FIREBASE_WEB_API_KEY"] = "AIzaSyDiVMzyOYl143PI43c6GwWPAQLXHEC9pIU"
+    settings["FIREBASE_APP_ID"] = "$(NEXT_FIREBASE_IOS_APP_ID)"
+    settings["FIREBASE_GCM_SENDER_ID"] = "$(NEXT_FIREBASE_GCM_SENDER_ID)"
+    settings["APS_ENVIRONMENT"] = "development"
+  else
+    settings["FIREBASE_PROJECT_ID"] = ENV.fetch(
+      "NEXT_FIREBASE_PRODUCTION_PROJECT_ID", "ictnagaoka-member"
+    )
+    settings["FIREBASE_WEB_API_KEY"] = "$(NEXT_FIREBASE_PRODUCTION_WEB_API_KEY)"
+    settings["FIREBASE_APP_ID"] = "$(NEXT_FIREBASE_PRODUCTION_IOS_APP_ID)"
+    settings["FIREBASE_GCM_SENDER_ID"] = "$(NEXT_FIREBASE_PRODUCTION_GCM_SENDER_ID)"
+    settings["APS_ENVIRONMENT"] = "production"
+  end
 end
 add_swift_files(project, app, "App", ios_root.join("App"))
 resources_group = project.main_group.new_group("App Resources", "App/Resources")
@@ -101,9 +116,29 @@ embed_frameworks_phase.dst_subfolder_spec = "10"
   embed(targets[name], embed_frameworks_phase)
 end
 
+firebase_package = project.new(
+  Xcodeproj::Project::Object::XCRemoteSwiftPackageReference
+)
+firebase_package.repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git"
+firebase_package.requirement = {
+  "kind" => "upToNextMajorVersion",
+  "minimumVersion" => "12.0.0"
+}
+project.root_object.package_references << firebase_package
+firebase_messaging = project.new(
+  Xcodeproj::Project::Object::XCSwiftPackageProductDependency
+)
+firebase_messaging.package = firebase_package
+firebase_messaging.product_name = "FirebaseMessaging"
+app.package_product_dependencies << firebase_messaging
+firebase_build_file = project.new(Xcodeproj::Project::Object::PBXBuildFile)
+firebase_build_file.product_ref = firebase_messaging
+app.frameworks_build_phase.files << firebase_build_file
+
 {
   "ModelTests" => ["Tests/ModelTests", ["Model"]],
   "DataLayerTests" => ["Tests/DataLayerTests", ["DataLayer", "Model"]],
+  "NotificationsTests" => ["Tests/NotificationsTests", ["Notifications", "Model"]],
   "FeatureToolsTests" => ["Tests/FeatureToolsTests", ["FeatureTools", "Model", "DataLayer"]]
 }.each do |name, (relative_path, dependencies)|
   test_target = project.new_target(:unit_test_bundle, name, platform, deployment_target)

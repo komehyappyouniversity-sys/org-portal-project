@@ -90,4 +90,4 @@ jobs:
           --config firebase.emulator.json
           --project demo-org-portal-next
           --only auth,firestore,storage
-          'node -e "process.exit(0)"'
+          'node scripts/test_manual_firestore_emulator.js'

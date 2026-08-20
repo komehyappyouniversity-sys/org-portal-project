@@ -185,6 +185,48 @@ final class FavoriteBookmarkTests: XCTestCase {
         )
     }
 
+    func testCommunityAdminPermissionsExposeSharedKeysAndJapaneseLabels() {
+        XCTAssertEqual(
+            CommunityAdminAccess.delegablePermissions.map { [$0.key, $0.label] },
+            [
+                ["memberReview", "メンバー閲覧・承認"],
+                ["announcementPublish", "お知らせ作成・公開"],
+                ["postCommentManagement", "投稿・コメントの管理"],
+                ["videoManualManagement", "動画・マニュアル管理"],
+                ["eventReservationManagement", "イベント・予約管理"],
+                ["questionAnswer", "質問への回答"],
+                ["reportResponse", "通報対応"],
+                ["accountingRead", "会計の閲覧"],
+                ["accountingEditApprove", "会計の編集・承認"],
+                ["usageAnalyticsRead", "利用状況の閲覧"]
+            ]
+        )
+    }
+
+    func testCommunityAdminDisplaysKnownLabelsAndPreservesUnknownPermissionsForEditing() {
+        let admin = CommunityAdmin(
+            userId: "manager",
+            permissions: [
+                CommunityAdminAccess.legacyMemberReviewPermission,
+                CommunityAdminAccess.accountingReadPermission,
+                "futurePermission"
+            ]
+        )
+
+        XCTAssertEqual(
+            admin.permissionLabels,
+            ["メンバー閲覧・承認", "会計の閲覧", "futurePermission"]
+        )
+        XCTAssertEqual(
+            CommunityAdminAccess.editablePermissions(admin.permissions),
+            [
+                CommunityAdminAccess.memberReviewPermission,
+                CommunityAdminAccess.accountingReadPermission,
+                "futurePermission"
+            ]
+        )
+    }
+
     func testValidationTrimsValuesAndDefaultsCategory() throws {
         let favorite = try FavoriteBookmark(
             title: " 公式サイト ",

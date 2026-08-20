@@ -99,6 +99,12 @@ service cloud.firestore {
         allow read, write: if hasActiveAdminRecord(communityId, request.auth.uid);
       }
 
+      match /manuals/{manualId} {
+        allow read: if resource.data.isPublished == true
+          && canReadCommunity(communityId);
+        allow write: if hasActiveAdminRecord(communityId, request.auth.uid);
+      }
+
       // Community content is available only to approved members and active
       // administrators. This covers the existing organization subcollections
       // without granting unauthenticated or pending-member access.
@@ -125,7 +131,7 @@ service cloud.firestore {
     }
 
     match /sharedManuals/{documentId} {
-      allow read: if signedIn();
+      allow read: if resource.data.isPublished == true;
       allow write: if false;
     }
   }
