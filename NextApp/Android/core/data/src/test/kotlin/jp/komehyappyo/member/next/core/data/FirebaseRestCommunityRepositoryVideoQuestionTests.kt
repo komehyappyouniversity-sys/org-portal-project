@@ -1,6 +1,7 @@
 package jp.komehyappyo.member.next.core.data
 
 import jp.komehyappyo.member.next.core.model.DistributedVideo
+import jp.komehyappyo.member.next.core.model.CommunityAdminAccess
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
@@ -181,6 +182,54 @@ class FirebaseRestCommunityRepositoryVideoQuestionTests {
             fields.getJSONObject("updatedAt").getString("timestampValue"),
             fields.getJSONObject("answeredAt").getString("timestampValue"),
         )
+    }
+
+    @Test
+    fun saveAdministratorPersistsSelectedPermissionSetAndAuditLog() = runBlocking {
+        installMockFirestoreStreamHandler()
+        FakeFirestoreRequestHandler.reset()
+        FakeFirestoreRequestHandler.responses = mapOf(
+            PathMethodKey(
+                path = "/v1/projects/test-project/databases/(default)/documents:commit",
+                method = "POST",
+            ) to FakeResponse(
+                statusCode = 200,
+                body = JSONObject().put("commitTime", "2026-08-15T00:00:00Z").toString(),
+            ),
+        )
+
+        repository().saveAdministrator(
+            communityId = "org-1",
+            adminUserId = " manager-1 ",
+            role = "manager",
+            permissions = setOf(
+                CommunityAdminAccess.USAGE_ANALYTICS_READ_PERMISSION,
+                CommunityAdminAccess.ANNOUNCEMENT_PUBLISH_PERMISSION,
+            ),
+            isActive = true,
+            actorUserId = "owner-1",
+            idToken = "id-token",
+        ).getOrThrow()
+
+        val request = FakeFirestoreRequestHandler.requests.single()
+        assertEquals("POST", request.method)
+        val writes = JSONObject(request.body).getJSONArray("writes")
+        val administratorFields = writes.getJSONObject(0)
+            .getJSONObject("update")
+            .getJSONObject("fields")
+        assertEquals(
+            "projects/test-project/databases/(default)/documents/organizations/org-1/admins/manager-1",
+            writes.getJSONObject(0).getJSONObject("update").getString("name"),
+        )
+        val permissions = administratorFields.getJSONObject("permissions")
+            .getJSONObject("arrayValue")
+            .getJSONArray("values")
+        assertEquals(2, permissions.length())
+        assertEquals("announcementPublish", permissions.getJSONObject(0).getString("stringValue"))
+        assertEquals("usageAnalyticsRead", permissions.getJSONObject(1).getString("stringValue"))
+        val auditFields = writes.getJSONObject(1).getJSONObject("update").getJSONObject("fields")
+        assertEquals("administrator.added", auditFields.getJSONObject("action").getString("stringValue"))
+        assertEquals("manager-1", auditFields.getJSONObject("targetUserId").getString("stringValue"))
     }
 
     private fun repository(): FirebaseRestCommunityRepository {
