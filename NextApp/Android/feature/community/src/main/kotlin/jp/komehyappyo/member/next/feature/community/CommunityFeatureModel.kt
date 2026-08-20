@@ -8,6 +8,7 @@ import android.media.MediaPlayer.OnCompletionListener
 import jp.komehyappyo.member.next.core.data.CommunityRepository
 import jp.komehyappyo.member.next.core.data.VimeoConfiguration
 import jp.komehyappyo.member.next.core.data.VimeoFolder
+import jp.komehyappyo.member.next.core.data.UsageLogRecorder
 import jp.komehyappyo.member.next.core.model.Community
 import jp.komehyappyo.member.next.core.model.CommunityAdminAccess
 import jp.komehyappyo.member.next.core.model.CommunityAdmin
@@ -25,6 +26,7 @@ import jp.komehyappyo.member.next.core.model.UserStage
 import jp.komehyappyo.member.next.core.model.RadioPlaybackRecord
 import jp.komehyappyo.member.next.core.model.RadioProgram
 import jp.komehyappyo.member.next.core.model.RadioPlaybackPolicy
+import jp.komehyappyo.member.next.core.model.UsageLogEventType
 import jp.komehyappyo.member.next.core.session.AppSession
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -81,16 +83,60 @@ class CommunityFeatureModel(
     private val repository: CommunityRepository,
     val session: AppSession,
     private val memoStore: VimeoMemoStore,
+    private val usageLogRecorder: UsageLogRecorder? = null,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(CommunityUiState())
     val state: StateFlow<CommunityUiState> = mutableState.asStateFlow()
     private var mediaPlayer: MediaPlayer? = null
     private var membershipsUserId: String? = null
+    private val lastRecordedVideoPositionBucket = mutableMapOf<String, Int>()
     private val currentUserId: String
         get() = session.state.value.userId
 
     init {
         refreshRadioPrograms()
+    }
+
+    fun recordVideoDetailOpened(video: DistributedVideo) {
+        recordUsage(UsageLogEventType.VideoDetailOpened, video.id)
+    }
+
+    fun recordVideoPlaybackStarted(video: DistributedVideo, positionSeconds: Double) {
+        recordUsage(UsageLogEventType.VideoPlaybackStarted, video.id, positionSeconds)
+    }
+
+    fun recordVideoPosition(video: DistributedVideo, positionSeconds: Double) {
+        if (!positionSeconds.isFinite() || positionSeconds < 30.0) return
+        val bucket = (positionSeconds / 30.0).toInt()
+        if (bucket <= 0 || lastRecordedVideoPositionBucket[video.id] == bucket) return
+        lastRecordedVideoPositionBucket[video.id] = bucket
+        recordUsage(UsageLogEventType.VideoPosition, video.id, positionSeconds)
+    }
+
+    fun recordVideoCompleted(video: DistributedVideo, positionSeconds: Double) {
+        lastRecordedVideoPositionBucket.remove(video.id)
+        recordUsage(UsageLogEventType.VideoCompleted, video.id, positionSeconds)
+    }
+
+    private fun recordUsage(
+        eventType: UsageLogEventType,
+        targetId: String,
+        positionSeconds: Double = 0.0,
+    ) {
+        val recorder = usageLogRecorder ?: return
+        val current = session.state.value
+        val idToken = current.authenticationToken ?: return
+        viewModelScope.launch {
+            runCatching {
+                recorder.record(
+                    userId = current.userId,
+                    idToken = idToken,
+                    eventType = eventType,
+                    targetId = targetId,
+                    positionSeconds = positionSeconds,
+                )
+            }
+        }
     }
 
     fun updateCode(value: String) {
@@ -492,6 +538,7 @@ class CommunityFeatureModel(
                 player.prepare()
                 player.start()
                 recordRadioPlayback(program.id)
+                recordUsage(UsageLogEventType.RadioPlayed, program.id)
             } catch (_: Throwable) {
                 stopRadioPlayback()
                 mutableState.value = mutableState.value.copy(
@@ -1284,9 +1331,10 @@ class CommunityFeatureModel(
         private val repository: CommunityRepository,
         private val session: AppSession,
         private val memoStore: VimeoMemoStore,
+        private val usageLogRecorder: UsageLogRecorder? = null,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            CommunityFeatureModel(repository, session, memoStore) as T
+            CommunityFeatureModel(repository, session, memoStore, usageLogRecorder) as T
     }
 }

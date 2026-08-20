@@ -11,6 +11,7 @@ import jp.komehyappyo.member.next.core.model.DistributedVideo
 import jp.komehyappyo.member.next.core.model.RadioProgram
 import jp.komehyappyo.member.next.core.model.VideoQuestion
 import jp.komehyappyo.member.next.core.model.VideoQuestionSyncStatus
+import jp.komehyappyo.member.next.core.model.UsageLog
 import jp.komehyappyo.member.next.core.model.CommunityCodeParser
 import jp.komehyappyo.member.next.core.model.CommunityMembership
 import jp.komehyappyo.member.next.core.model.CommunityMembershipStatus
@@ -229,7 +230,7 @@ private class CommunityHttpException(
 
 class FirebaseRestCommunityRepository(
     private val projectId: String,
-) : CommunityRepository {
+) : CommunityRepository, UsageLogRemoteRepository {
     override suspend fun publicCommunities(query: String): Result<List<Community>> =
         runCatching {
             val body = JSONObject().put(
@@ -1026,6 +1027,19 @@ class FirebaseRestCommunityRepository(
                 add(parseRadioProgram(document, communityId))
             }
         }
+    }
+
+    override suspend fun saveUsageLog(
+        log: UsageLog,
+        idToken: String,
+    ): Result<Unit> = runCatching {
+        request(
+            "documents/memberPrivate/${log.userId}/usageLogs/${log.id}",
+            "PATCH",
+            idToken,
+            JSONObject().put("fields", usageLogFirestoreFields(log)),
+        )
+        Unit
     }
 
     override suspend fun videoMemos(

@@ -22,6 +22,47 @@ final class VideoRepeatSettingTests: XCTestCase {
     }
 }
 
+final class UsageLogTests: XCTestCase {
+    func testValidUsageLogRoundTripsAndUsesExpectedEventValue() throws {
+        let occurredAt = Date(timeIntervalSince1970: 1_786_680_000)
+        let log = UsageLog(
+            id: "log-1",
+            userId: "member-1",
+            eventType: .videoPosition,
+            targetId: "video-1",
+            positionSeconds: 60,
+            occurredAt: occurredAt
+        )
+
+        XCTAssertNoThrow(try log.validate())
+        XCTAssertEqual(log.eventType.rawValue, "video_position")
+        XCTAssertEqual(
+            try JSONDecoder().decode(UsageLog.self, from: JSONEncoder().encode(log)),
+            log
+        )
+        XCTAssertEqual(UsageLogEventType.allCases.count, 5)
+    }
+
+    func testUsageLogRejectsContentlessIdentifiersAndInvalidPosition() {
+        let occurredAt = Date(timeIntervalSince1970: 1_786_680_000)
+        XCTAssertThrowsError(try UsageLog(
+            id: " ",
+            userId: "member-1",
+            eventType: .radioPlayed,
+            targetId: "radio-1",
+            occurredAt: occurredAt
+        ).validate())
+        XCTAssertThrowsError(try UsageLog(
+            id: "log-1",
+            userId: "member-1",
+            eventType: .videoPosition,
+            targetId: "video-1",
+            positionSeconds: -.infinity,
+            occurredAt: occurredAt
+        ).validate())
+    }
+}
+
 final class VideoQuestionTests: XCTestCase {
     func testAnsweredAtRoundTripsAndAnswerClassificationTrimsWhitespace() throws {
         let answeredAt = Date(timeIntervalSince1970: 1_786_680_000)

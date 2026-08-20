@@ -1014,7 +1014,10 @@ fun CommunityRoot(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { selectedVideoId = video.id }
+                            .clickable {
+                                model.recordVideoDetailOpened(video)
+                                selectedVideoId = video.id
+                            }
                             .padding(vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
@@ -1248,7 +1251,16 @@ private fun VimeoVideoDetailScreen(
                 playbackCommand = playbackCommand,
                 initialPlaybackSeconds = playbackSeconds,
                 isLandscape = isLandscape,
-                onTimeChanged = { playbackSeconds = it },
+                onTimeChanged = {
+                    playbackSeconds = it
+                    model.recordVideoPosition(video, it)
+                },
+                onPlaybackStarted = {
+                    model.recordVideoPlaybackStarted(video, playbackSeconds)
+                },
+                onPlaybackCompleted = {
+                    model.recordVideoCompleted(video, playbackSeconds)
+                },
                 modifier = Modifier.fillMaxHeight().aspectRatio(16f / 9f),
             )
         }
@@ -1271,7 +1283,16 @@ private fun VimeoVideoDetailScreen(
             playbackCommand = playbackCommand,
             initialPlaybackSeconds = playbackSeconds,
             isLandscape = isLandscape,
-            onTimeChanged = { playbackSeconds = it },
+            onTimeChanged = {
+                playbackSeconds = it
+                model.recordVideoPosition(video, it)
+            },
+            onPlaybackStarted = {
+                model.recordVideoPlaybackStarted(video, playbackSeconds)
+            },
+            onPlaybackCompleted = {
+                model.recordVideoCompleted(video, playbackSeconds)
+            },
             modifier = Modifier.fillMaxWidth().height(210.dp),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

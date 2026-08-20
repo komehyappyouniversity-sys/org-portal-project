@@ -253,6 +253,43 @@ service cloud.firestore {
         }
       }
 
+      match /usageLogs/{logId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.keys().hasOnly([
+            "id",
+            "userId",
+            "eventType",
+            "targetId",
+            "positionSeconds",
+            "occurredAt",
+            "expiresAt"
+          ])
+          && request.resource.data.keys().hasAll([
+            "id",
+            "userId",
+            "eventType",
+            "targetId",
+            "positionSeconds",
+            "occurredAt",
+            "expiresAt"
+          ])
+          && request.resource.data.id == logId
+          && request.resource.data.userId == uid
+          && request.resource.data.eventType in [
+            "video_detail_opened",
+            "video_playback_started",
+            "video_position",
+            "video_completed",
+            "radio_played"
+          ]
+          && request.resource.data.targetId is string
+          && request.resource.data.positionSeconds is number
+          && request.resource.data.positionSeconds >= 0
+          && request.resource.data.occurredAt is timestamp
+          && request.resource.data.expiresAt is timestamp;
+      }
+
       match /fcmTokens/{tokenId} {
         allow read: if isOwner(uid);
         allow create, update: if isOwner(uid)
@@ -282,6 +319,7 @@ service cloud.firestore {
           && request.resource.data.environment in ["development", "production"]
           && request.resource.data.updatedAt is timestamp;
         allow delete: if isOwner(uid);
+      }
       }
 
       match /{document=**} {

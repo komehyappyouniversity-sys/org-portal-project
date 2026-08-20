@@ -233,7 +233,10 @@ public struct ToolsHubView: View {
                 case .distributedVideos:
                     DistributedVideoListRoot(
                         model: distributedVideoModel,
-                        onSelect: { self.destination = .distributedVideoPlayer($0) },
+                        onSelect: {
+                            distributedVideoModel.recordVideoDetailOpened($0)
+                            self.destination = .distributedVideoPlayer($0)
+                        },
                         onOpenQuestions: { self.destination = .videoQuestions },
                     )
                 case .budgetSettlement:
@@ -376,7 +379,16 @@ private struct DistributedVideoPlayerView: View {
                     initialPlaybackSeconds: playbackSeconds,
                     command: playbackCommand,
                     isRepeatEnabled: model.isRepeatEnabled(videoId: video.id),
-                    onPlaybackTimeChanged: { playbackSeconds = $0 },
+                    onPlaybackTimeChanged: {
+                        playbackSeconds = $0
+                        model.recordVideoPosition(video, positionSeconds: $0)
+                    },
+                    onPlaybackStarted: {
+                        model.recordVideoPlaybackStarted(video, positionSeconds: playbackSeconds)
+                    },
+                    onPlaybackCompleted: {
+                        model.recordVideoCompleted(video, positionSeconds: playbackSeconds)
+                    },
                 )
                 .frame(height: 220)
 
@@ -803,6 +815,8 @@ private struct DistributedVimeoVideoPlayerView: UIViewRepresentable {
     let command: VimeoPlaybackCommand?
     let isRepeatEnabled: Bool
     let onPlaybackTimeChanged: (Double) -> Void
+    let onPlaybackStarted: () -> Void
+    let onPlaybackCompleted: () -> Void
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -846,7 +860,9 @@ private struct DistributedVimeoVideoPlayerView: UIViewRepresentable {
             videoId: videoId,
             initialPlaybackSeconds: initialPlaybackSeconds,
             isRepeatEnabled: isRepeatEnabled,
-            onPlaybackTimeChanged: onPlaybackTimeChanged
+            onPlaybackTimeChanged: onPlaybackTimeChanged,
+            onPlaybackStarted: onPlaybackStarted,
+            onPlaybackCompleted: onPlaybackCompleted
         )
     }
 
@@ -915,7 +931,17 @@ private struct DistributedVimeoVideoPlayerView: UIViewRepresentable {
                 postError(error && error.message ? error.message : 'Vimeoプレーヤーを準備できませんでした。');
             });
 
-            player.on('ended', function() {
+            player.on('play', function() {
+                sendMessage({ type: 'play' });
+            });
+
+            player.on('timeupdate', function(data) {
+                postTime(data.seconds || 0);
+            });
+
+            player.on('ended', function(data) {
+                postTime(data && data.seconds ? data.seconds : 0);
+                sendMessage({ type: 'ended' });
                 if (!repeatEnabled) return;
                 player.setCurrentTime(0).then(function() {
                     return player.play();
@@ -961,18 +987,24 @@ private struct DistributedVimeoVideoPlayerView: UIViewRepresentable {
         var initialPlaybackSeconds: Double
         var isRepeatEnabled: Bool
         let onPlaybackTimeChanged: (Double) -> Void
+        let onPlaybackStarted: () -> Void
+        let onPlaybackCompleted: () -> Void
         var lastError: String?
 
         init(
             videoId: String,
             initialPlaybackSeconds: Double,
             isRepeatEnabled: Bool,
-            onPlaybackTimeChanged: @escaping (Double) -> Void
+            onPlaybackTimeChanged: @escaping (Double) -> Void,
+            onPlaybackStarted: @escaping () -> Void,
+            onPlaybackCompleted: @escaping () -> Void
         ) {
             self.videoId = videoId
             self.initialPlaybackSeconds = initialPlaybackSeconds
             self.isRepeatEnabled = isRepeatEnabled
             self.onPlaybackTimeChanged = onPlaybackTimeChanged
+            self.onPlaybackStarted = onPlaybackStarted
+            self.onPlaybackCompleted = onPlaybackCompleted
             super.init()
         }
 
@@ -986,6 +1018,10 @@ private struct DistributedVimeoVideoPlayerView: UIViewRepresentable {
             case "time":
                 let value = body["value"] as? Double
                 onPlaybackTimeChanged(value ?? 0)
+            case "play":
+                onPlaybackStarted()
+            case "ended":
+                onPlaybackCompleted()
             case "error":
                 if let message = body["message"] as? String {
                     lastError = message

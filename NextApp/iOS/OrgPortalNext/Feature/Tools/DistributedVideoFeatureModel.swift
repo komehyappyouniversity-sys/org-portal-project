@@ -49,7 +49,9 @@ public final class DistributedVideoFeatureModel: ObservableObject {
     private let questionStore: VideoQuestionDraftStore
     private let repeatSettingRepository: (any VideoRepeatSettingRepository)?
     private let guestUserIdProvider: (any GuestUserIdProvider)?
+    private let usageLogRecorder: UsageLogRecorder?
     private var syncingVideoQuestionRequestIds: Set<String> = []
+    private var lastRecordedPositionBucket: [String: Int] = [:]
 
     public init(
         repository: any DistributedVideoRepository,
@@ -58,7 +60,8 @@ public final class DistributedVideoFeatureModel: ObservableObject {
         memoStore: VimeoMemoStore = VimeoMemoStore(),
         questionStore: VideoQuestionDraftStore = VideoQuestionDraftStore(),
         repeatSettingRepository: (any VideoRepeatSettingRepository)? = nil,
-        guestUserIdProvider: (any GuestUserIdProvider)? = nil
+        guestUserIdProvider: (any GuestUserIdProvider)? = nil,
+        usageLogRecorder: UsageLogRecorder? = nil
     ) {
         self.repository = repository
         self.session = session
@@ -67,6 +70,59 @@ public final class DistributedVideoFeatureModel: ObservableObject {
         self.questionStore = questionStore
         self.repeatSettingRepository = repeatSettingRepository
         self.guestUserIdProvider = guestUserIdProvider
+        self.usageLogRecorder = usageLogRecorder
+    }
+
+    public func recordVideoDetailOpened(_ video: DistributedVideo) {
+        recordUsage(.videoDetailOpened, targetId: video.id)
+    }
+
+    public func recordVideoPlaybackStarted(_ video: DistributedVideo, positionSeconds: Double) {
+        recordUsage(
+            .videoPlaybackStarted,
+            targetId: video.id,
+            positionSeconds: positionSeconds
+        )
+    }
+
+    public func recordVideoPosition(_ video: DistributedVideo, positionSeconds: Double) {
+        guard positionSeconds.isFinite, positionSeconds >= 30 else { return }
+        let bucket = Int(positionSeconds / 30)
+        guard bucket > 0, lastRecordedPositionBucket[video.id] != bucket else { return }
+        lastRecordedPositionBucket[video.id] = bucket
+        recordUsage(
+            .videoPosition,
+            targetId: video.id,
+            positionSeconds: positionSeconds
+        )
+    }
+
+    public func recordVideoCompleted(_ video: DistributedVideo, positionSeconds: Double) {
+        lastRecordedPositionBucket[video.id] = nil
+        recordUsage(
+            .videoCompleted,
+            targetId: video.id,
+            positionSeconds: positionSeconds
+        )
+    }
+
+    private func recordUsage(
+        _ eventType: UsageLogEventType,
+        targetId: String,
+        positionSeconds: Double = 0
+    ) {
+        guard let usageLogRecorder,
+              let userId = session.authenticatedUserId,
+              let idToken = session.authenticationToken else { return }
+        Task {
+            _ = try? await usageLogRecorder.record(
+                userId: userId,
+                idToken: idToken,
+                eventType: eventType,
+                targetId: targetId,
+                positionSeconds: positionSeconds
+            )
+        }
     }
 
     public func loadRepeatSetting(videoId: String) async {
