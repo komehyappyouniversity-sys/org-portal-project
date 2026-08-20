@@ -48,6 +48,7 @@ public struct ToolsHubView: View {
     @ObservedObject private var friendExchangeModel: FriendExchangeFeatureModel
     @ObservedObject private var distributedVideoModel: DistributedVideoFeatureModel
     @ObservedObject private var budgetSettlementModel: BudgetSettlementFeatureModel
+    @ObservedObject private var manualModel: ManualFeatureModel
     @State private var destination: Destination?
     private let notificationQuestionId: String?
     private let navigationRequestKey: Int
@@ -61,6 +62,7 @@ public struct ToolsHubView: View {
         friendExchangeModel: FriendExchangeFeatureModel,
         distributedVideoModel: DistributedVideoFeatureModel,
         budgetSettlementModel: BudgetSettlementFeatureModel,
+        manualModel: ManualFeatureModel,
         notificationQuestionId: String? = nil,
         navigationRequestKey: Int = 0
     ) {
@@ -73,6 +75,7 @@ public struct ToolsHubView: View {
         self.friendExchangeModel = friendExchangeModel
         self.distributedVideoModel = distributedVideoModel
         self.budgetSettlementModel = budgetSettlementModel
+        self.manualModel = manualModel
         self.notificationQuestionId = notificationQuestionId
         self.navigationRequestKey = navigationRequestKey
     }
@@ -226,7 +229,7 @@ public struct ToolsHubView: View {
                 case .friends:
                     FriendExchangeRootView(model: friendExchangeModel)
                 case .manual:
-                    ManualListView()
+                    ManualListView(model: manualModel)
                 case .distributedVideos:
                     DistributedVideoListRoot(
                         model: distributedVideoModel,

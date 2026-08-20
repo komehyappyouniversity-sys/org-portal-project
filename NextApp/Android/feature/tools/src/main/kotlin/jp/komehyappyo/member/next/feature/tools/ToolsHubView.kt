@@ -120,6 +120,7 @@ fun ToolsHubRoot(
     friendExchangeModel: FriendExchangeFeatureModel,
     distributedVideoModel: DistributedVideoFeatureModel,
     budgetSettlementModel: BudgetSettlementFeatureModel,
+    manualModel: ManualFeatureModel,
     notificationQuestionId: String? = null,
     navigationRequestKey: Long = 0,
 ) {
@@ -170,7 +171,7 @@ fun ToolsHubRoot(
         ToolsDestination.Manual -> ToolDestinationContainer(
             onBack = { destination = null },
         ) {
-            ManualListRoot()
+            ManualListRoot(manualModel)
         }
         ToolsDestination.DistributedVideos -> ToolDestinationContainer(
             onBack = { destination = null },

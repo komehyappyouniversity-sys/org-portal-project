@@ -120,15 +120,27 @@ public struct StatusBadge: View {
 
 public struct EmptyState: View {
     private let message: LocalizedStringKey
+    private let description: LocalizedStringKey?
     private let systemImage: String
 
-    public init(_ message: LocalizedStringKey, systemImage: String = "tray") {
+    public init(
+        _ message: LocalizedStringKey,
+        description: LocalizedStringKey? = nil,
+        systemImage: String = "tray"
+    ) {
         self.message = message
+        self.description = description
         self.systemImage = systemImage
     }
 
     public var body: some View {
-        ContentUnavailableView(message, systemImage: systemImage)
+        ContentUnavailableView {
+            Label(message, systemImage: systemImage)
+        } description: {
+            if let description {
+                Text(description)
+            }
+        }
     }
 }
 
@@ -143,7 +155,9 @@ public struct ErrorState: View {
 
     public var body: some View {
         ContentUnavailableView {
-            Label(message, systemImage: "exclamationmark.triangle")
+            Label("読み込みに失敗しました", systemImage: "exclamationmark.triangle")
+        } description: {
+            Text(message)
         } actions: {
             Button("action.retry", action: retry)
                 .buttonStyle(.borderedProminent)

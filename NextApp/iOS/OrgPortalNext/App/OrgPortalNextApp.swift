@@ -129,6 +129,7 @@ private struct AppBootstrapView: View {
     @StateObject private var accountModel: AccountFeatureModel
     @StateObject private var communityModel: CommunityFeatureModel
     @StateObject private var distributedVideoModel: DistributedVideoFeatureModel
+    @StateObject private var manualModel: ManualFeatureModel
     @StateObject private var announcementModel: AnnouncementFeatureModel
     @StateObject private var postModel: PostFeatureModel
     @StateObject private var budgetSettlementModel: BudgetSettlementFeatureModel
@@ -167,6 +168,11 @@ private struct AppBootstrapView: View {
                 : .development
         )
         let communityRepository = FirebaseRESTCommunityRepository(projectId: firebaseProjectID)
+        _manualModel = StateObject(
+            wrappedValue: ManualFeatureModel(
+                repository: FirebaseRESTManualRepository(projectId: firebaseProjectID)
+            )
+        )
         let community = CommunityFeatureModel(
             repository: communityRepository,
             session: session
@@ -315,7 +321,8 @@ private struct AppBootstrapView: View {
                 cashDistributionModel: cashDistributionModel,
                 meetingMinutesModel: meetingMinutesModel,
                 favoriteBookmarkModel: favoriteBookmarkModel,
-                appBackupModel: appBackupModel
+                appBackupModel: appBackupModel,
+                manualModel: manualModel
             ),
             tools: ToolsHubView(
                 scheduleModel: scheduleModel,
@@ -327,6 +334,7 @@ private struct AppBootstrapView: View {
                 friendExchangeModel: friendExchangeModel,
                 distributedVideoModel: distributedVideoModel,
                 budgetSettlementModel: budgetSettlementModel,
+                manualModel: manualModel,
                 notificationQuestionId: navigableNotificationRoute?.type == .videoQuestionAnswer
                     ? navigableNotificationRoute?.targetId
                     : nil,
@@ -366,7 +374,12 @@ private struct AppBootstrapView: View {
             )
         }
         .task(id: "\(appSession.authenticatedUserId ?? ""):\(appSession.selectedCommunityId ?? "")") {
-            await distributedVideoModel.load()
+            async let videoLoad: Void = distributedVideoModel.load()
+            async let manualLoad: Void = manualModel.load(
+                communityId: appSession.selectedCommunityId,
+                idToken: appSession.authenticationToken
+            )
+            _ = await (videoLoad, manualLoad)
         }
         .onReceive(NotificationCenter.default.publisher(for: .fcmTokenRefreshed)) { event in
             guard let token = event.object as? String else { return }
