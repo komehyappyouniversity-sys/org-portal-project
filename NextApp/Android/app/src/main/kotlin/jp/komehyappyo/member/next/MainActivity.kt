@@ -181,6 +181,8 @@ class MainActivity : FragmentActivity() {
                 communityRepository,
                 appSession,
                 VimeoMemoStore(applicationContext),
+                applicationContext,
+                BuildConfig.FIREBASE_PROJECT_ID,
             )
         }
         val communityModel: CommunityFeatureModel = viewModel(factory = communityFactory)

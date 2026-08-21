@@ -69,3 +69,52 @@ data class RadioPlaybackRecord(
     val playCount: Int = 0,
     val lastPlayedAt: java.time.Instant? = null,
 )
+
+object RadioPlaybackRecordPolicy {
+    fun started(
+        existing: RadioPlaybackRecord?,
+        userId: String,
+        programId: String,
+        at: java.time.Instant,
+    ): RadioPlaybackRecord = RadioPlaybackRecord(
+        userId = userId,
+        programId = programId,
+        lastPositionSeconds = maxOf(0, existing?.lastPositionSeconds ?: 0),
+        playCount = (existing?.playCount ?: 0) + 1,
+        lastPlayedAt = at,
+    )
+
+    fun updatingPosition(
+        existing: RadioPlaybackRecord,
+        positionSeconds: Long,
+        at: java.time.Instant,
+    ): RadioPlaybackRecord = existing.copy(
+        lastPositionSeconds = maxOf(0, positionSeconds),
+        lastPlayedAt = at,
+    )
+}
+
+object RadioPlaybackInterruptionPolicy {
+    fun shouldPause(focusChange: Int): Boolean = focusChange < 0
+
+    fun shouldResume(wasPlayingBeforeTransientLoss: Boolean, focusChange: Int): Boolean =
+        wasPlayingBeforeTransientLoss && focusChange > 0
+}
+
+object RadioPlaybackPresentation {
+    const val PLAY_ACTION = "再生"
+    const val PAUSE_ACTION = "一時停止"
+    const val RESUME_ACTION = "再開"
+    const val STOP_ACTION = "停止"
+    const val PLAYING_STATUS = "再生中"
+    const val PAUSED_STATUS = "一時停止中"
+
+    fun primaryAction(isPlayable: Boolean, isActive: Boolean, isPlaying: Boolean): String = when {
+        !isPlayable -> "配信前"
+        isActive && isPlaying -> PAUSE_ACTION
+        isActive -> RESUME_ACTION
+        else -> PLAY_ACTION
+    }
+
+    fun status(isPlaying: Boolean): String = if (isPlaying) PLAYING_STATUS else PAUSED_STATUS
+}

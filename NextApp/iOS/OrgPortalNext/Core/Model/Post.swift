@@ -180,3 +180,69 @@ public struct RadioPlaybackRecord: Identifiable, Equatable, Codable, Sendable {
         self.lastPlayedAt = lastPlayedAt
     }
 }
+
+public enum RadioPlaybackRecordPolicy {
+    public static func started(
+        existing: RadioPlaybackRecord?,
+        userId: String,
+        programId: String,
+        at date: Date
+    ) -> RadioPlaybackRecord {
+        RadioPlaybackRecord(
+            id: existing?.id ?? UUID().uuidString,
+            userId: userId,
+            programId: programId,
+            lastPositionSeconds: max(0, existing?.lastPositionSeconds ?? 0),
+            playCount: (existing?.playCount ?? 0) + 1,
+            lastPlayedAt: date
+        )
+    }
+
+    public static func updatingPosition(
+        _ existing: RadioPlaybackRecord,
+        positionSeconds: Double,
+        at date: Date
+    ) -> RadioPlaybackRecord {
+        RadioPlaybackRecord(
+            id: existing.id,
+            userId: existing.userId,
+            programId: existing.programId,
+            lastPositionSeconds: max(0, positionSeconds.isFinite ? positionSeconds : 0),
+            playCount: existing.playCount,
+            lastPlayedAt: date
+        )
+    }
+}
+
+public enum RadioPlaybackInterruptionPolicy {
+    public static func shouldResume(
+        wasPlayingBeforeInterruption: Bool,
+        systemAllowsResume: Bool
+    ) -> Bool {
+        wasPlayingBeforeInterruption && systemAllowsResume
+    }
+}
+
+public enum RadioPlaybackPresentation {
+    public static let playAction = "再生"
+    public static let pauseAction = "一時停止"
+    public static let resumeAction = "再開"
+    public static let stopAction = "停止"
+    public static let playingStatus = "再生中"
+    public static let pausedStatus = "一時停止中"
+
+    public static func primaryAction(
+        isPlayable: Bool,
+        isActive: Bool,
+        isPlaying: Bool
+    ) -> String {
+        if !isPlayable { return "配信前" }
+        if isActive && isPlaying { return pauseAction }
+        if isActive { return resumeAction }
+        return playAction
+    }
+
+    public static func status(isPlaying: Bool) -> String {
+        isPlaying ? playingStatus : pausedStatus
+    }
+}

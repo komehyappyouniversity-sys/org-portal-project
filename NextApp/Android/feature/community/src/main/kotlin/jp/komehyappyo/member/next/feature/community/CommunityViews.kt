@@ -43,6 +43,7 @@ import coil.compose.AsyncImage
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import jp.komehyappyo.member.next.core.designsystem.OfflineBanner
 import jp.komehyappyo.member.next.core.model.RadioPlaybackRecord
+import jp.komehyappyo.member.next.core.model.RadioPlaybackPresentation
 import jp.komehyappyo.member.next.core.model.RadioProgram
 import jp.komehyappyo.member.next.core.model.BookingEvent
 import jp.komehyappyo.member.next.core.model.BookingSlot
@@ -154,10 +155,12 @@ fun CommunityRoot(
                     programs = state.radioPrograms,
                     records = state.radioPlaybackRecords,
                     playingProgramId = state.radioPlayingProgramId,
+                    isPlaying = state.radioIsPlaying,
                     currentUserId = sessionState.userId,
                     formatter = radioDateTimeFormatter(),
                     isLoading = state.radioIsLoading,
                     onToggle = model::toggleRadioPlayback,
+                    onStop = model::stopRadioPlayback,
                     isPlayable = model::isRadioPlayable,
                 )
                 HorizontalDivider()
@@ -1351,9 +1354,11 @@ private fun RadioSection(
     records: List<RadioPlaybackRecord>,
     currentUserId: String,
     playingProgramId: String?,
+    isPlaying: Boolean,
     isLoading: Boolean,
     formatter: DateTimeFormatter,
     onToggle: (RadioProgram) -> Unit,
+    onStop: () -> Unit,
     isPlayable: (RadioProgram) -> Boolean,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1377,6 +1382,7 @@ private fun RadioSection(
                                 formatter.format(time.atZone(ZoneId.systemDefault()))
                             } ?: "未再生")
                     )
+                    Text("再生位置: ${formatRadioPosition(it.lastPositionSeconds)}")
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
@@ -1384,21 +1390,29 @@ private fun RadioSection(
                         enabled = !isLoading,
                     ) {
                         Text(
-                            when {
-                                !isPlayable(program) -> "配信前"
-                                playingProgramId == program.id -> "停止"
-                                else -> "再生"
-                            },
+                            RadioPlaybackPresentation.primaryAction(
+                                isPlayable = isPlayable(program),
+                                isActive = playingProgramId == program.id,
+                                isPlaying = isPlaying,
+                            ),
                         )
                     }
                     if (playingProgramId == program.id) {
-                        Text("再生中")
+                        TextButton(onClick = onStop) {
+                            Text(RadioPlaybackPresentation.STOP_ACTION)
+                        }
+                        Text(RadioPlaybackPresentation.status(isPlaying))
                     }
                 }
             }
             HorizontalDivider()
         }
     }
+}
+
+private fun formatRadioPosition(seconds: Long): String {
+    val total = seconds.coerceAtLeast(0)
+    return String.format(Locale.JAPAN, "%d:%02d", total / 60, total % 60)
 }
 
 private fun radioDateTimeFormatter(): DateTimeFormatter =

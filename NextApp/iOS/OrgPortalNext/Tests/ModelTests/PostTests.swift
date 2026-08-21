@@ -20,6 +20,88 @@ final class PostTests: XCTestCase {
         XCTAssertTrue(RadioPlaybackPolicy.isPlayable(program, at: start.addingTimeInterval(7_200)))
     }
 
+    func testRadioPlaybackRecordPolicyPreservesAndUpdatesPosition() {
+        let initialDate = Date(timeIntervalSince1970: 100)
+        let existing = RadioPlaybackRecord(
+            id: "record-1",
+            userId: "member-1",
+            programId: "radio-1",
+            lastPositionSeconds: 42,
+            playCount: 2,
+            lastPlayedAt: initialDate
+        )
+
+        let started = RadioPlaybackRecordPolicy.started(
+            existing: existing,
+            userId: "member-1",
+            programId: "radio-1",
+            at: initialDate.addingTimeInterval(1)
+        )
+        let updated = RadioPlaybackRecordPolicy.updatingPosition(
+            started,
+            positionSeconds: 75.5,
+            at: initialDate.addingTimeInterval(2)
+        )
+
+        XCTAssertEqual(started.playCount, 3)
+        XCTAssertEqual(started.lastPositionSeconds, 42)
+        XCTAssertEqual(updated.playCount, 3)
+        XCTAssertEqual(updated.lastPositionSeconds, 75.5)
+    }
+
+    func testRadioInterruptionOnlyResumesWhenPreviouslyPlayingAndAllowed() {
+        XCTAssertTrue(RadioPlaybackInterruptionPolicy.shouldResume(
+            wasPlayingBeforeInterruption: true,
+            systemAllowsResume: true
+        ))
+        XCTAssertFalse(RadioPlaybackInterruptionPolicy.shouldResume(
+            wasPlayingBeforeInterruption: false,
+            systemAllowsResume: true
+        ))
+        XCTAssertFalse(RadioPlaybackInterruptionPolicy.shouldResume(
+            wasPlayingBeforeInterruption: true,
+            systemAllowsResume: false
+        ))
+    }
+
+    func testRadioPresentationUsesSharedActionsAndStatuses() {
+        XCTAssertEqual(
+            RadioPlaybackPresentation.primaryAction(
+                isPlayable: false,
+                isActive: false,
+                isPlaying: false
+            ),
+            "配信前"
+        )
+        XCTAssertEqual(
+            RadioPlaybackPresentation.primaryAction(
+                isPlayable: true,
+                isActive: false,
+                isPlaying: false
+            ),
+            "再生"
+        )
+        XCTAssertEqual(
+            RadioPlaybackPresentation.primaryAction(
+                isPlayable: true,
+                isActive: true,
+                isPlaying: true
+            ),
+            "一時停止"
+        )
+        XCTAssertEqual(
+            RadioPlaybackPresentation.primaryAction(
+                isPlayable: true,
+                isActive: true,
+                isPlaying: false
+            ),
+            "再開"
+        )
+        XCTAssertEqual(RadioPlaybackPresentation.status(isPlaying: true), "再生中")
+        XCTAssertEqual(RadioPlaybackPresentation.status(isPlaying: false), "一時停止中")
+        XCTAssertEqual(RadioPlaybackPresentation.stopAction, "停止")
+    }
+
     func testUnreadReplyRequiresReplyAndUnreadFlag() {
         let post = makePost(reply: "回答です", hasRead: false)
         XCTAssertTrue(post.hasUnreadReply)
